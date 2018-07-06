@@ -197,7 +197,6 @@ class TestBasic(BaseTest):
 		# Form model fitting problem with logistic loss and L1 regularization.
 		theta = Variable(k+1)
 		lambd = 1.0
-		MAX_ITER = 55
 		loss = 0
 		for i in range(m):
 			loss += log_sum_exp(vstack([0, -Y[i]*X[i,:].T*theta]))
@@ -207,7 +206,7 @@ class TestBasic(BaseTest):
 		N = len(p_list)
 		
 		# Solve with consensus ADMM.
-		obj_admm = probs.solve(method = "consensus", rho_init = N*[0.5], \
+		obj_admm = probs.solve(method = "consensus", rho_init = N*[1.0], eps = 1e-8, \
 							   max_iter = self.MAX_ITER, spectral = self.spectral)
 		x_admm = [x.value for x in probs.variables()]
 		# probs.plot_residuals()
@@ -221,4 +220,4 @@ class TestBasic(BaseTest):
 		N = len(probs.variables())
 		self.assertAlmostEqual(obj_admm, obj_comb)
 		for i in range(N):
-			self.assertItemsAlmostEqual(x_admm[i], x_comb[i])
+			self.assertItemsAlmostEqual(x_admm[i], x_comb[i], places = 2)
