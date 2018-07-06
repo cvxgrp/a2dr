@@ -1,0 +1,20 @@
+from setuptools import setup
+
+setup(name='cvxconsensus',
+      version='0.1',
+      description='A package for generalized consensus optimization using the alternating direction method of multipliers (ADMM).',
+      url='http://github.com/anqif/cvxconsensus',
+      author='Anqi Fu, Stephen Boyd',
+      author_email='anqif@stanford.edu',
+      license='Apache License, Version 2.0',
+      packages=['cvxconsensus'],
+      install_requres=['collections',
+		       'matplotlib',
+		       'multiprocess',
+		       'tabulate',
+		       'time',
+		       'cvxpy >= 1.0',
+		       'numpy >= 1.14'],
+      zip_safe=False,
+      test_suite='nose.collector',
+      tests_require=['nose'])
