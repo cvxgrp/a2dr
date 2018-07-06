@@ -102,7 +102,7 @@ def step_safe(rho, a, b, a_cor, b_cor, eps = 0.2):
 	else:
 		return rho
 
-def step_spec(rho, k, dx, dxbar, du, duhat, eps = 0.2, C = 1e10):
+def step_spec(rho, k, dx, dxbar, dy, dyhat, eps = 0.2, C = 1e10):
 	"""Calculates the generalized spectral step size with safeguarding.
 	Xu, Taylor, et al. "Adaptive Consensus ADMM for Distributed Optimization."
 	
@@ -116,9 +116,9 @@ def step_spec(rho, k, dx, dxbar, du, duhat, eps = 0.2, C = 1e10):
         Change in primal value from the last step size update.
     dxbar : array
         Change in average primal value from the last step size update.
-    du : array
+    dy : array
         Change in dual value from the last step size update.
-    duhat : array
+    dyhat : array
         Change in intermediate dual value from the last step size update.
     eps : float, optional
         The safeguarding threshold.
@@ -137,19 +137,19 @@ def step_spec(rho, k, dx, dxbar, du, duhat, eps = 0.2, C = 1e10):
 		   return rho
 
 	# Compute spectral step size.
-	a_hat = step_ls(dx, duhat)
-	b_hat = step_ls(dxbar, du)
+	a_hat = step_ls(dx, dyhat)
+	b_hat = step_ls(dxbar, dy)
 	
 	# Estimate correlations.
-	a_cor = step_cor(dx, duhat)
-	b_cor = step_cor(dxbar, du)
+	a_cor = step_cor(dx, dyhat)
+	b_cor = step_cor(dxbar, dy)
 	
 	# Apply safeguarding rule.
 	scale = 1 + C/(1.0*k**2)
 	rho_hat = step_safe(rho, a_hat, b_hat, a_cor, b_cor, eps)
 	return max(min(rho_hat, scale*rho), rho/scale)
 
-def prox_step(prob, rho_init, scaled = True):
+def prox_step(prob, rho_init, scaled = False):
 	"""Formulates the proximal operator for a given objective, constraints, and step size.
 	Parikh, Boyd. "Proximal Algorithms."
 	
@@ -161,7 +161,7 @@ def prox_step(prob, rho_init, scaled = True):
     rho_init : float
         The initial step size.
     scaled : logical, optional
-        Should the proximal step use the scaled dual variable?
+    	Should the dual variable be scaled?
     
     Returns
     ----------
@@ -169,8 +169,7 @@ def prox_step(prob, rho_init, scaled = True):
         The proximal step problem.
     vmap : dict
         A map of each proximal variable id to a dictionary containing that variable `x`,
-        the mean variable parameter `xbar`, and the associated dual parameter: `u` if
-        `scaled = True` or `y` if `scaled = False`.
+        the mean variable parameter `xbar`, and the associated dual parameter `y`.
     rho : Parameter
         The step size parameter.
 	"""
@@ -179,20 +178,13 @@ def prox_step(prob, rho_init, scaled = True):
 	rho = Parameter(value = rho_init, nonneg = True)   # Step size
 	
 	# Add penalty for each variable.
-	if scaled:
-		for xvar in prob.variables():
-			xid = xvar.id
-			size = xvar.size
-			vmap[xid] = {"x": xvar, "xbar": Parameter(size, value = np.zeros(size)),
-						 "u": Parameter(size, value = np.zeros(size))}
-			f += (rho/2.0)*sum_squares(xvar - vmap[xid]["xbar"] - vmap[xid]["u"]/rho)
-	else:
-		for xvar in prob.variables():
-			xid = xvar.id
-			size = xvar.size
-			vmap[xid] = {"x": xvar, "xbar": Parameter(size, value = np.zeros(size)),
-				         "y": Parameter(size, value = np.zeros(size))}
-			f += sum(multiply(vmap[xid]["y"], xvar - vmap[xid]["xbar"])) + (rho/2.0)*sum_squares(xvar - vmap[xid]["xbar"])
+	for xvar in prob.variables():
+		xid = xvar.id
+		size = xvar.size
+		vmap[xid] = {"x": xvar, "xbar": Parameter(size, value = np.zeros(size)),
+					 "y": Parameter(size, value = np.zeros(size))}
+		dual = vmap[xid]["y"] if scaled else vmap[xid]["y"]/rho
+		f += (rho/2.0)*sum_squares(xvar - vmap[xid]["xbar"] - dual)
 	
 	prox = Problem(Minimize(f), prob.constraints)
 	return prox, vmap, rho
@@ -217,14 +209,14 @@ def res_stop(res_ssq, eps = 1e-4):
 	"""Calculate the sum of squared primal/dual residuals.
 	   Determine whether the stopping criterion is satisfied:
 	   ||r^(k)||^2 <= eps*max(\sum_i ||x_i^(k)||^2, \sum_i ||x_bar^(k)||^2) and
-	   ||d^(k)||^2 <= eps*\sum_i ||u_i^(k)||^2
+	   ||d^(k)||^2 <= eps*\sum_i ||y_i^(k)||^2
 	"""
 	primal = np.sum([r["primal"] for r in res_ssq])
 	dual = np.sum([r["dual"] for r in res_ssq])
 	
 	x_ssq = np.sum([r["x"] for r in res_ssq])
 	xbar_ssq = np.sum([r["xbar"] for r in res_ssq])
-	u_ssq = np.sum([r["u"] for r  in res_ssq])
+	u_ssq = np.sum([r["y"] for r  in res_ssq])
 	
 	eps_fl = np.finfo(float).eps   # Machine precision.
 	stopped = (primal <= eps*max(x_ssq, xbar_ssq) + eps_fl) and \
@@ -244,7 +236,7 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 	# Initiate step size variables.
 	nelem = np.prod([np.prod(xvar.size) for xvar in p.variables()])
 	v_old = {"x": np.zeros(nelem), "xbar": np.zeros(nelem),
-			 "u": np.zeros(nelem), "uhat": np.zeros(nelem)}
+			 "y": np.zeros(nelem), "yhat": np.zeros(nelem)}
 	
 	# ADMM loop.
 	while True:
@@ -258,23 +250,25 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 		pipe.send((prox.status, xvals))
 		xbars, i = pipe.recv()
 		
-		# Update u^(k+1) += rho^(k)*(x_bar^(k+1) - x^(k+1)).
-		v_flat = {"x": [], "xbar": [], "u": [], "uhat": []}
+		# Update y^(k+1) = y^(k) + rho^(k)*(x^(k+1) - x_bar^(k+1)).
+		v_flat = {"x": [], "xbar": [], "y": [], "yhat": []}
 		ssq = {"primal": 0, "dual": 0, "x": 0, "xbar": 0, "u": 0}
 		for key in v.keys():
-			# Calculate primal/dual residual^(k+1).
+			# Calculate residuals for the (k+1) step.
+			#    Primal: x^(k+1) - x_bar^(k+1)
+			#    Dual: rho^(k+1)*(x_bar^(k) - x_bar^(k+1)) 
 			if v[key]["x"].value is None:
-				primal = xbars[key]
+				primal = -xbars[key]
 			else:
-				primal = (xbars[key] - v[key]["x"]).value
+				primal = (v[key]["x"] - xbars[key]).value
 			dual = (rho*(v[key]["xbar"] - xbars[key])).value
 			
-			# Set parameter values of x_bar^(k+1) and u^(k+1).
+			# Set parameter values of x_bar^(k+1) and y^(k+1).
 			xbar_old = v[key]["xbar"].value
-			u_old = v[key]["u"].value
+			y_old = v[key]["y"].value
 			
 			v[key]["xbar"].value = xbars[key]
-			v[key]["u"].value += (rho*(v[key]["xbar"] - v[key]["x"])).value
+			v[key]["y"].value += (rho*(v[key]["x"] - v[key]["xbar"])).value
 			
 			# Save stopping rule criteria.
 			ssq["primal"] += np.sum(np.square(primal))
@@ -282,20 +276,20 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 			if v[key]["x"].value is not None:
 				ssq["x"] += np.sum(np.square(v[key]["x"].value))
 			ssq["xbar"] += np.sum(np.square(v[key]["xbar"].value))
-			ssq["u"] += np.sum(np.square(v[key]["u"].value))
+			ssq["y"] += np.sum(np.square(v[key]["y"].value))
 			
-			# Calculate u_hat^(k+1) for step size update.
-			u_hat = u_old + rho*(xbar_old - v[key]["x"])
-			v_flat["uhat"] += [np.asarray(u_hat.value).reshape(-1)]
+			# Calculate y_hat^(k+1) for step size update.
+			y_hat = y_old + rho*(v[key]["x"] - xbar_old)
+			v_flat["yhat"] += [np.asarray(y_hat.value).reshape(-1)]
 		pipe.send(ssq)
 		
 		# Spectral step size.
-		if spectral and i % Tf == 1:	
+		if spectral and i % Tf == 1:
 			# Collect and flatten variables.
 			for key in v.keys():
 				v_flat["x"] += [np.asarray(v[key]["x"].value).reshape(-1)]
 				v_flat["xbar"] += [np.asarray(v[key]["xbar"].value).reshape(-1)]
-				v_flat["u"] += [np.asarray(v[key]["u"].value).reshape(-1)]
+				v_flat["y"] += [np.asarray(v[key]["y"].value).reshape(-1)]
 			
 			for key in v_flat.keys():
 				v_flat[key] = np.concatenate(v_flat[key])
@@ -303,11 +297,11 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 			# Calculate change from old iterate.
 			dx = v_flat["x"] - v_old["x"]
 			dxbar = -v_flat["xbar"] + v_old["xbar"]
-			du = v_flat["u"] - v_old["u"]
-			duhat = v_flat["uhat"] - v_old["uhat"]
+			dy = v_flat["y"] - v_old["y"]
+			dyhat = v_flat["yhat"] - v_old["yhat"]
 			
 			# Update step size.
-			rho.value = step_spec(rho.value, i, dx, dxbar, du, duhat, eps, C)
+			rho.value = step_spec(rho.value, i, dx, dxbar, dy, dyhat, eps, C)
 			
 			# Update step size variables.
 			for key in v_flat.keys():
