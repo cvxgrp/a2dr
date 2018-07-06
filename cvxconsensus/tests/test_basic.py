@@ -51,7 +51,7 @@ class TestBasic(BaseTest):
 	def setUp(self):
 		np.random.seed(1)
 		self.MAX_ITER = 100
-		self.spectral = False
+		self.spectral = True
 	
 	def test_basic(self):
 		m = 100
@@ -87,7 +87,7 @@ class TestBasic(BaseTest):
 		N = len(probs.variables())
 		self.assertAlmostEqual(obj_admm, obj_comb)
 		for i in range(N):
-			self.assertItemsAlmostEqual(x_admm[i], x_comb[i], places = 4)
+			self.assertItemsAlmostEqual(x_admm[i], x_comb[i])
 
 	def test_ols(self):
 		N = 2
@@ -124,9 +124,9 @@ class TestBasic(BaseTest):
 		# Compare results.
 		# compare_results(probs, obj_admm, obj_comb, x_admm, x_comb)
 		N = len(probs.variables())
-		self.assertAlmostEqual(obj_admm, obj_comb, places = 1)
+		self.assertAlmostEqual(obj_admm, obj_comb)
 		for i in range(N):
-			self.assertItemsAlmostEqual(x_admm[i], x_comb[i], places = 2)
+			self.assertItemsAlmostEqual(x_admm[i], x_comb[i], places = 3)
 
 	def test_lasso(self):
 		""" FAILING: Objective blows up in consensus optimization."""
@@ -160,7 +160,7 @@ class TestBasic(BaseTest):
 		x_comb = [x.value for x in probs.variables()]
 		
 		# Compare results.
-		compare_results(probs, obj_admm, obj_comb, x_admm, x_comb)
+		# compare_results(probs, obj_admm, obj_comb, x_admm, x_comb)
 		N = len(probs.variables())
 		self.assertAlmostEqual(obj_admm, obj_comb)
 		for i in range(N):
