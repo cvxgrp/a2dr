@@ -133,7 +133,7 @@ def step_spec(rho, k, dx, dxbar, dy, dyhat, eps = 0.2, C = 1e10):
 	# Use old step size if unable to solve LS problem/correlations.
 	eps_fl = np.finfo(float).eps   # Machine precision.
 	if np.sum(dx**2) <= eps_fl or np.sum(dxbar**2) <= eps_fl or \
-	   np.sum(du**2) <= eps_fl or np.sum(duhat**2) <= eps_fl:
+	   np.sum(dy**2) <= eps_fl or np.sum(dyhat**2) <= eps_fl:
 		   return rho
 
 	# Compute spectral step size.
@@ -190,20 +190,23 @@ def prox_step(prob, rho_init, scaled = False):
 	return prox, vmap, rho
 
 def x_average(prox_res):
-	"""Average the primal variables over the nodes in which they are present.
+	"""Average the primal variables over the nodes in which they are present,
+	   weighted by each node's step size.
 	"""
 	xmerge = defaultdict(list)
+	rho_sum = defaultdict(float)
 	
-	for status, xvals in prox_res:
+	for status, rho, xvals in prox_res:
 		# Check if proximal step converged.
 		if status in s.INF_OR_UNB:
 			raise RuntimeError("Proximal problem is infeasible or unbounded")
 		
 		# Merge dictionary of x values
 		for key, value in xvals.items():
-			xmerge[key].append(value)
+			xmerge[key].append(rho*value)
+			rho_sum[key] += rho
 	
-	return {key: np.average(np.array(xlist), axis = 0) for key, xlist in xmerge.items()}
+	return {key: np.sum(np.array(xlist), axis = 0)/rho_sum[key] for key, xlist in xmerge.items()}
 
 def res_stop(res_ssq, eps = 1e-4):
 	"""Calculate the sum of squared primal/dual residuals.
@@ -247,12 +250,12 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 		xvals = {}
 		for xvar in prox.variables():
 			xvals[xvar.id] = xvar.value
-		pipe.send((prox.status, xvals))
+		pipe.send((prox.status, rho.value, xvals))
 		xbars, i = pipe.recv()
 		
 		# Update y^(k+1) = y^(k) + rho^(k)*(x^(k+1) - x_bar^(k+1)).
 		v_flat = {"x": [], "xbar": [], "y": [], "yhat": []}
-		ssq = {"primal": 0, "dual": 0, "x": 0, "xbar": 0, "u": 0}
+		ssq = {"primal": 0, "dual": 0, "x": 0, "xbar": 0, "y": 0}
 		for key in v.keys():
 			# Calculate residuals for the (k+1) step.
 			#    Primal: x^(k+1) - x_bar^(k+1)
