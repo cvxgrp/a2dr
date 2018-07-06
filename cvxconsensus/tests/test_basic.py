@@ -19,11 +19,11 @@ along with CVXPY.  If not, see <http://www.gnu.org/licenses/>.
 
 import numpy as np
 import matplotlib.pyplot as plt
-from unittest import TestCase
 from cvxpy import Variable, Parameter, Problem, Minimize
 from cvxpy.atoms import *
 import cvxconsensus
 from cvxconsensus import Problems
+from cvxconsensus.tests.base_test import BaseTest
 
 def compare_results(probs, obj_admm, obj_comb, x_admm, x_comb):
 	N = len(probs.variables())
@@ -45,12 +45,13 @@ def plot_residuals(primal, dual):
 	plt.ylabel("Residual")
 	plt.show()
 
-class TestBasic(TestCase):
+class TestBasic(BaseTest):
 	"""Basic unit tests for consensus optimization"""
 	
 	def setUp(self):
 		np.random.seed(1)
 		self.MAX_ITER = 100
+		self.spectral = False
 	
 	def test_basic(self):
 		m = 100
@@ -73,7 +74,7 @@ class TestBasic(TestCase):
 		
 		# Solve with consensus ADMM.
 		obj_admm = probs.solve(method = "consensus", rho_init = N*[1.0], \
-							   max_iter = self.MAX_ITER, spectral = True)
+							   max_iter = self.MAX_ITER, spectral = self.spectral)
 		x_admm = [x.value for x in probs.variables()]
 		# plot_residuals(probs._primal_residual, probs._dual_residual)
 
@@ -82,7 +83,11 @@ class TestBasic(TestCase):
 		x_comb = [x.value for x in probs.variables()]
 
 		# Compare results.
-		compare_results(probs, obj_admm, obj_comb, x_admm, x_comb)
+		# compare_results(probs, obj_admm, obj_comb, x_admm, x_comb)
+		N = len(probs.variables())
+		self.assertAlmostEqual(obj_admm, obj_comb)
+		for i in range(N):
+			self.assertItemsAlmostEqual(x_admm[i], x_comb[i], places = 4)
 
 	def test_ols(self):
 		N = 2
@@ -107,7 +112,7 @@ class TestBasic(TestCase):
 		
 		# Solve with consensus ADMM.
 		obj_admm = probs.solve(method = "consensus", rho_init = N*[0.5], \
-							   max_iter = self.MAX_ITER, spectral = True)
+							   max_iter = self.MAX_ITER, spectral = self.spectral)
 		x_admm = [x.value for x in probs.variables()]
 		# probs.plot_residuals()
 		
@@ -117,9 +122,14 @@ class TestBasic(TestCase):
 		x_comb = [x.value for x in probs.variables()]
 		
 		# Compare results.
-		compare_results(probs, obj_admm, obj_comb, x_admm, x_comb)
+		# compare_results(probs, obj_admm, obj_comb, x_admm, x_comb)
+		N = len(probs.variables())
+		self.assertAlmostEqual(obj_admm, obj_comb, places = 1)
+		for i in range(N):
+			self.assertItemsAlmostEqual(x_admm[i], x_comb[i], places = 2)
 
 	def test_lasso(self):
+		""" FAILING: Objective blows up in consensus optimization."""
 		m = 100
 		n = 10
 		DENSITY = 0.75
@@ -141,7 +151,7 @@ class TestBasic(TestCase):
 		
 		# Solve with consensus ADMM.
 		obj_admm = probs.solve(method = "consensus", rho_init = N*[1.0], \
-							   max_iter = self.MAX_ITER, spectral = False)
+							   max_iter = self.MAX_ITER, spectral = self.spectral)
 		x_admm = [x.value for x in probs.variables()]
 		# probs.plot_residuals()
 		
@@ -151,6 +161,10 @@ class TestBasic(TestCase):
 		
 		# Compare results.
 		compare_results(probs, obj_admm, obj_comb, x_admm, x_comb)
+		N = len(probs.variables())
+		self.assertAlmostEqual(obj_admm, obj_comb)
+		for i in range(N):
+			self.assertItemsAlmostEqual(x_admm[i], x_comb[i])
 
 	def test_logistic(self):
 		# Construct Z given X.
@@ -194,7 +208,7 @@ class TestBasic(TestCase):
 		
 		# Solve with consensus ADMM.
 		obj_admm = probs.solve(method = "consensus", rho_init = N*[0.5], \
-							   max_iter = self.MAX_ITER, spectral = True)
+							   max_iter = self.MAX_ITER, spectral = self.spectral)
 		x_admm = [x.value for x in probs.variables()]
 		# probs.plot_residuals()
 		
@@ -204,3 +218,7 @@ class TestBasic(TestCase):
 		
 		# Compare results.
 		compare_results(probs, obj_admm, obj_comb, x_admm, x_comb)
+		N = len(probs.variables())
+		self.assertAlmostEqual(obj_admm, obj_comb)
+		for i in range(N):
+			self.assertItemsAlmostEqual(x_admm[i], x_comb[i])
