@@ -222,7 +222,7 @@ class Problems(object):
 		# TODO: Save dual values (for constraints too?).
 		
 		# Save combined objective.
-		self._value = self.objective.value
+		self._value = np.asscalar(self.objective.value)
 		
 		# Save primal/dual residuals.
 		self._primal_residual = solution["residuals"][:,0]

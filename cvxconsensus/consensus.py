@@ -314,6 +314,8 @@ def consensus(p_list, *args, **kwargs):
 	N = len(p_list)   # Number of problems.
 	max_iter = kwargs.pop("max_iter", 100)
 	rho_init = kwargs.pop("rho_init", N*[1.0])
+	if np.isscalar(rho_init):
+		rho_init = N*[rho_init]
 	eps = kwargs.pop("eps", 1e-6)   # Stopping tolerance.
 	resid = np.zeros((max_iter, 2))
 	

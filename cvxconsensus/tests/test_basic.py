@@ -36,15 +36,6 @@ def compare_results(probs, obj_admm, obj_comb, x_admm, x_comb):
 	print("Iterations: %d" % probs.solver_stats["num_iters"])
 	print("Elapsed Time: %f" % probs.solver_stats["solve_time"])
 
-def plot_residuals(primal, dual):
-	resid = np.column_stack((primal, dual))
-	iters = range(1, resid.shape[0] + 1)
-	plt_resd = plt.plot(iters, resid, label = ["Primal", "Dual"])
-	plt.legend(plt_resd, ["Primal", "Dual"])
-	plt.xlabel("Iteration")
-	plt.ylabel("Residual")
-	plt.show()
-
 class TestBasic(BaseTest):
 	"""Basic unit tests for consensus optimization"""
 	
@@ -76,7 +67,7 @@ class TestBasic(BaseTest):
 		obj_admm = probs.solve(method = "consensus", rho_init = N*[1.0], \
 							   max_iter = self.MAX_ITER, spectral = self.spectral)
 		x_admm = [x.value for x in probs.variables()]
-		# plot_residuals(probs._primal_residual, probs._dual_residual)
+		# probs.plot_residuals()
 
 		# Solve combined problem.
 		obj_comb = probs.solve(method = "combined")
@@ -129,7 +120,6 @@ class TestBasic(BaseTest):
 			self.assertItemsAlmostEqual(x_admm[i], x_comb[i], places = 3)
 
 	def test_lasso(self):
-		""" FAILING: Objective blows up in consensus optimization."""
 		m = 100
 		n = 10
 		DENSITY = 0.75
