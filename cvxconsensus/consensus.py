@@ -237,7 +237,7 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 	prox, v, rho = prox_step(p, rho_init)
 	
 	# Initiate step size variables.
-	nelem = np.prod([np.prod(xvar.size) for xvar in p.variables()])
+	nelem = np.sum([np.prod(xvar.size) for xvar in p.variables()])
 	v_old = {"x": np.zeros(nelem), "xbar": np.zeros(nelem),
 			 "y": np.zeros(nelem), "yhat": np.zeros(nelem)}
 	

@@ -18,7 +18,6 @@ along with CVXPY.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 import numpy as np
-import matplotlib.pyplot as plt
 from cvxpy import Variable, Parameter, Problem, Minimize
 from cvxpy.atoms import *
 import cvxconsensus

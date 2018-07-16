@@ -122,7 +122,7 @@ class Problems(object):
 	
 	@property
 	def objective(self):
-		"""Minimize or Maximize : The combined problem's objective.
+		"""Minimize : The combined problem's objective.
 
         Note that the objective cannot be reassigned after creation,
         and modifying the objective after creation will result in
