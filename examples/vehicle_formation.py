@@ -3,6 +3,13 @@ import matplotlib.pyplot as plt
 from cvxpy import *
 from cvxconsensus import *
 
+# References:
+# EE364B Exercises, Chapter 12, Question 12.1 (MPC for output tracking).
+#    http://stanford.edu/class/ee364b/364b_exercises.pdf
+# Raffard, Tomlin, Boyd. "Distributed Optimization for Cooperative Agents: Application to Formation Flight."
+#    Proceedings IEEE Conference on Decision and Control, 3:2453-2459, Nassau, Bahamas, December 2004.
+#    http://stanford.edu/~boyd/papers/form_flight.html
+
 def plot_control(T, u, Umax, title = None):
 	Umax_vec = np.repeat(Umax, T)
 	Umax_lines = np.column_stack((Umax_vec, -Umax_vec))
