@@ -180,9 +180,9 @@ def prox_step(prob, rho_init, scaled = False):
 	# Add penalty for each variable.
 	for xvar in prob.variables():
 		xid = xvar.id
-		size = xvar.size
-		vmap[xid] = {"x": xvar, "xbar": Parameter(size, value = np.zeros(size)),
-					 "y": Parameter(size, value = np.zeros(size))}
+		shape = xvar.shape
+		vmap[xid] = {"x": xvar, "xbar": Parameter(shape, value = np.zeros(shape)),
+					 "y": Parameter(shape, value = np.zeros(shape))}
 		dual = vmap[xid]["y"] if scaled else vmap[xid]["y"]/rho
 		f += (rho/2.0)*sum_squares(xvar - vmap[xid]["xbar"] + dual)
 	
