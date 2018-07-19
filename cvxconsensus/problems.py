@@ -143,7 +143,7 @@ class Problems(object):
 		"""Accessor method for variables.
 
         Returns
-        -------
+        ----------
         list of :class:`~cvxpy.expressions.variable.Variable`
             A list of the variables in the combined problem.
         """
@@ -163,7 +163,7 @@ class Problems(object):
 		"""Accessor method for constants.
 
         Returns
-        -------
+        ----------
         list of :class:`~cvxpy.expressions.constants.constant.Constant`
             A list of the constants in the combined problem.
         """
@@ -210,7 +210,7 @@ class Problems(object):
 		Updates problem.status, problem.value, and value of the primal variables.
 		
 		Parameters
-		-------
+		----------
 		solution : dict
 		     Consensus solution to the combined problem. "xbars" refers to the
 		     final average of the primal value over all the workers.
