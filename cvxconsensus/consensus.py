@@ -25,6 +25,7 @@ import cvxpy.settings as s
 from cvxpy.problems.problem import Problem, Minimize
 from cvxpy.expressions.constants import Parameter
 from cvxpy.atoms import sum_squares
+from cvxconsensus.acceleration import dual_update
 
 def flip_obj(prob):
 	"""Helper function to flip sign of objective function.
@@ -230,8 +231,12 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 	# Spectral step size parameters.
 	spectral = kwargs.pop("spectral", False)
 	Tf = kwargs.pop("Tf", 2)
-	eps = kwargs.pop("eps", 0.2)
+	eps_spec = kwargs.pop("eps_spec", 0.2)
 	C = kwargs.pop("C", 1e10)
+	
+	# Anderson acceleration parameters.
+	anderson = kwargs.pop("anderson", False)
+	m_accel = kwargs.pop("m_accel", 5)   # Number of past iterations to keep (>= 1)
 	
 	# Initiate proximal problem.
 	prox, v, rho = prox_step(p, rho_init)
@@ -240,6 +245,10 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 	nelem = np.sum([np.prod(xvar.size) for xvar in p.variables()])
 	v_old = {"x": np.zeros(nelem), "xbar": np.zeros(nelem),
 			 "y": np.zeros(nelem), "yhat": np.zeros(nelem)}
+	
+	# Initiate Anderson acceleration matrices.
+	Y = np.empty((nelem,0))
+	R = np.empty((nelem,0))
 	
 	# ADMM loop.
 	while True:
@@ -251,7 +260,8 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 		for xvar in prox.variables():
 			xvals[xvar.id] = xvar.value
 		pipe.send((prox.status, rho.value, xvals))
-		xbars, i = pipe.recv()
+		xbars, k = pipe.recv()
+		m_k = min(m_accel, k+1)
 		
 		# Update y^(k+1) = y^(k) + rho^(k)*(x^(k+1) - x_bar^(k+1)).
 		v_flat = {"x": [], "xbar": [], "y": [], "yhat": []}
@@ -271,7 +281,16 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 			y_old = v[key]["y"].value
 			
 			v[key]["xbar"].value = xbars[key]
-			v[key]["y"].value += (rho*(v[key]["x"] - v[key]["xbar"])).value
+			if anderson:   # Save last m_k dual variables and primal residuals.
+				Y = np.insert(Y, Y.shape[1], y_old, axis = 1)
+				R = np.insert(R, R.shape[1], primal, axis = 1)
+				if Y.shape[1] > (m_k + 1):
+					Y = np.delete(Y, range(0, Y.shape[1] - m_k - 1), axis = 1)
+				if R.shape[1] > (m_k + 1):
+					R = np.delete(R, range(0, R.shape[1] - m_k - 1), axis = 1)
+				v[key]["y"].value = dual_update(Y, R, rho.value)
+			else:
+				v[key]["y"].value += (rho*(v[key]["x"] - v[key]["xbar"])).value
 			
 			# Save stopping rule criteria.
 			ssq["primal"] += np.sum(np.square(primal))
@@ -287,7 +306,7 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 		pipe.send(ssq)
 		
 		# Spectral step size.
-		if spectral and i % Tf == 1:
+		if spectral and k % Tf == 1:
 			# Collect and flatten variables.
 			for key in v.keys():
 				v_flat["x"] += [np.asarray(v[key]["x"].value).reshape(-1)]
@@ -304,7 +323,7 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 			dyhat = v_flat["yhat"] - v_old["yhat"]
 			
 			# Update step size.
-			rho.value = step_spec(rho.value, i, dx, dxbar, dy, dyhat, eps, C)
+			rho.value = step_spec(rho.value, k, dx, dxbar, dy, dyhat, eps_spec, C)
 			
 			# Update step size variables.
 			for key in v_flat.keys():
@@ -316,7 +335,7 @@ def consensus(p_list, *args, **kwargs):
 	rho_init = kwargs.pop("rho_init", N*[1.0])
 	if np.isscalar(rho_init):
 		rho_init = N*[rho_init]
-	eps = kwargs.pop("eps", 1e-6)   # Stopping tolerance.
+	eps_stop = kwargs.pop("eps_stop", 1e-6)   # Stopping tolerance.
 	resid = np.zeros((max_iter, 2))
 	
 	# Set up the workers.
@@ -330,22 +349,22 @@ def consensus(p_list, *args, **kwargs):
 
 	# ADMM loop.
 	start = time()
-	for i in range(max_iter):
+	for k in range(max_iter):
 		# Gather and average x_i.
 		prox_res = [pipe.recv() for pipe in pipes]
 		xbars = x_average(prox_res)
 	
 		# Scatter x_bar.
 		for pipe in pipes:
-			pipe.send((xbars, i))
+			pipe.send((xbars, k))
 		
 		# Calculate normalized residuals.
 		ssq = [pipe.recv() for pipe in pipes]
-		primal, dual, stopped = res_stop(ssq, eps)
-		resid[i,:] = np.array([primal, dual])
+		primal, dual, stopped = res_stop(ssq, eps_stop)
+		resid[k,:] = np.array([primal, dual])
 		if stopped:
 			break
 	end = time()
 
 	[p.terminate() for p in procs]
-	return {"xbars": xbars, "residuals": resid[:(i+1),:], "num_iters": i+1, "solve_time": (end - start)}
+	return {"xbars": xbars, "residuals": resid[:(k+1),:], "num_iters": k+1, "solve_time": (end - start)}
