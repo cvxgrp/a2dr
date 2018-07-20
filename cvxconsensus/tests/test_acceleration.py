@@ -18,12 +18,23 @@ along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 """
 
 import numpy as np
+import matplotlib.pyplot as plt
 from cvxpy import Variable, Parameter, Problem, Minimize
 from cvxpy.atoms import *
 import cvxconsensus
 from cvxconsensus import Problems
 from cvxconsensus.tests.base_test import BaseTest
 
+def compare_residuals(res_admm, res_accel):
+	plt.plot(range(res_admm["primal"].shape[0]), res_admm["primal"], "b-", label = "Primal")
+	plt.plot(range(res_admm["dual"].shape[0]), res_admm["dual"], "r-", label = "Dual")
+	plt.plot(range(res_accel["primal"].shape[0]), res_accel["primal"], "b--", label = "Accel Primal")
+	plt.plot(range(res_accel["dual"].shape[0]), res_accel["dual"], "r--", label = "Accel Dual")
+	plt.legend()
+	plt.xlabel("Iteration")
+	plt.ylabel("Residual")
+	plt.show()
+	
 class TestAcceleration(BaseTest):
 	"""Unit tests for Anderson acceleration of consensus ADMM"""
 	
@@ -54,10 +65,16 @@ class TestAcceleration(BaseTest):
 		
 		# Solve with consensus ADMM.
 		obj_admm = probs.solve(method = "consensus", rho_init = N*[1.0], \
+							   max_iter = self.MAX_ITER, spectral = self.spectral)
+		res_admm = {"primal": probs.primal_residual, "dual": probs.dual_residual}
+		
+		# Solve with consensus ADMM using Anderson acceleration.
+		obj_accel = probs.solve(method = "consensus", rho_init = N*[1.0], \
 							   max_iter = self.MAX_ITER, spectral = self.spectral,
 							   anderson = True, m_accel = 5)
-		x_admm = [x.value for x in probs.variables()]
-		probs.plot_residuals()
+		res_accel = {"primal": probs.primal_residual, "dual": probs.dual_residual}
+		x_accel = [x.value for x in probs.variables()]
+		compare_residuals(res_admm, res_accel)
 		
 		# Solve combined problem.
 		obj_comb = probs.solve(method = "combined")
@@ -65,6 +82,6 @@ class TestAcceleration(BaseTest):
 		
 		# Compare results.
 		N = len(probs.variables())
-		self.assertAlmostEqual(obj_admm, obj_comb)
+		self.assertAlmostEqual(obj_accel, obj_comb)
 		for i in range(N):
-			self.assertItemsAlmostEqual(x_admm[i], x_comb[i])
+			self.assertItemsAlmostEqual(x_accel[i], x_comb[i])

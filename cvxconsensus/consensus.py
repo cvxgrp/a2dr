@@ -249,6 +249,7 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 	# Initiate Anderson acceleration matrices.
 	Y = np.empty((nelem,0))
 	R = np.empty((nelem,0))
+	rho_vec = np.empty((1,0))
 	
 	# ADMM loop.
 	while True:
@@ -284,11 +285,15 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 			if anderson:   # Save last m_k dual variables and primal residuals.
 				Y = np.insert(Y, Y.shape[1], y_old, axis = 1)
 				R = np.insert(R, R.shape[1], primal, axis = 1)
-				if Y.shape[1] > (m_k + 1):
+				rho_vec = np.append(rho_vec, rho.value)
+				
+				ncols = Y.shape[1]
+				if ncols > (m_k + 1):
 					Y = np.delete(Y, range(0, Y.shape[1] - m_k - 1), axis = 1)
-				if R.shape[1] > (m_k + 1):
 					R = np.delete(R, range(0, R.shape[1] - m_k - 1), axis = 1)
-				v[key]["y"].value = dual_update(Y, R, rho.value)
+					rho_vec = np.delete(rho_vec, 0)
+				v[key]["y"].value = dual_update(Y, R, rho_vec)
+				# v[key]["y"].value = dual_update(Y, R, rho.value)
 			else:
 				v[key]["y"].value += (rho*(v[key]["x"] - v[key]["xbar"])).value
 			
