@@ -90,8 +90,8 @@ def dual_update(yvals, primals, rho):
 	#
 	# weights = dual_weights(primals)
 	# ydiff = np.diff(yvals, axis = 1)
-	# Rdiff = np.diff(primals, axis = 1)
-	# Rdrho = np.multiply(Rdiff, rho[:-1])
-	# yRoff = (ydiff + Rdrho).dot(weights)
+	# prhos = np.multiply(primals, rho)
+	# Rdiff = np.diff(prhos, axis = 1)
+	# yRoff = (ydiff + Rdiff).dot(weights)
 	# return yRnew - yRoff[:,0]
 	
