@@ -25,21 +25,7 @@ import cvxpy.settings as s
 from cvxpy.problems.problem import Problem, Minimize
 from cvxpy.expressions.constants import Parameter
 from cvxpy.atoms import sum_squares
-
-def flip_obj(prob):
-	"""Helper function to flip sign of objective function.
-	"""
-	if isinstance(prob.objective, Minimize):
-		return prob.objective
-	else:
-		return -prob.objective
-
-def assign_rho(p_list, rho_init = dict(), default = 1.0):
-	"""Construct dictionaries that map variable id to initial step
-	   size value for each problem.
-	"""
-	return [{var.id: rho_init.get(var.id, default) for var in \
-				prob.variables()} for prob in p_list]
+from cvxconsensus.utilities import flip_obj, assign_rho
 
 # Spectral step size.
 def step_ls(p, d):
@@ -259,10 +245,11 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 		prox.solve(*args, **kwargs)
 		
 		# Calculate x_bar^(k+1).
+		rvals = {}
 		xvals = {}
-		for xvar in prox.variables():
-			xvals[xvar.id] = xvar.value
-		rvals = {key: vmap["rho"].value for key, vmap in v.items()}
+		for key, vmap in v.items():
+			rvals[key] = vmap["rho"].value
+			xvals[key] = vmap["x"].value
 		pipe.send((prox.status, rvals, xvals))
 		xbars, i = pipe.recv()
 		
