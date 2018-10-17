@@ -16,7 +16,8 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 """
-from cvxpy.problems.problem import Problem, Minimize
+from cvxpy.problems.problem import Minimize
+from collections import Counter
 
 def flip_obj(prob):
 	"""Helper function to flip sign of objective function.
@@ -27,21 +28,25 @@ def flip_obj(prob):
 		return -prob.objective
 
 def assign_rho(p_list, rho_init = dict(), default = 1.0):
-	"""Construct dictionaries that map variable id to initial step
-	   size value for each problem.
+	"""For each problem, construct a dictionary that maps variable id to 
+	   initial step size value.
 	"""
 	return [{var.id: rho_init.get(var.id, default) for var in \
 				prob.variables()} for prob in p_list]
 
-def separate_vars(p_list):
-	all_vars = {var.id for var in prob.variables() for prob in p_list}
+def partition_vars(p_list):
+	"""For each problem, partition variables into public (shared with at 
+	   least one other problem) and private (only exists in that problem).
+	"""
+	varmerge = [var.id for prob in p_list for var in prob.variables()]
+	var_count = Counter(varmerge)
 	var_list = []
 	for prob in p_list:
-		var_dict = {"public": [], "private": []}
+		var_dict = {"public": {}, "private": {}}
 		for var in prob.variables():
-			if var in all_vars:
-				var_dict["public"].append(var)
+			if var_count[var.id] == 1:
+				var_dict["private"].add(var.id)
 			else:
-				var_dict["private"].append(var)
+				var_dict["public"].add(var.id)
 		var_list.append(var_dict)
 	return var_list

@@ -25,7 +25,7 @@ import cvxpy.settings as s
 from cvxpy.problems.problem import Problem, Minimize
 from cvxpy.expressions.constants import Parameter
 from cvxpy.atoms import sum_squares
-from cvxconsensus.utilities import flip_obj, assign_rho
+from cvxconsensus.utilities import flip_obj, assign_rho, partition_vars
 
 # Spectral step size.
 def step_ls(p, d):
@@ -223,6 +223,7 @@ def res_stop(res_ssq, eps = 1e-4):
 			  (dual <= eps*u_ssq + eps_fl)
 	return primal, dual, stopped
 
+# def run_worker(pipe, p, var_split, rho_init, *args, **kwargs):
 def run_worker(pipe, p, rho_init, *args, **kwargs):
 	# Spectral step size parameters.
 	spectral = kwargs.pop("spectral", False)
@@ -247,6 +248,7 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 		# Calculate x_bar^(k+1).
 		rvals = {}
 		xvals = {}
+		# for key in var_split["public"]:
 		for key, vmap in v.items():
 			rvals[key] = vmap["rho"].value
 			xvals[key] = vmap["x"].value
@@ -258,18 +260,23 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 		for key in v.keys():
 			# Calculate residuals for the (k+1) step.
 			#    Primal: x^(k+1) - x_bar^(k+1)
-			#    Dual: rho^(k+1)*(x_bar^(k) - x_bar^(k+1)) 
+			#    Dual: rho^(k+1)*(x_bar^(k) - x_bar^(k+1))
+			# xbar = xbars.get(key, v[key]["x"].value)
 			if v[key]["x"].value is None:
 				primal = -xbars[key]
+				# primal = -xbar
 			else:
 				primal = (v[key]["x"] - xbars[key]).value
+				# primal = (v[key]["x"] - xbar).value
 			dual = (v[key]["rho"]*(v[key]["xbar"] - xbars[key])).value
+			# dual = (v[key]["rho"]*(v[key]["xbar"] - xbar)).value
 			
 			# Set parameter values of x_bar^(k+1) and y^(k+1).
 			xbar_old = v[key]["xbar"].value
 			y_old = v[key]["y"].value
 			
 			v[key]["xbar"].value = xbars[key]
+			# v[key]["xbar"].value = xbar
 			v[key]["y"].value += (v[key]["rho"]*(v[key]["x"] - v[key]["xbar"])).value
 			
 			# Save stopping rule criteria.
@@ -305,12 +312,14 @@ def consensus(p_list, *args, **kwargs):
 	N = len(p_list)   # Number of problems.
 	max_iter = kwargs.pop("max_iter", 100)
 	rho_init = kwargs.pop("rho_init", dict())
+	eps = kwargs.pop("eps", 1e-6)   # Stopping tolerance.
+	resid = np.zeros((max_iter, 2))
+	
 	if np.isscalar(rho_init):
 	    rho_list = assign_rho(p_list, default = rho_init)
 	else:
 	    rho_list = assign_rho(p_list, rho_init = rho_init)
-	eps = kwargs.pop("eps", 1e-6)   # Stopping tolerance.
-	resid = np.zeros((max_iter, 2))
+	# var_list = partition_vars(p_list)
 	
 	# Set up the workers.
 	pipes = []
@@ -319,6 +328,7 @@ def consensus(p_list, *args, **kwargs):
 		local, remote = Pipe()
 		pipes += [local]
 		procs += [Process(target = run_worker, args = (remote, p_list[i], rho_list[i]) + args, kwargs = kwargs)]
+		# procs += [Process(target = run_worker, args = (remote, p_list[i], var_list[i], rho_list[i]) + args, kwargs = kwargs)]
 		procs[-1].start()
 
 	# ADMM loop.
@@ -339,6 +349,6 @@ def consensus(p_list, *args, **kwargs):
 		if stopped:
 			break
 	end = time()
-
+	
 	[p.terminate() for p in procs]
 	return {"xbars": xbars, "residuals": resid[:(i+1),:], "num_iters": i+1, "solve_time": (end - start)}
