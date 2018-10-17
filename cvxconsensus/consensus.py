@@ -35,8 +35,8 @@ def flip_obj(prob):
 		return -prob.objective
 
 def assign_rho(p_list, rho_init = dict(), default = 1.0):
-	"""Construct dictionaries that map variable id to rho value
-	   for each problem.
+	"""Construct dictionaries that map variable id to initial step
+	   size value for each problem.
 	"""
 	return [{var.id: rho_init.get(var.id, default) for var in \
 				prob.variables()} for prob in p_list]
@@ -156,7 +156,7 @@ def step_spec(rho, k, dx, dxbar, dy, dyhat, eps = 0.2, C = 1e10):
 	rho_hat = step_safe(rho, a_hat, b_hat, a_cor, b_cor, eps)
 	return max(min(rho_hat, scale*rho), rho/scale)
 
-def prox_step(prob, rho_init, scaled = False):
+def prox_step(prob, rho_init, scaled = False, spectral = False):
 	"""Formulates the proximal operator for a given objective, constraints, and step size.
 	Parikh, Boyd. "Proximal Algorithms."
 	
@@ -169,6 +169,8 @@ def prox_step(prob, rho_init, scaled = False):
         The initial step size.
     scaled : logical, optional
     	Should the dual variable be scaled?
+	spectral : logical, optional
+	    Will spectral step sizes be used?
     
     Returns
     ----------
@@ -176,30 +178,26 @@ def prox_step(prob, rho_init, scaled = False):
         The proximal step problem.
     vmap : dict
         A map of each proximal variable id to a dictionary containing that variable `x`,
-        the mean variable parameter `xbar`, and the associated dual parameter `y`.
-    rho : Parameter
-        The step size parameter.
+        the mean variable parameter `xbar`, the associated dual parameter `y`, and the
+        step size parameter `rho`. If `spectral = True`, the estimated dual parameter 
+        `yhat` is also included.
 	"""
 	vmap = {}   # Store consensus variables
 	f = flip_obj(prob).args[0]
-	# rho = Parameter(value = rho_init, nonneg = True)   # Step size
 	
 	# Add penalty for each variable.
 	for xvar in prob.variables():
 		xid = xvar.id
 		shape = xvar.shape
-		# vmap[xid] = {"x": xvar, "xbar": Parameter(shape, value = np.zeros(shape)),
-		#			 "y": Parameter(shape, value = np.zeros(shape))}
-		# dual = vmap[xid]["y"] if scaled else vmap[xid]["y"]/rho
-		# f += (rho/2.0)*sum_squares(xvar - vmap[xid]["xbar"] + dual)
 		vmap[xid] = {"x": xvar, "xbar": Parameter(shape, value = np.zeros(shape)),
 		 		     "y": Parameter(shape, value = np.zeros(shape)),
 					 "rho": Parameter(value = rho_init[xid], nonneg = True)}
+		if spectral:
+			vmap[xid]["yhat"] = Parameter(shape, value = np.zeros(shape))
 		dual = vmap[xid]["y"] if scaled else vmap[xid]["y"]/vmap[xid]["rho"]
 		f += (vmap[xid]["rho"]/2.0)*sum_squares(xvar - vmap[xid]["xbar"] + dual)
 	
 	prox = Problem(Minimize(f), prob.constraints)
-	# return prox, vmap, rho
 	return prox, vmap
 
 def x_average(prox_res):
@@ -216,8 +214,6 @@ def x_average(prox_res):
 		
 		# Merge dictionary of x values
 		for key, value in xvals.items():
-			# xmerge[key].append(rho*value)
-			# rho_sum[key] += rho
 			xmerge[key].append(rho[key]*value)
 			rho_sum[key] += rho[key]
 	
@@ -249,13 +245,13 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 	C = kwargs.pop("C", 1e10)
 	
 	# Initiate proximal problem.
-	# prox, v, rho = prox_step(p, rho_init)
-	prox, v = prox_step(p, rho_init)
+	prox, v = prox_step(p, rho_init, spectral = spectral)
 	
 	# Initiate step size variables.
-	nelem = np.sum([np.prod(xvar.size) for xvar in p.variables()])
-	v_old = {"x": np.zeros(nelem), "xbar": np.zeros(nelem),
-			 "y": np.zeros(nelem), "yhat": np.zeros(nelem)}
+	if spectral:
+		v_old = {key: {"x": np.zeros(vmap["x"].shape), "xbar": np.zeros(vmap["xbar"].shape),
+			           "y": np.zeros(vmap["y"].shape), "yhat": np.zeros(vmap["yhat"].shape)} \
+			       for key, vmap in v.items()}
 	
 	# ADMM loop.
 	while True:
@@ -267,12 +263,10 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 		for xvar in prox.variables():
 			xvals[xvar.id] = xvar.value
 		rvals = {key: vmap["rho"].value for key, vmap in v.items()}
-		# pipe.send((prox.status, rho.value, xvals))
 		pipe.send((prox.status, rvals, xvals))
 		xbars, i = pipe.recv()
 		
 		# Update y^(k+1) = y^(k) + rho^(k)*(x^(k+1) - x_bar^(k+1)).
-		v_flat = {"x": [], "xbar": [], "y": [], "yhat": []}
 		ssq = {"primal": 0, "dual": 0, "x": 0, "xbar": 0, "y": 0}
 		for key in v.keys():
 			# Calculate residuals for the (k+1) step.
@@ -282,7 +276,6 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 				primal = -xbars[key]
 			else:
 				primal = (v[key]["x"] - xbars[key]).value
-			# dual = (rho*(v[key]["xbar"] - xbars[key])).value
 			dual = (v[key]["rho"]*(v[key]["xbar"] - xbars[key])).value
 			
 			# Set parameter values of x_bar^(k+1) and y^(k+1).
@@ -290,7 +283,6 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 			y_old = v[key]["y"].value
 			
 			v[key]["xbar"].value = xbars[key]
-			# v[key]["y"].value += (rho*(v[key]["x"] - v[key]["xbar"])).value
 			v[key]["y"].value += (v[key]["rho"]*(v[key]["x"] - v[key]["xbar"])).value
 			
 			# Save stopping rule criteria.
@@ -301,48 +293,30 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 			ssq["xbar"] += np.sum(np.square(v[key]["xbar"].value))
 			ssq["y"] += np.sum(np.square(v[key]["y"].value))
 			
-			# Calculate y_hat^(k+1) for step size update.
-			# y_hat = y_old + rho*(v[key]["x"] - xbar_old)
-			y_hat = y_old + v[key]["rho"]*(v[key]["x"] - xbar_old)
-			v_flat["yhat"] += [np.asarray(y_hat.value).reshape(-1)]
-		pipe.send(ssq)
-		
-		# Spectral step size.
-		if spectral and i % Tf == 1:
-			# Collect and flatten variables.
-			for key in v.keys():
-				v_flat["x"] += [np.asarray(v[key]["x"].value).reshape(-1)]
-				v_flat["xbar"] += [np.asarray(v[key]["xbar"].value).reshape(-1)]
-				v_flat["y"] += [np.asarray(v[key]["y"].value).reshape(-1)]
-			
-			for key in v_flat.keys():
-				v_flat[key] = np.concatenate(v_flat[key])
+			# Spectral step size.
+			if spectral and i % Tf == 1:
+				# Calculate y_hat^(k+1) for step size update.
+				v[key]["yhat"] = y_old + v[key]["rho"]*(v[key]["x"] - xbar_old)
 
-			# Calculate change from old iterate.
-			dx = v_flat["x"] - v_old["x"]
-			dxbar = -v_flat["xbar"] + v_old["xbar"]
-			dy = v_flat["y"] - v_old["y"]
-			dyhat = v_flat["yhat"] - v_old["yhat"]
-			
-			# Update step size.
-			rho.value = step_spec(rho.value, i, dx, dxbar, dy, dyhat, eps, C)
-			# rho_vals = np.asarray([vmap["rho"].value for key, vmap in v.items()])
-			# rho_vals = step_spec(rho_vals, i, dx, dxbar, dy, dyhat, eps, C)
-			# count = 0
-			# for key, vmap in v.items():
-			#     rho[key].value = rho_vals[count]
-			#     count = count + 1
-			
-			# Update step size variables.
-			for key in v_flat.keys():
-				v_old[key] = v_flat[key]
+				# Calculate change from old iterate.
+				dx = v[key]["x"].value - v_old[key]["x"]
+				dxbar = -v[key]["xbar"].value + v_old[key]["xbar"]
+				dy = v[key]["y"].value - v_old[key]["y"]
+				dyhat = v[key]["yhat"].value - v_old[key]["yhat"]
+				
+				# Update step size.
+				v[key]["rho"].value = step_spec(v[key]["rho"].value, i, dx, dxbar, dy, dyhat, eps, C)
+				
+				# Update step size variables.
+				v_old[key]["x"] = v[key]["x"].value
+				v_old[key]["xbar"] = v[key]["xbar"].value
+				v_old[key]["y"] = v[key]["y"].value
+				v_old[key]["yhat"] = v[key]["yhat"].value
+		pipe.send(ssq)
 
 def consensus(p_list, *args, **kwargs):
 	N = len(p_list)   # Number of problems.
 	max_iter = kwargs.pop("max_iter", 100)
-	# rho_init = kwargs.pop("rho_init", N*[1.0])
-	# if np.isscalar(rho_init):
-	#	rho_init = N*[rho_init]
 	rho_init = kwargs.pop("rho_init", dict())
 	if np.isscalar(rho_init):
 	    rho_list = assign_rho(p_list, default = rho_init)
@@ -357,7 +331,6 @@ def consensus(p_list, *args, **kwargs):
 	for i in range(N):
 		local, remote = Pipe()
 		pipes += [local]
-		# procs += [Process(target = run_worker, args = (remote, p_list[i], rho_init[i]) + args, kwargs = kwargs)]
 		procs += [Process(target = run_worker, args = (remote, p_list[i], rho_list[i]) + args, kwargs = kwargs)]
 		procs[-1].start()
 

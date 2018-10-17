@@ -55,5 +55,5 @@ class BaseTest(TestCase):
             print("MSE: ", np.mean(np.square(x_admm[i] - x_comb[i])), "\n")
         print("ADMM Objective: %f" % obj_admm)
         print("Base Objective: %f" % obj_comb)
-        print("Iterations: %d" % probs.solver_status["num_iters"])
-        print("Elapsed Time: %f" % probs.solver_status["solve_time"])
+        print("Iterations: %d" % probs.solver_stats["num_iters"])
+        print("Elapsed Time: %f" % probs.solver_stats["solve_time"])
