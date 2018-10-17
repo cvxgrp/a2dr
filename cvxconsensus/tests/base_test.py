@@ -46,3 +46,14 @@ class BaseTest(TestCase):
             return np.asarray(mat).flatten('F').tolist()
         else:
             return mat
+
+    def compare_results(self, probs, obj_admm, obj_comb, x_admm, x_comb):
+        N = len(probs.variables())
+        for i in range(N):
+            print("\nADMM Solution:\n", x_admm[i])
+            print("Base Solution:\n", x_comb[i])
+            print("MSE: ", np.mean(np.square(x_admm[i] - x_comb[i])), "\n")
+        print("ADMM Objective: %f" % obj_admm)
+        print("Base Objective: %f" % obj_comb)
+        print("Iterations: %d" % probs.solver_status["num_iters"])
+        print("Elapsed Time: %f" % probs.solver_status["solve_time"])

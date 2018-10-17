@@ -34,6 +34,13 @@ def flip_obj(prob):
 	else:
 		return -prob.objective
 
+def assign_rho(p_list, rho_init = dict(), default = 1.0):
+	"""Construct dictionaries that map variable id to rho value
+	   for each problem.
+	"""
+	return [{var.id: rho_init.get(var.id, default) for var in \
+				prob.variables()} for prob in p_list]
+
 # Spectral step size.
 def step_ls(p, d):
 	"""Least squares estimator for spectral step size.
@@ -175,19 +182,25 @@ def prox_step(prob, rho_init, scaled = False):
 	"""
 	vmap = {}   # Store consensus variables
 	f = flip_obj(prob).args[0]
-	rho = Parameter(value = rho_init, nonneg = True)   # Step size
+	# rho = Parameter(value = rho_init, nonneg = True)   # Step size
 	
 	# Add penalty for each variable.
 	for xvar in prob.variables():
 		xid = xvar.id
 		shape = xvar.shape
+		# vmap[xid] = {"x": xvar, "xbar": Parameter(shape, value = np.zeros(shape)),
+		#			 "y": Parameter(shape, value = np.zeros(shape))}
+		# dual = vmap[xid]["y"] if scaled else vmap[xid]["y"]/rho
+		# f += (rho/2.0)*sum_squares(xvar - vmap[xid]["xbar"] + dual)
 		vmap[xid] = {"x": xvar, "xbar": Parameter(shape, value = np.zeros(shape)),
-					 "y": Parameter(shape, value = np.zeros(shape))}
-		dual = vmap[xid]["y"] if scaled else vmap[xid]["y"]/rho
-		f += (rho/2.0)*sum_squares(xvar - vmap[xid]["xbar"] + dual)
+		 		     "y": Parameter(shape, value = np.zeros(shape)),
+					 "rho": Parameter(value = rho_init[xid], nonneg = True)}
+		dual = vmap[xid]["y"] if scaled else vmap[xid]["y"]/vmap[xid]["rho"]
+		f += (vmap[xid]["rho"]/2.0)*sum_squares(xvar - vmap[xid]["xbar"] + dual)
 	
 	prox = Problem(Minimize(f), prob.constraints)
-	return prox, vmap, rho
+	# return prox, vmap, rho
+	return prox, vmap
 
 def x_average(prox_res):
 	"""Average the primal variables over the nodes in which they are present,
@@ -203,8 +216,10 @@ def x_average(prox_res):
 		
 		# Merge dictionary of x values
 		for key, value in xvals.items():
-			xmerge[key].append(rho*value)
-			rho_sum[key] += rho
+			# xmerge[key].append(rho*value)
+			# rho_sum[key] += rho
+			xmerge[key].append(rho[key]*value)
+			rho_sum[key] += rho[key]
 	
 	return {key: np.sum(np.array(xlist), axis = 0)/rho_sum[key] for key, xlist in xmerge.items()}
 
@@ -234,7 +249,8 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 	C = kwargs.pop("C", 1e10)
 	
 	# Initiate proximal problem.
-	prox, v, rho = prox_step(p, rho_init)
+	# prox, v, rho = prox_step(p, rho_init)
+	prox, v = prox_step(p, rho_init)
 	
 	# Initiate step size variables.
 	nelem = np.sum([np.prod(xvar.size) for xvar in p.variables()])
@@ -250,7 +266,9 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 		xvals = {}
 		for xvar in prox.variables():
 			xvals[xvar.id] = xvar.value
-		pipe.send((prox.status, rho.value, xvals))
+		rvals = {key: vmap["rho"].value for key, vmap in v.items()}
+		# pipe.send((prox.status, rho.value, xvals))
+		pipe.send((prox.status, rvals, xvals))
 		xbars, i = pipe.recv()
 		
 		# Update y^(k+1) = y^(k) + rho^(k)*(x^(k+1) - x_bar^(k+1)).
@@ -264,14 +282,16 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 				primal = -xbars[key]
 			else:
 				primal = (v[key]["x"] - xbars[key]).value
-			dual = (rho*(v[key]["xbar"] - xbars[key])).value
+			# dual = (rho*(v[key]["xbar"] - xbars[key])).value
+			dual = (v[key]["rho"]*(v[key]["xbar"] - xbars[key])).value
 			
 			# Set parameter values of x_bar^(k+1) and y^(k+1).
 			xbar_old = v[key]["xbar"].value
 			y_old = v[key]["y"].value
 			
 			v[key]["xbar"].value = xbars[key]
-			v[key]["y"].value += (rho*(v[key]["x"] - v[key]["xbar"])).value
+			# v[key]["y"].value += (rho*(v[key]["x"] - v[key]["xbar"])).value
+			v[key]["y"].value += (v[key]["rho"]*(v[key]["x"] - v[key]["xbar"])).value
 			
 			# Save stopping rule criteria.
 			ssq["primal"] += np.sum(np.square(primal))
@@ -282,7 +302,8 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 			ssq["y"] += np.sum(np.square(v[key]["y"].value))
 			
 			# Calculate y_hat^(k+1) for step size update.
-			y_hat = y_old + rho*(v[key]["x"] - xbar_old)
+			# y_hat = y_old + rho*(v[key]["x"] - xbar_old)
+			y_hat = y_old + v[key]["rho"]*(v[key]["x"] - xbar_old)
 			v_flat["yhat"] += [np.asarray(y_hat.value).reshape(-1)]
 		pipe.send(ssq)
 		
@@ -305,6 +326,12 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 			
 			# Update step size.
 			rho.value = step_spec(rho.value, i, dx, dxbar, dy, dyhat, eps, C)
+			# rho_vals = np.asarray([vmap["rho"].value for key, vmap in v.items()])
+			# rho_vals = step_spec(rho_vals, i, dx, dxbar, dy, dyhat, eps, C)
+			# count = 0
+			# for key, vmap in v.items():
+			#     rho[key].value = rho_vals[count]
+			#     count = count + 1
 			
 			# Update step size variables.
 			for key in v_flat.keys():
@@ -313,9 +340,14 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 def consensus(p_list, *args, **kwargs):
 	N = len(p_list)   # Number of problems.
 	max_iter = kwargs.pop("max_iter", 100)
-	rho_init = kwargs.pop("rho_init", N*[1.0])
+	# rho_init = kwargs.pop("rho_init", N*[1.0])
+	# if np.isscalar(rho_init):
+	#	rho_init = N*[rho_init]
+	rho_init = kwargs.pop("rho_init", dict())
 	if np.isscalar(rho_init):
-		rho_init = N*[rho_init]
+	    rho_list = assign_rho(p_list, default = rho_init)
+	else:
+	    rho_list = assign_rho(p_list, rho_init = rho_init)
 	eps = kwargs.pop("eps", 1e-6)   # Stopping tolerance.
 	resid = np.zeros((max_iter, 2))
 	
@@ -325,7 +357,8 @@ def consensus(p_list, *args, **kwargs):
 	for i in range(N):
 		local, remote = Pipe()
 		pipes += [local]
-		procs += [Process(target = run_worker, args = (remote, p_list[i], rho_init[i]) + args, kwargs = kwargs)]
+		# procs += [Process(target = run_worker, args = (remote, p_list[i], rho_init[i]) + args, kwargs = kwargs)]
+		procs += [Process(target = run_worker, args = (remote, p_list[i], rho_list[i]) + args, kwargs = kwargs)]
 		procs[-1].start()
 
 	# ADMM loop.
