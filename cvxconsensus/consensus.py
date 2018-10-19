@@ -190,20 +190,20 @@ def x_average(prox_res):
 	"""Average the primal variables over the nodes in which they are present,
 	   weighted by each node's step size.
 	"""
-	xmerge = defaultdict(list)
+	x_merge = defaultdict(list)
 	rho_sum = defaultdict(float)
 	
-	for status, rho, xvals in prox_res:
+	for status, vals in prox_res:
 		# Check if proximal step converged.
 		if status in s.INF_OR_UNB:
 			raise RuntimeError("Proximal problem is infeasible or unbounded")
 		
 		# Merge dictionary of x values
-		for key, value in xvals.items():
-			xmerge[key].append(rho[key]*value)
-			rho_sum[key] += rho[key]
+		for key, value in vals.items():
+			x_merge[key].append(value["rho"]*value["x"])
+			rho_sum[key] += value["rho"]
 	
-	return {key: np.sum(np.array(xlist), axis = 0)/rho_sum[key] for key, xlist in xmerge.items()}
+	return {key: np.sum(np.array(x_list), axis = 0)/rho_sum[key] for key, x_list in x_merge.items()}
 
 def res_stop(res_ssq, eps = 1e-4):
 	"""Calculate the sum of squared primal/dual residuals.
@@ -238,7 +238,7 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 	if spectral:
 		v_old = {key: {"x": np.zeros(vmap["x"].shape), "xbar": np.zeros(vmap["xbar"].shape),
 			           "y": np.zeros(vmap["y"].shape), "yhat": np.zeros(vmap["yhat"].shape)} \
-			       for key, vmap in v.items()}
+					for key, vmap in v.items()}
 	
 	# ADMM loop.
 	while True:
@@ -246,13 +246,9 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 		prox.solve(*args, **kwargs)
 		
 		# Calculate x_bar^(k+1).
-		rvals = {}
-		xvals = {}
-		# for key in var_split["public"]:
-		for key, vmap in v.items():
-			rvals[key] = vmap["rho"].value
-			xvals[key] = vmap["x"].value
-		pipe.send((prox.status, rvals, xvals))
+		vals = {key: {"x": vmap["x"].value, "rho": vmap["rho"].value} \
+					for key, vmap in v.items()}
+		pipe.send((prox.status, vals))
 		xbars, i = pipe.recv()
 		
 		# Update y^(k+1) = y^(k) + rho^(k)*(x^(k+1) - x_bar^(k+1)).

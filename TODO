@@ -3,3 +3,10 @@
 1. Allow step size parameter (rho) to differ across variables, not threads (i.e., each variable id is associated with a unique rho, and threads that share a variable should initialize rho to the same value for that variable.)
 
 2. Keep track of variable(s) shared across multiple threads. Each thread should only send its shared variable(s) to the reducer, so private variable(s) are never seen by the reducer or other threads.
+
+3. Add examples on the following topics:
+    a. Network flow.
+    b. Federated learning.
+    c. Formation (flying) control.
+    d. Engineering design (power/area).
+

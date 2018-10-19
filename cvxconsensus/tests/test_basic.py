@@ -52,7 +52,7 @@ class TestBasic(BaseTest):
 		probs.pretty_vars()
 		
 		# Solve with consensus ADMM.
-		obj_admm = probs.solve(method = "consensus", rho_init = {x.id: 1.0, y.id: 0.5}, \
+		obj_admm = probs.solve(method = "consensus", rho_init = 1.0, \
 								max_iter = self.MAX_ITER, spectral = self.spectral)
 		x_admm = [x.value for x in probs.variables()]
 		# probs.plot_residuals()
