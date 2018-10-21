@@ -223,8 +223,7 @@ def res_stop(res_ssq, eps = 1e-4):
 			  (dual <= eps*u_ssq + eps_fl)
 	return primal, dual, stopped
 
-# def run_worker(pipe, p, var_split, rho_init, *args, **kwargs):
-def run_worker(pipe, p, rho_init, *args, **kwargs):
+def run_worker(pipe, p, var_split, rho_init, *args, **kwargs):
 	# Spectral step size parameters.
 	spectral = kwargs.pop("spectral", False)
 	Tf = kwargs.pop("Tf", 2)
@@ -241,14 +240,14 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 					for key, vmap in v.items()}
 	
 	# ADMM loop.
-	while True:
+	while True:	
 		# Proximal step for x^(k+1).
 		prox.solve(*args, **kwargs)
 		
-		# Calculate x_bar^(k+1).
-		vals = {key: {"x": vmap["x"].value, "rho": vmap["rho"].value} \
-					for key, vmap in v.items()}
-		pipe.send((prox.status, vals))
+		# Calculate x_bar^(k+1) for public variables.
+		vals_pub = {key: {"x": v[key]["x"].value, "rho": v[key]["rho"].value} \
+						for key in var_split["public"]}
+		pipe.send((prox.status, vals_pub))
 		xbars, i = pipe.recv()
 		
 		# Update y^(k+1) = y^(k) + rho^(k)*(x^(k+1) - x_bar^(k+1)).
@@ -257,22 +256,17 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 			# Calculate residuals for the (k+1) step.
 			#    Primal: x^(k+1) - x_bar^(k+1)
 			#    Dual: rho^(k+1)*(x_bar^(k) - x_bar^(k+1))
-			# xbar = xbars.get(key, v[key]["x"].value)
+			xbar = xbars.get(key, v[key]["x"].value)
 			if v[key]["x"].value is None:
-				primal = -xbars[key]
-				# primal = -xbar
+				primal = -xbar
 			else:
-				primal = (v[key]["x"] - xbars[key]).value
-				# primal = (v[key]["x"] - xbar).value
-			dual = (v[key]["rho"]*(v[key]["xbar"] - xbars[key])).value
-			# dual = (v[key]["rho"]*(v[key]["xbar"] - xbar)).value
+				primal = (v[key]["x"] - xbar).value
+			dual = (v[key]["rho"]*(v[key]["xbar"] - xbar)).value
 			
 			# Set parameter values of x_bar^(k+1) and y^(k+1).
 			xbar_old = v[key]["xbar"].value
 			y_old = v[key]["y"].value
-			
-			v[key]["xbar"].value = xbars[key]
-			# v[key]["xbar"].value = xbar
+			v[key]["xbar"].value = xbar
 			v[key]["y"].value += (v[key]["rho"]*(v[key]["x"] - v[key]["xbar"])).value
 			
 			# Save stopping rule criteria.
@@ -303,6 +297,11 @@ def run_worker(pipe, p, rho_init, *args, **kwargs):
 				v_old[key]["y"] = v[key]["y"].value
 				v_old[key]["yhat"] = v[key]["yhat"].value
 		pipe.send(ssq)
+		
+		# Send private variable values if ADMM loop terminated.
+		finished = pipe.recv()
+		if finished:
+		 	pipe.send({key: v[key]["x"].value for key in var_split["private"]})
 
 def consensus(p_list, *args, **kwargs):
 	N = len(p_list)   # Number of problems.
@@ -312,10 +311,10 @@ def consensus(p_list, *args, **kwargs):
 	resid = np.zeros((max_iter, 2))
 	
 	if np.isscalar(rho_init):
-	    rho_list = assign_rho(p_list, default = rho_init)
+		rho_list = assign_rho(p_list, default = rho_init)
 	else:
-	    rho_list = assign_rho(p_list, rho_init = rho_init)
-	# var_list = partition_vars(p_list)
+		rho_list = assign_rho(p_list, rho_init = rho_init)
+	var_list = partition_vars(p_list)   # Public/private variable partition.
 	
 	# Set up the workers.
 	pipes = []
@@ -323,13 +322,15 @@ def consensus(p_list, *args, **kwargs):
 	for i in range(N):
 		local, remote = Pipe()
 		pipes += [local]
-		procs += [Process(target = run_worker, args = (remote, p_list[i], rho_list[i]) + args, kwargs = kwargs)]
-		# procs += [Process(target = run_worker, args = (remote, p_list[i], var_list[i], rho_list[i]) + args, kwargs = kwargs)]
+		procs += [Process(target = run_worker, args = (remote, p_list[i], var_list[i], \
+							rho_list[i]) + args, kwargs = kwargs)]
 		procs[-1].start()
 
 	# ADMM loop.
+	i = 0
+	finished = False
 	start = time()
-	for i in range(max_iter):
+	while not finished:
 		# Gather and average x_i.
 		prox_res = [pipe.recv() for pipe in pipes]
 		xbars = x_average(prox_res)
@@ -342,8 +343,17 @@ def consensus(p_list, *args, **kwargs):
 		ssq = [pipe.recv() for pipe in pipes]
 		primal, dual, stopped = res_stop(ssq, eps)
 		resid[i,:] = np.array([primal, dual])
-		if stopped:
-			break
+		
+		# Send finished flag to threads.
+		i = i + 1
+		finished = stopped or i >= max_iter
+		for pipe in pipes:
+		    pipe.send(finished)
+	
+	# Gather private x_i values.
+	xprivs = [pipe.recv() for pipe in pipes]
+	for xpriv in xprivs:
+	    xbars.update(xpriv)
 	end = time()
 	
 	[p.terminate() for p in procs]

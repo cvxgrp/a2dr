@@ -22,7 +22,7 @@ from cvxpy import Variable, Parameter, Problem, Minimize
 from cvxpy.atoms import *
 import cvxconsensus
 from cvxconsensus import Problems
-from cvxconsensus.utilities import assign_rho
+from cvxconsensus.utilities import assign_rho, partition_vars
 from cvxconsensus.tests.base_test import BaseTest
 
 class TestFunctions(BaseTest):
@@ -30,28 +30,41 @@ class TestFunctions(BaseTest):
 	
 	def setUp(self):
 		np.random.seed(1)
+		self.n = 10
+		self.x = Variable(10)
+		self.y = Variable(20)
+		self.z = Variable(5)
 	
 	def test_rho_init(self):
-		n = 10
-		x = Variable(n)
-		p_list = [Problem(Minimize(norm(x)))]
+		p_list = [Problem(Minimize(norm(self.x)))]
 		rho_list = assign_rho(p_list)
-		self.assertDictEqual(rho_list[0], {x.id: 1.0})
+		self.assertDictEqual(rho_list[0], {self.x.id: 1.0})
 		
 		rho_list = assign_rho(p_list, default = 0.5)
-		self.assertDictEqual(rho_list[0], {x.id: 0.5})
+		self.assertDictEqual(rho_list[0], {self.x.id: 0.5})
 		
-		rho_list = assign_rho(p_list, rho_init = {x.id: 1.5})
-		self.assertDictEqual(rho_list[0], {x.id: 1.5})
+		rho_list = assign_rho(p_list, rho_init = {self.x.id: 1.5})
+		self.assertDictEqual(rho_list[0], {self.x.id: 1.5})
 		
-		m = 20
-		y = Variable(m)
-		p_list.append(Problem(Minimize(0.5*sum_squares(y)), [norm(x) <= 10]))
+		p_list.append(Problem(Minimize(0.5*sum_squares(self.y)), [norm(self.x) <= 10]))
 		rho_list = assign_rho(p_list)
-		self.assertDictEqual(rho_list[0], {x.id: 1.0})
-		self.assertDictEqual(rho_list[1], {x.id: 1.0, y.id: 1.0})
+		self.assertDictEqual(rho_list[0], {self.x.id: 1.0})
+		self.assertDictEqual(rho_list[1], {self.x.id: 1.0, self.y.id: 1.0})
 		
-		rho_list = assign_rho(p_list, rho_init = {x.id: 2.0}, default = 0.5)
-		self.assertDictEqual(rho_list[0], {x.id: 2.0})
-		self.assertDictEqual(rho_list[1], {x.id: 2.0, y.id: 0.5})
+		rho_list = assign_rho(p_list, rho_init = {self.x.id: 2.0}, default = 0.5)
+		self.assertDictEqual(rho_list[0], {self.x.id: 2.0})
+		self.assertDictEqual(rho_list[1], {self.x.id: 2.0, self.y.id: 0.5})
+	
+	def test_var_partition(self):
+		p_list = [Problem(Minimize(norm(self.x)))]
+		var_list = partition_vars(p_list)
+		self.assertSetEqual(var_list[0]["private"], {self.x.id})
+		self.assertSetEqual(var_list[0]["public"], set())
 		
+		p_list = [Problem(Minimize(norm(self.x) + norm(self.y))),
+				  Problem(Minimize(norm(self.y)))]
+		var_list = partition_vars(p_list)
+		self.assertSetEqual(var_list[0]["private"], {self.x.id})
+		self.assertSetEqual(var_list[0]["public"], {self.y.id})
+		self.assertSetEqual(var_list[1]["private"], set())
+		self.assertSetEqual(var_list[1]["public"], {self.y.id})

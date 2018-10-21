@@ -31,6 +31,11 @@ def assign_rho(p_list, rho_init = dict(), default = 1.0):
 	"""For each problem, construct a dictionary that maps variable id to 
 	   initial step size value.
 	"""
+	vids = {var.id for prob in p_list for var in prob.variables()}
+	for key in rho_init.keys():
+		if not key in vids:
+			raise ValueError("{} is not a valid variable id".format(key))
+			
 	return [{var.id: rho_init.get(var.id, default) for var in \
 				prob.variables()} for prob in p_list]
 
@@ -42,7 +47,7 @@ def partition_vars(p_list):
 	var_count = Counter(varmerge)
 	var_list = []
 	for prob in p_list:
-		var_dict = {"public": {}, "private": {}}
+		var_dict = {"public": set(), "private": set()}
 		for var in prob.variables():
 			if var_count[var.id] == 1:
 				var_dict["private"].add(var.id)

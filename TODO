@@ -4,7 +4,9 @@
 
 2. Keep track of variable(s) shared across multiple threads. Each thread should only send its shared variable(s) to the reducer, so private variable(s) are never seen by the reducer or other threads.
 
-3. Add examples on the following topics:
+10/21/2018
+============
+1. Add examples on the following topics:
     a. Network flow.
     b. Federated learning.
     c. Formation (flying) control.
