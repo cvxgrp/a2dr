@@ -7,8 +7,7 @@
 10/21/2018
 ============
 1. Add examples on the following topics:
-    a. Network flow.
+    a. Network flow (with > 2 partitions).
     b. Federated learning.
-    c. Formation (flying) control.
-    d. Engineering design (power/area).
+    c. Engineering design (power/area).
 
