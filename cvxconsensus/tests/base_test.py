@@ -10,7 +10,7 @@ the Free Software Foundation, either version 3 of the License, or
 
 CVXConsensus is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
@@ -46,3 +46,14 @@ class BaseTest(TestCase):
             return np.asarray(mat).flatten('F').tolist()
         else:
             return mat
+
+    def compare_results(self, probs, obj_admm, obj_comb, x_admm, x_comb):
+        N = len(probs.variables())
+        for i in range(N):
+            print("\nADMM Solution:\n", x_admm[i])
+            print("Base Solution:\n", x_comb[i])
+            print("MSE: ", np.mean(np.square(x_admm[i] - x_comb[i])), "\n")
+        print("ADMM Objective: %f" % obj_admm)
+        print("Base Objective: %f" % obj_comb)
+        print("Iterations: %d" % probs.solver_stats["num_iters"])
+        print("Elapsed Time: %f" % probs.solver_stats["solve_time"])

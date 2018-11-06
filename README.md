@@ -1,3 +1,3 @@
-cvxconsensus
+Consensus Optimization
 ===============================
 

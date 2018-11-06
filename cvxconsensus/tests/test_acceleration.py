@@ -64,12 +64,12 @@ class TestAcceleration(BaseTest):
 		N = len(p_list)
 		
 		# Solve with consensus ADMM.
-		obj_admm = probs.solve(method = "consensus", rho_init = N*[1.0], \
+		obj_admm = probs.solve(method = "consensus", rho_init = 1.0, \
 							   max_iter = self.MAX_ITER, spectral = self.spectral)
 		res_admm = {"primal": probs.primal_residual, "dual": probs.dual_residual}
 		
 		# Solve with consensus ADMM using Anderson acceleration.
-		obj_accel = probs.solve(method = "consensus", rho_init = N*[1.0], \
+		obj_accel = probs.solve(method = "consensus", rho_init = 1.0, \
 							   max_iter = self.MAX_ITER, spectral = self.spectral,
 							   anderson = True, m_accel = 5)
 		res_accel = {"primal": probs.primal_residual, "dual": probs.dual_residual}

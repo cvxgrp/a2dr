@@ -10,7 +10,7 @@ the Free Software Foundation, either version 3 of the License, or
 
 CVXConsensus is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
@@ -23,17 +23,6 @@ from cvxpy.atoms import *
 import cvxconsensus
 from cvxconsensus import Problems
 from cvxconsensus.tests.base_test import BaseTest
-
-def compare_results(probs, obj_admm, obj_comb, x_admm, x_comb):
-	N = len(probs.variables())
-	for i in range(N):
-		print("\nADMM Solution:\n", x_admm[i])
-		print("Base Solution:\n", x_comb[i])
-		print("MSE: ", np.mean(np.square(x_admm[i] - x_comb[i])), "\n")
-	print("ADMM Objective: %f" % obj_admm)
-	print("Base Objective: %f" % obj_comb)
-	print("Iterations: %d" % probs.solver_stats["num_iters"])
-	print("Elapsed Time: %f" % probs.solver_stats["solve_time"])
 
 class TestBasic(BaseTest):
 	"""Basic unit tests for consensus optimization"""
@@ -63,8 +52,8 @@ class TestBasic(BaseTest):
 		probs.pretty_vars()
 		
 		# Solve with consensus ADMM.
-		obj_admm = probs.solve(method = "consensus", rho_init = N*[1.0], \
-							   max_iter = self.MAX_ITER, spectral = self.spectral)
+		obj_admm = probs.solve(method = "consensus", rho_init = 1.0, \
+								max_iter = self.MAX_ITER, spectral = self.spectral)
 		x_admm = [x.value for x in probs.variables()]
 		# probs.plot_residuals()
 
@@ -73,7 +62,7 @@ class TestBasic(BaseTest):
 		x_comb = [x.value for x in probs.variables()]
 
 		# Compare results.
-		# compare_results(probs, obj_admm, obj_comb, x_admm, x_comb)
+		# self.compare_results(probs, obj_admm, obj_comb, x_admm, x_comb)
 		N = len(probs.variables())
 		self.assertAlmostEqual(obj_admm, obj_comb)
 		for i in range(N):
@@ -101,8 +90,8 @@ class TestBasic(BaseTest):
 		probs.pretty_vars()
 		
 		# Solve with consensus ADMM.
-		obj_admm = probs.solve(method = "consensus", rho_init = N*[0.5], \
-							   max_iter = self.MAX_ITER, spectral = self.spectral)
+		obj_admm = probs.solve(method = "consensus", rho_init = 0.5, \
+								max_iter = self.MAX_ITER, spectral = self.spectral)
 		x_admm = [x.value for x in probs.variables()]
 		# probs.plot_residuals()
 		
@@ -112,7 +101,7 @@ class TestBasic(BaseTest):
 		x_comb = [x.value for x in probs.variables()]
 		
 		# Compare results.
-		# compare_results(probs, obj_admm, obj_comb, x_admm, x_comb)
+		# self.compare_results(probs, obj_admm, obj_comb, x_admm, x_comb)
 		N = len(probs.variables())
 		self.assertAlmostEqual(obj_admm, obj_comb)
 		for i in range(N):
@@ -139,8 +128,8 @@ class TestBasic(BaseTest):
 		N = len(p_list)
 		
 		# Solve with consensus ADMM.
-		obj_admm = probs.solve(method = "consensus", rho_init = N*[1.0], \
-							   max_iter = self.MAX_ITER, spectral = self.spectral)
+		obj_admm = probs.solve(method = "consensus", rho_init = 1.0, \
+								max_iter = self.MAX_ITER, spectral = self.spectral)
 		x_admm = [x.value for x in probs.variables()]
 		# probs.plot_residuals()
 		
@@ -149,7 +138,7 @@ class TestBasic(BaseTest):
 		x_comb = [x.value for x in probs.variables()]
 		
 		# Compare results.
-		# compare_results(probs, obj_admm, obj_comb, x_admm, x_comb)
+		# self.compare_results(probs, obj_admm, obj_comb, x_admm, x_comb)
 		N = len(probs.variables())
 		self.assertAlmostEqual(obj_admm, obj_comb)
 		for i in range(N):
@@ -195,8 +184,8 @@ class TestBasic(BaseTest):
 		N = len(p_list)
 		
 		# Solve with consensus ADMM.
-		obj_admm = probs.solve(method = "consensus", rho_init = N*[1.0], eps = 1e-8, \
-							   max_iter = self.MAX_ITER, spectral = self.spectral)
+		obj_admm = probs.solve(method = "consensus", rho_init = 1.0, eps_stop = 1e-8, \
+								max_iter = self.MAX_ITER, spectral = self.spectral)
 		x_admm = [x.value for x in probs.variables()]
 		# probs.plot_residuals()
 		
@@ -205,7 +194,7 @@ class TestBasic(BaseTest):
 		x_comb = [x.value for x in probs.variables()]
 		
 		# Compare results.
-		compare_results(probs, obj_admm, obj_comb, x_admm, x_comb)
+		self.compare_results(probs, obj_admm, obj_comb, x_admm, x_comb)
 		N = len(probs.variables())
 		self.assertAlmostEqual(obj_admm, obj_comb)
 		for i in range(N):
