@@ -72,7 +72,7 @@ def w_project(prox_res, rho_x, rho_z):
 	if rho_z <= 0:
 		raise ValueError("Step size for z must be strictly positive")
 		
-	x_merge = defaultdict(list)
+	ys_diff = defaultdict(list)
 	rho_sum = defaultdict(float)
 	
 	for status, y_half, s_half in prox_res:
@@ -82,10 +82,18 @@ def w_project(prox_res, rho_x, rho_z):
 		
 		# Merge dictionary of x values
 		for key in y_half.keys():
-			x_merge[key].append(rho_x[key]/rho_z * (y_half[key] - s_half[key]))
+			ys_diff[key].append(rho_x[key]/rho_z * (y_half[key] - s_half[key]))
 			rho_sum[key] += rho_x[key]/rho_z
 	
-	return {key: np.sum(np.array(x_list), axis = 0)/rho_sum[key] for key, x_list in x_merge.items()}
+	# Form common matrix term.
+	mat_term = {}
+	for key, ys_list in ys_diff.items():
+		num = np.sum(np.array(ys_list), axis = 0)
+		den = 1.0 + rho_sum[key]
+		mat_term[key] = num/den
+	
+	# TODO: Compute z update term from s_half.
+	return mat_term, z_new
 
 def res_stop(res_ssq, eps = 1e-4):
 	"""Calculate the sum of squared primal/dual residuals.
@@ -126,8 +134,9 @@ def run_worker(pipe, p, *args, **kwargs):
 		
 		# Project to obtain w^(k+1) = (x^(k+1), z^(k+1)).
 		pipe.send((prox.status, y_half, s_half))
-		x_new, z_new, i = pipe.recv()
+		mat_term, z_new, i = pipe.recv()
 		for key in v.keys():
+			v[key]["x"].value = s_half[key] + mat_term[key]
 			v[key]["z"].value = z_new[key]
 		
 		# Update v^(k+1) = v^(k) + w^(k+1) - w^(k+1/2) where v^(k) = (y^(k), s^(k)).
@@ -162,11 +171,11 @@ def consensus(p_list, *args, **kwargs):
 	for i in range(max_iter):
 		# Gather and average x_i.
 		prox_res = [pipe.recv() for pipe in pipes]
-		x_new, z_new = w_project(prox_res, rho_all)
+		mat_term, z_new = w_project(prox_res, rho_all)
 	
 		# Scatter x_bar.
 		for pipe in pipes:
-			pipe.send((x_new, z_new, i))
+			pipe.send((mat_term, z_new, i))
 	end = time()
 	
 	[p.terminate() for p in procs]
