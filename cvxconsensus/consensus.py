@@ -80,19 +80,19 @@ def w_project(prox_res, rho_x, rho_z):
 		if status in s.INF_OR_UNB:
 			raise RuntimeError("Proximal problem is infeasible or unbounded")
 		
-		# Merge dictionary of x values
+		# Merge dictionary of y and s values
 		for key in y_half.keys():
 			ys_diff[key].append(rho_x[key]/rho_z * (y_half[key] - s_half[key]))
 			rho_sum[key] += rho_x[key]/rho_z
 	
-	# Form common matrix term.
+	# Compute z update and common matrix term.
 	mat_term = {}
 	for key, ys_list in ys_diff.items():
 		num = np.sum(np.array(ys_list), axis = 0)
 		den = 1.0 + rho_sum[key]
 		mat_term[key] = num/den
+		z_new[key] = s_half[key] + num - rho_sum[key]*mat_term[key]
 	
-	# TODO: Compute z update term from s_half.
 	return mat_term, z_new
 
 def res_stop(res_ssq, eps = 1e-4):
@@ -147,15 +147,15 @@ def run_worker(pipe, p, *args, **kwargs):
 def consensus(p_list, *args, **kwargs):
 	N = len(p_list)   # Number of problems.
 	max_iter = kwargs.pop("max_iter", 100)
-	rho_init = kwargs.pop("rho_init", dict())
-	eps_stop = kwargs.pop("eps_stop", 1e-6)   # Stopping tolerance.
+	rho_x = kwargs.pop("rho_x", dict())   # Step sizes.
+	rho_z = kwargs.pop("rho_z", 1.0)
 	resid = np.zeros((max_iter, 2))
 	
 	var_all = {var.id: var for prob in p_list for var in prob.variables()}
-	if np.isscalar(rho_init):
-		rho_all = {key: rho_init for key in var_all.keys()}
+	if np.isscalar(rho_x):
+		rho_x = {key: rho_x for key in var_all.keys()}
 	else:
-		rho_all = {key: rho_init.get(vid, 1.0) for vid in var_all.keys()}
+		rho_x = {key: rho_x.get(key, 1.0) for key in var_all.keys()}
 	
 	# Set up the workers.
 	pipes = []
@@ -171,11 +171,13 @@ def consensus(p_list, *args, **kwargs):
 	for i in range(max_iter):
 		# Gather and average x_i.
 		prox_res = [pipe.recv() for pipe in pipes]
-		mat_term, z_new = w_project(prox_res, rho_all)
+		mat_term, z_new = w_project(prox_res, z, rho_x, rho_z)
 	
 		# Scatter x_bar.
 		for pipe in pipes:
 			pipe.send((mat_term, z_new, i))
+			
+		# TODO: Update v^(k+1) = v^(k) + w^(k+1) - w^(k+1/2).
 	end = time()
 	
 	[p.terminate() for p in procs]
