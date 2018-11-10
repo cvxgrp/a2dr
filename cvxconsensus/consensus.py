@@ -65,33 +65,33 @@ def prox_step(prob, rho_init):
 	prox = Problem(Minimize(f), prob.constraints)
 	return prox, vmap
 
-def w_project(prox_res, rho_x, rho_z):
-	"""Consensus scaled Douglas-Rachford splitting step to calculate
-	   w^(k+1) = (x^(k+1), z^(k+1)) by projection.
+def w_project(prox_res, s_half):
+	"""Projection step update of w^(k+1) = (x^(k+1), z^(k+1)) in the
+	   consensus scaled Douglas-Rachford algorithm.
 	"""
-	if rho_z <= 0:
-		raise ValueError("Step size for z must be strictly positive")
-		
 	ys_diff = defaultdict(list)
-	rho_sum = defaultdict(float)
+	var_cnt = defaultdict(float)
 	
-	for status, y_half, s_half in prox_res:
+	for status, y_half in prox_res:
 		# Check if proximal step converged.
 		if status in s.INF_OR_UNB:
 			raise RuntimeError("Proximal problem is infeasible or unbounded")
 		
-		# Merge dictionary of y and s values
+		# Store difference between y_i and consensus term s for each variable ID.
 		for key in y_half.keys():
-			ys_diff[key].append(rho_x[key]/rho_z * (y_half[key] - s_half[key]))
-			rho_sum[key] += rho_x[key]/rho_z
+			ys_diff[key].append(y_half[key] - s_half[key])
+			var_cnt[key] += 1.0
 	
-	# Compute z update and common matrix term.
+	if set(s_half.keys()) != set(ys_diff.keys()):
+		raise RuntimeError("Mismatch between variable IDs of consensus and individual node terms")
+	
+	# Compute common matrix term and z update.
 	mat_term = {}
-	for key, ys_list in ys_diff.items():
-		num = np.sum(np.array(ys_list), axis = 0)
-		den = 1.0 + rho_sum[key]
-		mat_term[key] = num/den
-		z_new[key] = s_half[key] + num - rho_sum[key]*mat_term[key]
+	z_new = {}
+	for key in z.keys()
+		ys_sum[key] = np.sum(np.array(ys_diff[key]), axis = 0)
+		mat_term[key] = ys_sum[key]/(1.0 + var_cnt[key])
+		z_new[key] = s_half[key] + ys_sum[key] - var_cnt[key] * mat_term[key]
 	
 	return mat_term, z_new
 
@@ -126,23 +126,25 @@ def run_worker(pipe, p, *args, **kwargs):
 		# Proximal step for x^(k+1/2).
 		prox.solve(*args, **kwargs)
 		x_half = {key: v[key]["x"].value for key in v.keys()}
-		z_half = {key: v[key]["z"].value for key in v.keys()}
 		
 		# Calculate y^(k+1/2) = 2*x^(k+1/2) - y^(k).
 		y_half = {key: 2*x_half[key] - v[key]["y"].value for key in v.keys()}
-		s_half = {key: v[key]["z"].value for key in v.keys()}
 		
 		# Project to obtain w^(k+1) = (x^(k+1), z^(k+1)).
-		pipe.send((prox.status, y_half, s_half))
+		pipe.send((prox.status, y_half))
 		mat_term, z_new, i = pipe.recv()
 		for key in v.keys():
-			v[key]["x"].value = s_half[key] + mat_term[key]
+			# Update corresponding w^(k+1) parameters.
+			s_half = v[key]["z"].value
+			v[key]["x"].value = s_half + mat_term[key]
 			v[key]["z"].value = z_new[key]
 		
-		# Update v^(k+1) = v^(k) + w^(k+1) - w^(k+1/2) where v^(k) = (y^(k), s^(k)).
-		for key in v.keys():
-			v[key]["y"].value += x_new[key] - x_half[key]
-			v[key]["s"].value += z_new[key] - z_half[key]
+			# Update v^(k+1) = v^(k) + w^(k+1) - w^(k+1/2) where v^(k) = (y^(k), s^(k)).
+			v[key]["y"].value += v[key]["x"].value - x_half[key]
+			
+			# TODO: Should we have central node update consensus term s 
+			# to avoid nodes diverging due to, e.g., floating point error?
+			v[key]["s"].value += v[key]["z"].value - s_half
 
 def consensus(p_list, *args, **kwargs):
 	N = len(p_list)   # Number of problems.
