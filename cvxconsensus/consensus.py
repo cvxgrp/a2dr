@@ -121,7 +121,7 @@ def run_worker(pipe, p, *args, **kwargs):
 	# Initiate proximal problem.
 	prox, v = prox_step(p, rho_init)
 	
-	# ADMM loop.
+	# Consensus S-DRS loop.
 	while True:	
 		# Proximal step for x^(k+1/2).
 		prox.solve(*args, **kwargs)
@@ -139,12 +139,14 @@ def run_worker(pipe, p, *args, **kwargs):
 			v[key]["x"].value = s_half + mat_term[key]
 			v[key]["z"].value = z_new[key]
 		
-			# Update v^(k+1) = v^(k) + w^(k+1) - w^(k+1/2) where v^(k) = (y^(k), s^(k)).
+			# Update y^(k+1) = y^(k) + x^(k+1) - x^(k+1/2).
 			v[key]["y"].value += v[key]["x"].value - x_half[key]
-			
-			# TODO: Should we have central node update consensus term s 
-			# to avoid nodes diverging due to, e.g., floating point error?
-			v[key]["s"].value += v[key]["z"].value - s_half
+			# v[key]["s"].value += v[key]["z"].value - s_half
+		
+		# Receive and set s^(k+1) value.
+		s_new = pipe.recv()
+		for key in v.keys():
+			v[key]["s"].value = s_new[key]
 
 def consensus(p_list, *args, **kwargs):
 	N = len(p_list)   # Number of problems.
@@ -153,6 +155,7 @@ def consensus(p_list, *args, **kwargs):
 	rho_z = kwargs.pop("rho_z", 1.0)
 	resid = np.zeros((max_iter, 2))
 	
+	# Construct dictionary of step sizes for each node.
 	var_all = {var.id: var for prob in p_list for var in prob.variables()}
 	if np.isscalar(rho_x):
 		rho_x = {key: rho_x for key in var_all.keys()}
@@ -168,19 +171,28 @@ def consensus(p_list, *args, **kwargs):
 		procs += [Process(target = run_worker, args = (remote, p_list[i]) + args, kwargs = kwargs)]
 		procs[-1].start()
 
-	# ADMM loop.
+	# Initialize consensus variables.
+	s = defaultdict(float)
+	z = {key: np.zeros(var.shape) for key, var in var_all.items()}
+
+	# Consensus S-DRS loop.
 	start = time()
 	for i in range(max_iter):
-		# Gather and average x_i.
+		# Gather y_i^(k+1/2) from nodes.
 		prox_res = [pipe.recv() for pipe in pipes]
-		mat_term, z_new = w_project(prox_res, z, rho_x, rho_z)
+		
+		# Projection step for w^(k+1).
+		mat_term, z_new = w_project(prox_res, z)
 	
-		# Scatter x_bar.
+		# Scatter z^(k+1) and common matrix term.
 		for pipe in pipes:
 			pipe.send((mat_term, z_new, i))
-			
-		# TODO: Update v^(k+1) = v^(k) + w^(k+1) - w^(k+1/2).
+		
+		# Update s^(k+1) = s^(k) + z^(k+1) - z^(k+1/2).
+		for key in var_all.keys():
+			s[key] += z_new[key] - z[key]
+		z = z_new
 	end = time()
 	
 	[p.terminate() for p in procs]
-	return {"xbars": z_new, "num_iters": i+1, "solve_time": (end - start)}
+	return {"xbars": z, "num_iters": i + 1, "solve_time": (end - start)}
