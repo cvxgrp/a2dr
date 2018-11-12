@@ -95,12 +95,11 @@ def w_project(prox_res, s_half):
 	return mat_term, z_new
 
 def run_worker(pipe, p, rho_init, anderson, m_accel, *args, **kwargs):
-	# Initiate proximal problem.
+	# Initialize proximal problem.
 	prox, v = prox_step(p, rho_init)
 	
-	# AA-II parameters.
+	# Initialize AA-II parameters.
 	if anderson:
-		m_k = 0       # Keep iterations k - m_k through k >= 0.
 		y_diff = []   # History of y^(k) - F(y^(k)) fixed point mappings.
 	
 	# Consensus S-DRS loop.
@@ -115,10 +114,11 @@ def run_worker(pipe, p, rho_init, anderson, m_accel, *args, **kwargs):
 		# Project to obtain w^(k+1) = (x^(k+1), z^(k+1)).
 		pipe.send((prox.status, y_half))
 		mat_term, z_new, k = pipe.recv()
-		m_k = min(m_accel, i)
 		
 		if anderson:
-			diff = defaultdict(float)
+			m_k = min(m_accel, k)   # Keep iterations (k - m_k) through k.
+			
+			diff = {}
 			for key in v.keys():
 				# Update corresponding w^(k+1) parameters.
 				s_half = v[key]["z"].value
@@ -126,7 +126,7 @@ def run_worker(pipe, p, rho_init, anderson, m_accel, *args, **kwargs):
 				v[key]["z"].value = z_new[key]
 				
 				# Save history of y^(k) - F(y^(k)) = x^(k+1/2) - x^(k+1),
-				# where F(.) is the mapping from v^(k) to v^(k+1) and v^(k) = (y^(k), s^(k)).
+				# where F(.) is the consensus S-DRS mapping of v^(k+1) = F(v^(k)).
 				diff[key] = x_half[key] - v[key]["x"].value
 			y_diff.append(diff)
 			if len(y_diff) > m_k + 1:
@@ -170,7 +170,7 @@ def consensus(p_list, *args, **kwargs):
 	anderson = kwargs.pop("anderson", False)
 	m_accel = int(kwargs.pop("m_accel", 5))   # Maximum past iterations to keep (>= 0).
 	if m_accel < 0:
-		raise ValueError("m_accel must be a non-negative integer."
+		raise ValueError("m_accel must be a non-negative integer.")
 	
 	# Construct dictionary of step sizes for each node.
 	var_all = {var.id: var for prob in p_list for var in prob.variables()}
@@ -193,6 +193,10 @@ def consensus(p_list, *args, **kwargs):
 	# Initialize consensus variables.
 	s = defaultdict(float)
 	z = {key: np.zeros(var.shape) for key, var in var_all.items()}
+	
+	# Initialize AA-II parameters.
+	if anderson:
+		s_diff = []
 
 	# Consensus S-DRS loop.
 	start = time()
@@ -207,11 +211,41 @@ def consensus(p_list, *args, **kwargs):
 		for pipe in pipes:
 			pipe.send((mat_term, z_new, k))
 		
-		# Update s^(k+1) = s^(k) + z^(k+1) - z^(k+1/2).
-		for key in var_all.keys():
-			s[key] += z_new[key] - z[key]
-		z = z_new
+		if anderson:
+			m_k = min(m_accel, k)   # Keep iterations (k - m_k) through k.
+			
+			# Receive history of y_i differences.
+			y_diffs = [pipe.recv() for pipe in pipes]
+			
+			# Save history of s^(k) - F(s^(k)) = z^(k+1/2) - z^(k+1),
+			# where F(.) is the consensus S-DRS mapping of v^(k+1) = F(v^(k)).
+			diff = {}
+			for key in var_all.keys():
+				diff[key] = z[key] - z_new[key]
+			s_diff.append(diff)
+			if len(s_diffs) > m_k + 1:
+				s_diff.pop(0)
+			
+			# Compute AA-II weights.
+			y_weights, s_weight = aa_weights(y_diffs + [s_diff])
+			
+			# Weighted update of s^(k+1).
+			for key in var_all.keys():
+				s_val = np.zeros(s_diff[0][key].shape)
+				for j in range(m_k + 1):
+					s_val += s_weight[j] * s_diff[j][key]
+				s[key] = s_val
+			
+			# Scatter s^(k+1) and AA-II weights for y^(k+1).
+			for pipe, y_weight in zip(pipes, y_weights):
+				pipe.send((s, y_weight))
+			z = z_new
+		else:
+			# Update s^(k+1) = s^(k) + z^(k+1) - z^(k+1/2).
+			for key in var_all.keys():
+				s[key] += z_new[key] - z[key]
+			z = z_new
 	end = time()
 	
 	[p.terminate() for p in procs]
-	return {"xvals": z, "num_iters": i + 1, "solve_time": (end - start)}
+	return {"xvals": z, "num_iters": k + 1, "solve_time": (end - start)}

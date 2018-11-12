@@ -22,6 +22,48 @@ import numpy as np
 from cvxpy import Variable, Problem, Minimize
 from scipy.linalg import qr_insert, qr_delete, solve_triangular
 
+def dicts_to_arr(dicts):
+	d_cols = []
+	d_info = []
+	
+	for d in dicts:
+		col = []
+		info = {}
+		offset = 0
+		for key, val in d.items():		
+			# Save shape and offset for later reconstruction.
+			info[key] = {"shape": val.shape, "offset": offset}
+			offset += val.size
+			
+			# Flatten into column-order array.
+			col.append(d.flatten(order = "C"))
+		
+		# Stack all dict values into single column.
+		col = np.concatenate(col)
+		d_cols.append(col)
+		d_info.append(info)
+	
+	arr = np.array(d_cols).T
+	return arr, d_info
+
+def arr_to_dicts(arr, d_info):
+	dicts = []
+	ncol = arr.shape[1]
+	
+	for j in range(ncol):
+		d = {}
+		for key, info in d_info[j].items():
+			# Select corresponding rows.
+			offset = info["offset"]
+			size = np.prod(info["shape"])
+			val = arr[offset:(offset + size),j]
+			
+			# Reshape vector and add to dict.
+			val = np.reshape(val, shape = info["shape"])
+			d[key] = val
+		dicts.append(d)
+	return dicts
+
 def aa_weights(residuals, lam = None):
 	""" Solve the constrained least-squares problem
 	   Minimize sum_squares(\sum_{j=0}^m w[j]*r^(k+1-m+j)
@@ -53,35 +95,3 @@ def aa_weights(residuals, lam = None):
 	prob = Problem(Minimize(obj + reg), constr)
 	prob.solve()
 	return w.value
-
-def aa_update(vals, residuals, rho, lam = None):
-	""" Dual variable update for the accelerated ADMM consensus problem.
-	
-	Parameters
-	----------
-	vals : array
-	     A numpy array containing the dual variable value for the last `m+1`
-	     iterations, including the current iteration. If our current iteration
-	     is `k`, then column `j` is the dual from iteration `k-m+j` for
-	     `j = 0,...,m`, i.e., new values are appended (as the rightmost column)
-	     to the array.
-	primals : array
-	     A numpy array containing the primal residuals for the last `m+1`
-	     iterations, ordered in the same manner as `yvals`.
-	rho : float
-	     The positive mixing parameter.
-	"""
-	weights = aa_weights(residuals, lam)
-	prhos = np.multiply(residuals, rho)
-	return (vals + prhos).dot(weights)
-	
-	# yRnew = yvals[:,-1] + rho[-1]*primals[:,-1]
-	# if primals.shape[1] == 1:
-	#	return yRnew
-	#
-	# weights = dual_weights(primals)
-	# ydiff = np.diff(yvals, axis = 1)
-	# prhos = np.multiply(primals, rho)
-	# Rdiff = np.diff(prhos, axis = 1)
-	# yRoff = (ydiff + Rdiff).dot(weights)
-	# return yRnew - yRoff[:,0]
