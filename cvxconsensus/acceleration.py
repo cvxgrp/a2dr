@@ -64,7 +64,7 @@ def arr_to_dicts(arr, d_info):
 		dicts.append(d)
 	return dicts
 
-def aa_weights(residuals, lam = None):
+def aa_weights(residuals, lam = None, *args, **kwargs):
 	""" Solve the constrained least-squares problem
 	   Minimize sum_squares(\sum_{j=0}^m w[j]*r^(k+1-m+j)
 	      subject to \sum_{j=0}^m w[j] = 1
@@ -87,11 +87,19 @@ def aa_weights(residuals, lam = None):
     ----------
     An array of length `m` containing the solution to the least-squares problem.
 	"""
+	# Form matrix of residuals G(v^(k) - m_k + j).
+	# G_blocks = []
+	# for res in residuals:
+	#	arr, info = dicts_to_arr(res)
+	#	G_blocks.append(arr)
+	G_blocks = [dicts_to_arr(res)[0] for res in residuals]
+	G = np.vstack(tuple(G_blocks))
 	
-	w = Variable(residuals.shape[1])
-	obj = cvxpy.sum_squares(residuals * w)
-	reg = lam * sum_squares(w) if lam else 0
-	constr = [cvxpy.sum(w) == 1]
+	# Solve for AA-II constrained LS weights.
+	alpha = Variable(G.shape[1])
+	obj = cvxpy.sum_squares(G * alpha)
+	reg = lam * sum_squares(alpha) if lam else 0   # Stabilization with l_2 penalty.
+	constr = [cvxpy.sum(alpha) == 1]
 	prob = Problem(Minimize(obj + reg), constr)
-	prob.solve()
-	return w.value
+	prob.solve(*args, **kwargs)
+	return alpha.value

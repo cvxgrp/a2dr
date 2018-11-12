@@ -134,7 +134,7 @@ def run_worker(pipe, p, rho_init, anderson, m_accel, *args, **kwargs):
 			
 			# Receive s^(k+1) and AA-II weights for y^(k+1).
 			pipe.send(y_diff)
-			s_new, y_weight = pipe.recv()
+			s_new, alpha = pipe.recv()
 			
 			for key in v.keys():
 				# Set s^(k+1) value.
@@ -143,7 +143,7 @@ def run_worker(pipe, p, rho_init, anderson, m_accel, *args, **kwargs):
 				# Weighted update of y^(k+1).
 				y_val = np.zeros(y_diff[0][key].shape)
 				for j in range(m_k + 1):
-					y_val += y_weight[j] * y_diff[j][key]
+					y_val += alpha[j] * y_diff[j][key]
 				v[key]["y"].value = y_val
 		else:
 			for key in v.keys():
@@ -227,18 +227,18 @@ def consensus(p_list, *args, **kwargs):
 				s_diff.pop(0)
 			
 			# Compute AA-II weights.
-			y_weights, s_weight = aa_weights(y_diffs + [s_diff])
+			alpha = aa_weights(y_diffs + [s_diff])
 			
 			# Weighted update of s^(k+1).
 			for key in var_all.keys():
 				s_val = np.zeros(s_diff[0][key].shape)
 				for j in range(m_k + 1):
-					s_val += s_weight[j] * s_diff[j][key]
+					s_val += alpha[j] * s_diff[j][key]
 				s[key] = s_val
 			
 			# Scatter s^(k+1) and AA-II weights for y^(k+1).
-			for pipe, y_weight in zip(pipes, y_weights):
-				pipe.send((s, y_weight))
+			for pipe in pipes:
+				pipe.send((s, alpha))
 			z = z_new
 		else:
 			# Update s^(k+1) = s^(k) + z^(k+1) - z^(k+1/2).
