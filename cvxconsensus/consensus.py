@@ -37,8 +37,8 @@ def prox_step(prob, rho_init):
     prob : Problem
         The objective and constraints associated with the proximal operator.
         The sign of the objective function is flipped if `prob` is a maximization problem.
-    rho_init : float
-        The initial step size.
+    rho_init : dict
+        The initial step size indexed by unique variable id.
     
     Returns
     ----------
@@ -46,11 +46,10 @@ def prox_step(prob, rho_init):
         The proximal step problem.
     vmap : dict
         A map of each proximal variable id to a dictionary containing that variable `x`,
-        the mean variable parameter `xbar`, the associated dual parameter `y`, and the
-        step size parameter `rho`. If `spectral = True`, the estimated dual parameter 
-        `yhat` is also included.
+        the consensus variable parameter `z`, the associated dual parameter `y`, and the
+        step size parameter `rho`.
 	"""
-	vmap = {}   # Store consensus variables
+	vmap = {}   # Store consensus variables.
 	f = flip_obj(prob).args[0]
 	
 	# Add penalty for each variable.
@@ -95,31 +94,14 @@ def w_project(prox_res, s_half):
 	
 	return mat_term, z_new
 
-def res_stop(res_ssq, eps = 1e-4):
-	"""Calculate the sum of squared primal/dual residuals.
-	   Determine whether the stopping criterion is satisfied:
-	   ||r^(k)||^2 <= eps*max(\sum_i ||x_i^(k)||^2, \sum_i ||x_bar^(k)||^2) and
-	   ||d^(k)||^2 <= eps*\sum_i ||y_i^(k)||^2
-	"""
-	primal = np.sum([r["primal"] for r in res_ssq])
-	dual = np.sum([r["dual"] for r in res_ssq])
-	
-	x_ssq = np.sum([r["x"] for r in res_ssq])
-	xbar_ssq = np.sum([r["xbar"] for r in res_ssq])
-	u_ssq = np.sum([r["y"] for r  in res_ssq])
-	
-	eps_fl = np.finfo(float).eps   # Machine precision.
-	stopped = (primal <= eps*max(x_ssq, xbar_ssq) + eps_fl) and \
-			  (dual <= eps*u_ssq + eps_fl)
-	return primal, dual, stopped
-
-def run_worker(pipe, p, *args, **kwargs):
-	# Anderson acceleration parameters.
-	anderson = kwargs.pop("anderson", False)
-	m_accel = kwargs.pop("m_accel", 5)   # Number of past iterations to keep (>= 1)
-	
+def run_worker(pipe, p, rho_init, anderson, m_accel, *args, **kwargs):
 	# Initiate proximal problem.
 	prox, v = prox_step(p, rho_init)
+	
+	# AA-II parameters.
+	if anderson:
+		m_k = 0       # Keep iterations k - m_k through k >= 0.
+		y_diff = []   # History of y^(k) - F(y^(k)) fixed point mappings.
 	
 	# Consensus S-DRS loop.
 	while True:	
@@ -132,35 +114,71 @@ def run_worker(pipe, p, *args, **kwargs):
 		
 		# Project to obtain w^(k+1) = (x^(k+1), z^(k+1)).
 		pipe.send((prox.status, y_half))
-		mat_term, z_new, i = pipe.recv()
-		for key in v.keys():
-			# Update corresponding w^(k+1) parameters.
-			s_half = v[key]["z"].value
-			v[key]["x"].value = s_half + mat_term[key]
-			v[key]["z"].value = z_new[key]
+		mat_term, z_new, k = pipe.recv()
+		m_k = min(m_accel, i)
 		
-			# Update y^(k+1) = y^(k) + x^(k+1) - x^(k+1/2).
-			v[key]["y"].value += v[key]["x"].value - x_half[key]
-			# v[key]["s"].value += v[key]["z"].value - s_half
-		
-		# Receive and set s^(k+1) value.
-		s_new = pipe.recv()
-		for key in v.keys():
-			v[key]["s"].value = s_new[key]
+		if anderson:
+			diff = defaultdict(float)
+			for key in v.keys():
+				# Update corresponding w^(k+1) parameters.
+				s_half = v[key]["z"].value
+				v[key]["x"].value = s_half + mat_term[key]
+				v[key]["z"].value = z_new[key]
+				
+				# Save history of y^(k) - F(y^(k)) = x^(k+1/2) - x^(k+1),
+				# where F(.) is the mapping from v^(k) to v^(k+1) and v^(k) = (y^(k), s^(k)).
+				diff[key] = x_half[key] - v[key]["x"].value
+			y_diff.append(diff)
+			if len(y_diff) > m_k + 1:
+				y_diff.pop(0)
+			
+			# Receive s^(k+1) and AA-II weights for y^(k+1).
+			pipe.send(y_diff)
+			s_new, y_weight = pipe.recv()
+			
+			for key in v.keys():
+				# Set s^(k+1) value.
+				v[key]["s"].value = s_new[key]
+				
+				# Weighted update of y^(k+1).
+				y_val = np.zeros(y_diff[0][key].shape)
+				for j in range(m_k + 1):
+					y_val += y_weight[j] * y_diff[j][key]
+				v[key]["y"].value = y_val
+		else:
+			for key in v.keys():
+				# Update corresponding w^(k+1) parameters.
+				s_half = v[key]["z"].value
+				v[key]["x"].value = s_half + mat_term[key]
+				v[key]["z"].value = z_new[key]
+				
+				# Update y^(k+1) = y^(k) + x^(k+1) - x^(k+1/2).
+				v[key]["y"].value += v[key]["x"].value - x_half[key]
+				# v[key]["s"].value += v[key]["z"].value - s_half
+			
+			# Receive and set s^(k+1) value.
+			s_new = pipe.recv()
+			for key in v.keys():
+				v[key]["s"].value = s_new[key]
 
 def consensus(p_list, *args, **kwargs):
 	N = len(p_list)   # Number of problems.
 	max_iter = kwargs.pop("max_iter", 100)
-	rho_x = kwargs.pop("rho_x", dict())   # Step sizes.
-	rho_z = kwargs.pop("rho_z", 1.0)
-	resid = np.zeros((max_iter, 2))
+	rho_init = kwargs.pop("rho_init", dict())   # Step sizes.
+	
+	# AA-II parameters.
+	anderson = kwargs.pop("anderson", False)
+	m_accel = int(kwargs.pop("m_accel", 5))   # Maximum past iterations to keep (>= 0).
+	if m_accel < 0:
+		raise ValueError("m_accel must be a non-negative integer."
 	
 	# Construct dictionary of step sizes for each node.
 	var_all = {var.id: var for prob in p_list for var in prob.variables()}
-	if np.isscalar(rho_x):
-		rho_x = {key: rho_x for key in var_all.keys()}
+	if np.isscalar(rho_init):
+		rho_list = assign_rho(p_list, default = rho_init)
 	else:
-		rho_x = {key: rho_x.get(key, 1.0) for key in var_all.keys()}
+		rho_list = assign_rho(p_list, rho_init = rho_init)
+	# var_list = partition_vars(p_list)   # Public/private variable partition.
 	
 	# Set up the workers.
 	pipes = []
@@ -168,7 +186,8 @@ def consensus(p_list, *args, **kwargs):
 	for i in range(N):
 		local, remote = Pipe()
 		pipes += [local]
-		procs += [Process(target = run_worker, args = (remote, p_list[i]) + args, kwargs = kwargs)]
+		procs += [Process(target = run_worker, args = (remote, p_list[i], rho_list[i], \
+							anderson, m_accel) + args, kwargs = kwargs)]
 		procs[-1].start()
 
 	# Initialize consensus variables.
@@ -177,7 +196,7 @@ def consensus(p_list, *args, **kwargs):
 
 	# Consensus S-DRS loop.
 	start = time()
-	for i in range(max_iter):
+	for k in range(max_iter):
 		# Gather y_i^(k+1/2) from nodes.
 		prox_res = [pipe.recv() for pipe in pipes]
 		
@@ -186,7 +205,7 @@ def consensus(p_list, *args, **kwargs):
 	
 		# Scatter z^(k+1) and common matrix term.
 		for pipe in pipes:
-			pipe.send((mat_term, z_new, i))
+			pipe.send((mat_term, z_new, k))
 		
 		# Update s^(k+1) = s^(k) + z^(k+1) - z^(k+1/2).
 		for key in var_all.keys():
@@ -195,4 +214,4 @@ def consensus(p_list, *args, **kwargs):
 	end = time()
 	
 	[p.terminate() for p in procs]
-	return {"xbars": z, "num_iters": i + 1, "solve_time": (end - start)}
+	return {"xvals": z, "num_iters": i + 1, "solve_time": (end - start)}

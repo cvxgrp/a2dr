@@ -17,11 +17,12 @@ You should have received a copy of the GNU General Public License
 along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 """
 
+import cvxpy
 import numpy as np
+from cvxpy import Variable, Problem, Minimize
 from scipy.linalg import qr_insert, qr_delete, solve_triangular
-from cvxpy import Variable, Problem, Minimize, sum_squares
 
-def dual_weights(primals):
+def aa_weights(residuals, lam = None):
 	""" Solve the constrained least-squares problem
 	   Minimize sum_squares(\sum_{j=0}^m w[j]*r^(k+1-m+j)
 	      subject to \sum_{j=0}^m w[j] = 1
@@ -45,30 +46,20 @@ def dual_weights(primals):
     An array of length `m` containing the solution to the least-squares problem.
 	"""
 	
-	w = Variable(primals.shape[1])
-	obj = sum_squares(primals*w)
-	constr = [sum(w) == 1, w >= 0]
-	prob = Problem(Minimize(obj), constr)
+	w = Variable(residuals.shape[1])
+	obj = cvxpy.sum_squares(residuals * w)
+	reg = lam * sum_squares(w) if lam else 0
+	constr = [cvxpy.sum(w) == 1]
+	prob = Problem(Minimize(obj + reg), constr)
 	prob.solve()
 	return w.value
-	
-	# if primals.shape[1] == 1:
-	#	return np.zeros((primals.shape[0],1))
-	#
-	# rnew = np.array([primals[:,-1]]).T
-	# Rdiff = np.diff(primals, axis = 1)
-	# g = Variable((Rdiff.shape[1], 1))
-	# obj = sum_squares(rnew - Rdiff*g)
-	# prob = Problem(Minimize(obj))
-	# prob.solve()
-	# return g.value
 
-def dual_update(yvals, primals, rho):
+def aa_update(vals, residuals, rho, lam = None):
 	""" Dual variable update for the accelerated ADMM consensus problem.
 	
 	Parameters
 	----------
-	yvals : array
+	vals : array
 	     A numpy array containing the dual variable value for the last `m+1`
 	     iterations, including the current iteration. If our current iteration
 	     is `k`, then column `j` is the dual from iteration `k-m+j` for
@@ -80,9 +71,9 @@ def dual_update(yvals, primals, rho):
 	rho : float
 	     The positive mixing parameter.
 	"""
-	weights = dual_weights(primals)
-	prhos = np.multiply(primals, rho)
-	return (yvals + prhos).dot(weights)
+	weights = aa_weights(residuals, lam)
+	prhos = np.multiply(residuals, rho)
+	return (vals + prhos).dot(weights)
 	
 	# yRnew = yvals[:,-1] + rho[-1]*primals[:,-1]
 	# if primals.shape[1] == 1:
@@ -94,4 +85,3 @@ def dual_update(yvals, primals, rho):
 	# Rdiff = np.diff(prhos, axis = 1)
 	# yRoff = (ydiff + Rdiff).dot(weights)
 	# return yRnew - yRoff[:,0]
-	
