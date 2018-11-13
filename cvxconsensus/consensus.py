@@ -129,11 +129,9 @@ def run_worker(pipe, p, rho_init, anderson, m_accel, *args, **kwargs):
 				# Save history of y^(k) - F(y^(k)) = x^(k+1/2) - x^(k+1),
 				# where F(.) is the consensus S-DRS mapping of v^(k+1) = F(v^(k)).
 				diff[key] = x_half[key] - v[key]["x"].value
-				
-				# Save residual y^(k) - F(y^(k)) for stopping criteria.
 				y_res.append(diff[key].flatten(order = "C"))
 			y_res = np.concatenate(y_res)
-				
+			
 			y_diff.append(diff)
 			if len(y_diff) > m_k + 1:
 				y_diff.pop(0)
@@ -146,7 +144,7 @@ def run_worker(pipe, p, rho_init, anderson, m_accel, *args, **kwargs):
 				# Weighted update of y^(k+1).
 				y_val = np.zeros(y_diff[0][key].shape)
 				for j in range(m_k + 1):
-					y_val += alpha[j] * y_diff[j][key]
+					y_val += alpha[j] * y_diff[j][key]   # TODO: This is wrong, need alpha * F(x) = alpha * (x - G(x)), not alpha * G(x).
 				v[key]["y"].value = y_val
 		else:
 			y_res = []
@@ -229,7 +227,7 @@ def consensus(p_list, *args, **kwargs):
 			# Save history of s^(k) - F(s^(k)) = z^(k+1/2) - z^(k+1),
 			# where F(.) is the consensus S-DRS mapping of v^(k+1) = F(v^(k)).
 			diff = {}
-			s_res = []   # Save residual s^(k) - F(s^(k)) for stopping criterion.
+			s_res = []   # Save residual s^(k) - s^(k+1) for stopping criteria.
 			for key in var_all.keys():
 				diff[key] = z[key] - z_new[key]
 				s_res.append(diff[key].flatten(order = "C"))
@@ -239,7 +237,7 @@ def consensus(p_list, *args, **kwargs):
 			if len(s_diff) > m_k + 1:
 				s_diff.pop(0)
 			
-			# Compute l2-norm of residual G(v^(k)) = v^(k) - F(v^(k)) 
+			# Compute l2-norm of residual G(v^(k)) = v^(k) - v^(k+1) 
 			# where v^(k) = (y^(k), s^(k)).
 			v_res.append(s_res)
 			v_res = np.concatenate(v_res, axis = 0)
@@ -254,7 +252,7 @@ def consensus(p_list, *args, **kwargs):
 			for key in var_all.keys():
 				s_val = np.zeros(s_diff[0][key].shape)
 				for j in range(m_k + 1):
-					s_val += alpha[j] * s_diff[j][key]
+					s_val += alpha[j] * s_diff[j][key]   # TODO: This is wrong, need alpha * F(x) = alpha * (x - G(x)), not alpha * G(x).
 				s[key] = s_val
 		else:
 			s_res = []
@@ -273,6 +271,7 @@ def consensus(p_list, *args, **kwargs):
 			v_res.append(s_res)
 			v_res = np.concatenate(v_res, axis = 0)
 			resid[k] = np.linalg.norm(v_res, ord = 2)
+			# rnorm = resid[k]/np.max(resid[k]) if anderson else resid[k]/resid[0]
 			
 		# Stop if G(v^(k))/G(v^(0)) falls below tolerance.
 		z = z_new
