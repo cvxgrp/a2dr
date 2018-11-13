@@ -30,7 +30,6 @@ class TestBasic(BaseTest):
 	def setUp(self):
 		np.random.seed(1)
 		self.MAX_ITER = 100
-		self.spectral = True
 	
 	def test_basic(self):
 		m = 100
@@ -52,8 +51,7 @@ class TestBasic(BaseTest):
 		probs.pretty_vars()
 		
 		# Solve with consensus ADMM.
-		obj_admm = probs.solve(method = "consensus", rho_init = 1.0, \
-								max_iter = self.MAX_ITER, spectral = self.spectral)
+		obj_admm = probs.solve(method = "consensus", rho_init = 1.0, max_iter = self.MAX_ITER)
 		x_admm = [x.value for x in probs.variables()]
 		# probs.plot_residuals()
 
@@ -90,8 +88,7 @@ class TestBasic(BaseTest):
 		probs.pretty_vars()
 		
 		# Solve with consensus ADMM.
-		obj_admm = probs.solve(method = "consensus", rho_init = 0.5, \
-								max_iter = self.MAX_ITER, spectral = self.spectral)
+		obj_admm = probs.solve(method = "consensus", rho_init = 0.5, max_iter = self.MAX_ITER)
 		x_admm = [x.value for x in probs.variables()]
 		# probs.plot_residuals()
 		
@@ -128,8 +125,7 @@ class TestBasic(BaseTest):
 		N = len(p_list)
 		
 		# Solve with consensus ADMM.
-		obj_admm = probs.solve(method = "consensus", rho_init = 1.0, \
-								max_iter = self.MAX_ITER, spectral = self.spectral)
+		obj_admm = probs.solve(method = "consensus", rho_init = 1.0, max_iter = self.MAX_ITER)
 		x_admm = [x.value for x in probs.variables()]
 		# probs.plot_residuals()
 		
@@ -184,8 +180,7 @@ class TestBasic(BaseTest):
 		N = len(p_list)
 		
 		# Solve with consensus ADMM.
-		obj_admm = probs.solve(method = "consensus", rho_init = 1.0, eps_stop = 1e-8, \
-								max_iter = self.MAX_ITER, spectral = self.spectral)
+		obj_admm = probs.solve(method = "consensus", rho_init = 1.0, max_iter = self.MAX_ITER)
 		x_admm = [x.value for x in probs.variables()]
 		# probs.plot_residuals()
 		

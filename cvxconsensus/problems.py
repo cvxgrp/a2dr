@@ -212,21 +212,17 @@ class Problems(object):
 		Parameters
 		----------
 		solution : dict
-		     Consensus solution to the combined problem. "xbars" refers to the
+		     Consensus solution to the combined problem. "zvals" refers to the
 		     final average of the primal value over all the workers.
 		"""
 		# Save primal values.
 		for v in self.variables():
-			v.save_value(solution["xbars"][v.id])
+			v.save_value(solution["zvals"][v.id])
 	
 		# TODO: Save dual values (for constraints too?).
 		
 		# Save combined objective.
 		self._value = np.asscalar(self.objective.value)
-		
-		# Save primal/dual residuals.
-		self._primal_residual = solution["residuals"][:,0]
-		self._dual_residual = solution["residuals"][:,1]
 		
 		# TODO: Handle statuses.
 		self._solver_stats = {"num_iters": solution["num_iters"],

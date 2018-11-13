@@ -25,7 +25,7 @@ import cvxpy.settings as s
 from cvxpy.problems.problem import Problem, Minimize
 from cvxpy.expressions.constants import Parameter
 from cvxpy.atoms import sum_squares
-from cvxconsensus.acceleration import dual_update
+from cvxconsensus.acceleration import aa_weights
 from cvxconsensus.utilities import flip_obj, assign_rho, partition_vars
 
 def prox_step(prob, rho_init):
@@ -87,10 +87,10 @@ def w_project(prox_res, s_half):
 	# Compute common matrix term and z update.
 	mat_term = {}
 	z_new = {}
-	for key in z.keys()
-		ys_sum[key] = np.sum(np.array(ys_diff[key]), axis = 0)
-		mat_term[key] = ys_sum[key]/(1.0 + var_cnt[key])
-		z_new[key] = s_half[key] + ys_sum[key] - var_cnt[key] * mat_term[key]
+	for key in s_half.keys():
+		ys_sum = np.sum(np.array(ys_diff[key]), axis = 0)
+		mat_term[key] = ys_sum/(1.0 + var_cnt[key])
+		z_new[key] = s_half[key] + ys_sum - var_cnt[key] * mat_term[key]
 	
 	return mat_term, z_new
 
@@ -134,12 +134,9 @@ def run_worker(pipe, p, rho_init, anderson, m_accel, *args, **kwargs):
 			
 			# Receive s^(k+1) and AA-II weights for y^(k+1).
 			pipe.send(y_diff)
-			s_new, alpha = pipe.recv()
+			alpha = pipe.recv()
 			
 			for key in v.keys():
-				# Set s^(k+1) value.
-				v[key]["s"].value = s_new[key]
-				
 				# Weighted update of y^(k+1).
 				y_val = np.zeros(y_diff[0][key].shape)
 				for j in range(m_k + 1):
@@ -154,12 +151,6 @@ def run_worker(pipe, p, rho_init, anderson, m_accel, *args, **kwargs):
 				
 				# Update y^(k+1) = y^(k) + x^(k+1) - x^(k+1/2).
 				v[key]["y"].value += v[key]["x"].value - x_half[key]
-				# v[key]["s"].value += v[key]["z"].value - s_half
-			
-			# Receive and set s^(k+1) value.
-			s_new = pipe.recv()
-			for key in v.keys():
-				v[key]["s"].value = s_new[key]
 
 def consensus(p_list, *args, **kwargs):
 	N = len(p_list)   # Number of problems.
@@ -236,9 +227,9 @@ def consensus(p_list, *args, **kwargs):
 					s_val += alpha[j] * s_diff[j][key]
 				s[key] = s_val
 			
-			# Scatter s^(k+1) and AA-II weights for y^(k+1).
+			# Scatter AA-II weights for y^(k+1).
 			for pipe in pipes:
-				pipe.send((s, alpha))
+				pipe.send(alpha)
 			z = z_new
 		else:
 			# Update s^(k+1) = s^(k) + z^(k+1) - z^(k+1/2).
@@ -248,4 +239,4 @@ def consensus(p_list, *args, **kwargs):
 	end = time()
 	
 	[p.terminate() for p in procs]
-	return {"xvals": z, "num_iters": k + 1, "solve_time": (end - start)}
+	return {"zvals": z, "num_iters": k + 1, "solve_time": (end - start)}
