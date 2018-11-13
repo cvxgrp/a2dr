@@ -25,7 +25,7 @@ import cvxpy.settings as s
 from cvxpy.problems.problem import Problem, Minimize
 from cvxpy.expressions.constants import Parameter
 from cvxpy.atoms import sum_squares
-from cvxconsensus.acceleration import aa_weights
+from cvxconsensus.acceleration import aa_weights, dicts_to_arr
 from cvxconsensus.utilities import flip_obj, assign_rho, partition_vars
 
 def prox_step(prob, rho_init):
@@ -143,6 +143,7 @@ def run_worker(pipe, p, rho_init, anderson, m_accel, *args, **kwargs):
 					y_val += alpha[j] * y_diff[j][key]
 				v[key]["y"].value = y_val
 		else:
+			y_res = []
 			for key in v.keys():
 				# Update corresponding w^(k+1) parameters.
 				s_half = v[key]["z"].value
@@ -151,11 +152,18 @@ def run_worker(pipe, p, rho_init, anderson, m_accel, *args, **kwargs):
 				
 				# Update y^(k+1) = y^(k) + x^(k+1) - x^(k+1/2).
 				v[key]["y"].value += v[key]["x"].value - x_half[key]
+				
+				# Send residual y^(k) - y^(k+1) for stopping criteria.
+				res = x_half[key] - v[key]["x"].value
+				y_res.append(res.flatten(order = "C"))
+			y_res = np.concatenate(y_res)
+			pipe.send(y_res)
 
 def consensus(p_list, *args, **kwargs):
 	N = len(p_list)   # Number of problems.
 	max_iter = kwargs.pop("max_iter", 100)
 	rho_init = kwargs.pop("rho_init", dict())   # Step sizes.
+	eps_stop = kwargs.pop("eps_stop", 1e-6)     # Stopping tolerance.
 	
 	# AA-II parameters.
 	anderson = kwargs.pop("anderson", False)
@@ -184,14 +192,17 @@ def consensus(p_list, *args, **kwargs):
 	# Initialize consensus variables.
 	s = defaultdict(float)
 	z = {key: np.zeros(var.shape) for key, var in var_all.items()}
+	resid = np.zeros(max_iter)
 	
 	# Initialize AA-II parameters.
 	if anderson:
 		s_diff = []
 
 	# Consensus S-DRS loop.
+	k = 0
+	finished = False
 	start = time()
-	for k in range(max_iter):
+	while not finished:
 		# Gather y_i^(k+1/2) from nodes.
 		prox_res = [pipe.recv() for pipe in pipes]
 		
@@ -231,12 +242,30 @@ def consensus(p_list, *args, **kwargs):
 			for pipe in pipes:
 				pipe.send(alpha)
 			z = z_new
+			k = k + 1
 		else:
-			# Update s^(k+1) = s^(k) + z^(k+1) - z^(k+1/2).
+			s_res = []
 			for key in var_all.keys():
+				# Update s^(k+1) = s^(k) + z^(k+1) - z^(k+1/2).
 				s[key] += z_new[key] - z[key]
+				
+				# Save residual s^(k) - s^(k+1) for stopping criteria.
+				res = z[key] - z_new[key]
+				s_res.append(res.flatten(order = "C"))
+			s_res = np.concatenate(s_res)
+			
+			# Compute l2-norm of residual G(v^(k)) = v^(k) - v^(k+1) 
+			# where v^(k) = (y^(k), s^(k)).
+			v_res = [pipe.recv() for pipe in pipes]
+			v_res.append(s_res)
+			v_res = np.concatenate(v_res, axis = 0)
+			resid[k] = np.linalg.norm(v_res, ord = 2)
+			
+			# Stop if G(v^(k))/G(v^(0)) falls below tolerance.
 			z = z_new
+			k = k + 1
+			finished = k >= max_iter or resid[k-1] <= eps_stop*resid[0]
 	end = time()
 	
 	[p.terminate() for p in procs]
-	return {"zvals": z, "num_iters": k + 1, "solve_time": (end - start)}
+	return {"zvals": z, "residuals": np.array(resid), "num_iters": k, "solve_time": (end - start)}

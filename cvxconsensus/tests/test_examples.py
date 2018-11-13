@@ -100,7 +100,7 @@ class TestExamples(BaseTest):
 		probs = Problems(p_list)
 		
 		# Solve via consensus using spectral step size adjustment.
-		probs.solve(method = "consensus", rho_init = 1.0, max_iter = 20, spectral = True)
+		probs.solve(method = "consensus", rho_init = 1.0, max_iter = 20)
 		print("Objective:", probs.value)
 		print("Solution:", w.value)
 	

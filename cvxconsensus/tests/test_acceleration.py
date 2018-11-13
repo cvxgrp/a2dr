@@ -41,7 +41,6 @@ class TestAcceleration(BaseTest):
 	def setUp(self):
 		np.random.seed(1)
 		self.MAX_ITER = 100
-		self.spectral = False
 	
 	def test_lasso(self):	
 		m = 100
@@ -64,14 +63,12 @@ class TestAcceleration(BaseTest):
 		N = len(p_list)
 		
 		# Solve with consensus ADMM.
-		obj_admm = probs.solve(method = "consensus", rho_init = 1.0, \
-							   max_iter = self.MAX_ITER, spectral = self.spectral)
+		obj_admm = probs.solve(method = "consensus", rho_init = 1.0, max_iter = self.MAX_ITER)
 		res_admm = {"primal": probs.primal_residual, "dual": probs.dual_residual}
 		
 		# Solve with consensus ADMM using Anderson acceleration.
 		obj_accel = probs.solve(method = "consensus", rho_init = 1.0, \
-							   max_iter = self.MAX_ITER, spectral = self.spectral,
-							   anderson = True, m_accel = 5)
+							   max_iter = self.MAX_ITER, anderson = True, m_accel = 5)
 		res_accel = {"primal": probs.primal_residual, "dual": probs.dual_residual}
 		x_accel = [x.value for x in probs.variables()]
 		compare_residuals(res_admm, res_accel)

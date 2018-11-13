@@ -43,8 +43,7 @@ class Problems(object):
 		self._problems = problems
 		self._value = None
 		self._status = None
-		self._primal_residual = None
-		self._dual_residual = None
+		self._residual
 		self._solver_stats = None
 		
 		self.combined = self._combined()
@@ -72,18 +71,12 @@ class Problems(object):
 		return self._problems
 	
 	@property
-	def primal_residual(self):
-		"""list : The sum of squared primal residuals for each iteration, i.e.
-				  ||r^(k)||^2 where r_i^(k) = x_i^(k) - x_bar^(k).
-		"""
-		return self._primal_residual
-	
-	@property
 	def dual_residual(self):
-		"""list : The sum of squared dual residuals for each iteration, i.e.
-				  ||d^(k)||^2 where d_i^(k) = rho_i^(k)*(x_bar^(k-1) - x_bar^(k)).
+		"""list : The l2-normed residuals for each iteration, i.e.
+				  ||G(v^(k))||^2 where v^(k) = (y^(k), s^(k)) and G(.)
+				  is the mapping G(v^(k)) = v^(k) - v^(k+1).
 		"""
-		return self._dual_residual
+		return self._residual
 	
 	def _combined(self):
 		"""Sum list of problems with sign flip if objective is maximization.
@@ -224,20 +217,27 @@ class Problems(object):
 		# Save combined objective.
 		self._value = np.asscalar(self.objective.value)
 		
+		# Save residual from fixed point mapping.
+		self._residual = solution["residual"]
+		
 		# TODO: Handle statuses.
 		self._solver_stats = {"num_iters": solution["num_iters"],
 							  "solve_time": solution["solve_time"]}
 	
-	def plot_residuals(self):
-		"""Plot the sum of squared primal/dual residuals over all iterations.
+	def plot_residual(self, normalize = True):
+		"""Plot the l2-normed residual over all iterations.
+		
+		Parameters
+		----------
+		normalize : logical
+		     Should the residuals be normalized by their initial iteration value?
 		"""
 		if self._solver_stats is None:
 			raise ValueError("Solver stats is empty. Nothing to plot.")
 		iters = range(self._solver_stats["num_iters"])
-		resid = np.column_stack((self._primal_residual, self._dual_residual))
+		resid = self._residual/self._residual[0] if normalize else self.residual
 		
-		plt_resd = plt.plot(iters, resid, label = ["Primal", "Dual"])
-		plt.legend(plt_resd, ["Primal", "Dual"])
+		plt.plot(iters, resid)
 		plt.xlabel("Iteration")
 		plt.ylabel("Residual")
 		plt.show()
