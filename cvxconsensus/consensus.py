@@ -268,4 +268,4 @@ def consensus(p_list, *args, **kwargs):
 	end = time()
 	
 	[p.terminate() for p in procs]
-	return {"zvals": z, "residuals": np.array(resid), "num_iters": k, "solve_time": (end - start)}
+	return {"zvals": z, "residuals": np.array(resid[:k]), "num_iters": k, "solve_time": (end - start)}

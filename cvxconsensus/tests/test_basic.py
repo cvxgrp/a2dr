@@ -53,7 +53,7 @@ class TestBasic(BaseTest):
 		# Solve with consensus ADMM.
 		obj_admm = probs.solve(method = "consensus", rho_init = 1.0, max_iter = self.MAX_ITER)
 		x_admm = [x.value for x in probs.variables()]
-		# probs.plot_residuals()
+		probs.plot_residuals()
 
 		# Solve combined problem.
 		obj_comb = probs.solve(method = "combined")

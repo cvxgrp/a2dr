@@ -43,7 +43,7 @@ class Problems(object):
 		self._problems = problems
 		self._value = None
 		self._status = None
-		self._residual
+		self._residuals = None
 		self._solver_stats = None
 		
 		self.combined = self._combined()
@@ -71,12 +71,12 @@ class Problems(object):
 		return self._problems
 	
 	@property
-	def dual_residual(self):
+	def residuals(self):
 		"""list : The l2-normed residuals for each iteration, i.e.
 				  ||G(v^(k))||^2 where v^(k) = (y^(k), s^(k)) and G(.)
 				  is the mapping G(v^(k)) = v^(k) - v^(k+1).
 		"""
-		return self._residual
+		return self._residuals
 	
 	def _combined(self):
 		"""Sum list of problems with sign flip if objective is maximization.
@@ -218,13 +218,13 @@ class Problems(object):
 		self._value = np.asscalar(self.objective.value)
 		
 		# Save residual from fixed point mapping.
-		self._residual = solution["residual"]
+		self._residuals = solution["residuals"]
 		
 		# TODO: Handle statuses.
 		self._solver_stats = {"num_iters": solution["num_iters"],
 							  "solve_time": solution["solve_time"]}
 	
-	def plot_residual(self, normalize = True):
+	def plot_residuals(self, normalize = True):
 		"""Plot the l2-normed residual over all iterations.
 		
 		Parameters
@@ -235,7 +235,7 @@ class Problems(object):
 		if self._solver_stats is None:
 			raise ValueError("Solver stats is empty. Nothing to plot.")
 		iters = range(self._solver_stats["num_iters"])
-		resid = self._residual/self._residual[0] if normalize else self.residual
+		resid = self._residuals/self._residuals[0] if normalize else self._residuals
 		
 		plt.plot(iters, resid)
 		plt.xlabel("Iteration")
