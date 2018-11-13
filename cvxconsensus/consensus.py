@@ -100,6 +100,7 @@ def run_worker(pipe, p, rho_init, anderson, m_accel, *args, **kwargs):
 	
 	# Initialize AA-II parameters.
 	if anderson:
+		y_hist = []   # History of y^(k).
 		y_diff = []   # History of y^(k) - F(y^(k)) fixed point mappings.
 	
 	# Consensus S-DRS loop.
@@ -117,6 +118,12 @@ def run_worker(pipe, p, rho_init, anderson, m_accel, *args, **kwargs):
 		
 		if anderson:
 			m_k = min(m_accel, k)   # Keep iterations (k - m_k) through k.
+			
+			# Save history of y^(k).
+			y = {key: v[key]["y"].value for key in v.keys()}
+			y_hist.append(y)
+			if len(y_hist) > m_k + 1:
+				y_hist.pop(0)
 			
 			diff = {}
 			y_res = []
@@ -144,7 +151,7 @@ def run_worker(pipe, p, rho_init, anderson, m_accel, *args, **kwargs):
 				# Weighted update of y^(k+1).
 				y_val = np.zeros(y_diff[0][key].shape)
 				for j in range(m_k + 1):
-					y_val += alpha[j] * y_diff[j][key]   # TODO: This is wrong, need alpha * F(x) = alpha * (x - G(x)), not alpha * G(x).
+					y_val += alpha[j] * (y_hist[j][key] - y_diff[j][key])
 				v[key]["y"].value = y_val
 		else:
 			y_res = []
@@ -194,13 +201,14 @@ def consensus(p_list, *args, **kwargs):
 		procs[-1].start()
 
 	# Initialize consensus variables.
-	s = defaultdict(float)
 	z = {key: np.zeros(var.shape) for key, var in var_all.items()}
+	s = z.copy()
 	resid = np.zeros(max_iter)
 	
 	# Initialize AA-II parameters.
 	if anderson:
-		s_diff = []
+		s_hist = []   # History of s^(k).
+		s_diff = []   # History of s^(k) - F(s^(k)) fixed point mappings.
 
 	# Consensus S-DRS loop.
 	k = 0
@@ -220,19 +228,23 @@ def consensus(p_list, *args, **kwargs):
 		if anderson:
 			m_k = min(m_accel, k)   # Keep iterations (k - m_k) through k.
 			
+			# Save history of s^(k).
+			s_hist.append(s.copy())
+			if len(s_hist) > m_k + 1:
+				s_hist.pop(0)
+			
 			# Receive history of y_i differences.
-			y_hist = [pipe.recv() for pipe in pipes]
-			y_diffs, v_res = map(list, zip(*y_hist))
+			y_update = [pipe.recv() for pipe in pipes]
+			y_diffs, v_res = map(list, zip(*y_update))
 			
 			# Save history of s^(k) - F(s^(k)) = z^(k+1/2) - z^(k+1),
 			# where F(.) is the consensus S-DRS mapping of v^(k+1) = F(v^(k)).
 			diff = {}
-			s_res = []   # Save residual s^(k) - s^(k+1) for stopping criteria.
+			s_res = []   # Save current residual for stopping criteria.
 			for key in var_all.keys():
 				diff[key] = z[key] - z_new[key]
 				s_res.append(diff[key].flatten(order = "C"))
 			s_res = np.concatenate(s_res)
-			
 			s_diff.append(diff)
 			if len(s_diff) > m_k + 1:
 				s_diff.pop(0)
@@ -252,7 +264,7 @@ def consensus(p_list, *args, **kwargs):
 			for key in var_all.keys():
 				s_val = np.zeros(s_diff[0][key].shape)
 				for j in range(m_k + 1):
-					s_val += alpha[j] * s_diff[j][key]   # TODO: This is wrong, need alpha * F(x) = alpha * (x - G(x)), not alpha * G(x).
+					s_val += alpha[j] * (s_hist[j][key] - s_diff[j][key])
 				s[key] = s_val
 		else:
 			s_res = []
