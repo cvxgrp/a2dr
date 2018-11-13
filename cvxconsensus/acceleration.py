@@ -36,7 +36,7 @@ def dicts_to_arr(dicts):
 			offset += val.size
 			
 			# Flatten into column-order array.
-			col.append(d.flatten(order = "C"))
+			col.append(val.flatten(order = "C"))
 		
 		# Stack all dict values into single column.
 		col = np.concatenate(col)
@@ -98,7 +98,7 @@ def aa_weights(residuals, lam = None, *args, **kwargs):
 	# Solve for AA-II constrained LS weights.
 	alpha = Variable(G.shape[1])
 	obj = cvxpy.sum_squares(G * alpha)
-	reg = lam * sum_squares(alpha) if lam else 0   # Stabilization with l_2 penalty.
+	reg = lam * sum_squares(alpha) if lam else 0   # Stabilization with l2 penalty.
 	constr = [cvxpy.sum(alpha) == 1]
 	prob = Problem(Minimize(obj + reg), constr)
 	prob.solve(*args, **kwargs)

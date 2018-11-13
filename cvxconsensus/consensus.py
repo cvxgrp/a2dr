@@ -119,6 +119,7 @@ def run_worker(pipe, p, rho_init, anderson, m_accel, *args, **kwargs):
 			m_k = min(m_accel, k)   # Keep iterations (k - m_k) through k.
 			
 			diff = {}
+			y_res = []
 			for key in v.keys():
 				# Update corresponding w^(k+1) parameters.
 				s_half = v[key]["z"].value
@@ -128,12 +129,17 @@ def run_worker(pipe, p, rho_init, anderson, m_accel, *args, **kwargs):
 				# Save history of y^(k) - F(y^(k)) = x^(k+1/2) - x^(k+1),
 				# where F(.) is the consensus S-DRS mapping of v^(k+1) = F(v^(k)).
 				diff[key] = x_half[key] - v[key]["x"].value
+				
+				# Save residual y^(k) - F(y^(k)) for stopping criteria.
+				y_res.append(diff[key].flatten(order = "C"))
+			y_res = np.concatenate(y_res)
+				
 			y_diff.append(diff)
 			if len(y_diff) > m_k + 1:
 				y_diff.pop(0)
 			
-			# Receive s^(k+1) and AA-II weights for y^(k+1).
-			pipe.send(y_diff)
+			# Receive AA-II weights for y^(k+1).
+			pipe.send((y_diff, y_res))
 			alpha = pipe.recv()
 			
 			for key in v.keys():
@@ -217,19 +223,32 @@ def consensus(p_list, *args, **kwargs):
 			m_k = min(m_accel, k)   # Keep iterations (k - m_k) through k.
 			
 			# Receive history of y_i differences.
-			y_diffs = [pipe.recv() for pipe in pipes]
+			y_hist = [pipe.recv() for pipe in pipes]
+			y_diffs, v_res = map(list, zip(*y_hist))
 			
 			# Save history of s^(k) - F(s^(k)) = z^(k+1/2) - z^(k+1),
 			# where F(.) is the consensus S-DRS mapping of v^(k+1) = F(v^(k)).
 			diff = {}
+			s_res = []   # Save residual s^(k) - F(s^(k)) for stopping criterion.
 			for key in var_all.keys():
 				diff[key] = z[key] - z_new[key]
+				s_res.append(diff[key].flatten(order = "C"))
+			s_res = np.concatenate(s_res)
+			
 			s_diff.append(diff)
-			if len(s_diffs) > m_k + 1:
+			if len(s_diff) > m_k + 1:
 				s_diff.pop(0)
 			
-			# Compute AA-II weights.
+			# Compute l2-norm of residual G(v^(k)) = v^(k) - F(v^(k)) 
+			# where v^(k) = (y^(k), s^(k)).
+			v_res.append(s_res)
+			v_res = np.concatenate(v_res, axis = 0)
+			resid[k] = np.linalg.norm(v_res, ord = 2)
+			
+			# Compute and scatter AA-II weights.
 			alpha = aa_weights(y_diffs + [s_diff])
+			for pipe in pipes:
+				pipe.send(alpha)
 			
 			# Weighted update of s^(k+1).
 			for key in var_all.keys():
@@ -237,12 +256,6 @@ def consensus(p_list, *args, **kwargs):
 				for j in range(m_k + 1):
 					s_val += alpha[j] * s_diff[j][key]
 				s[key] = s_val
-			
-			# Scatter AA-II weights for y^(k+1).
-			for pipe in pipes:
-				pipe.send(alpha)
-			z = z_new
-			k = k + 1
 		else:
 			s_res = []
 			for key in var_all.keys():
@@ -261,10 +274,10 @@ def consensus(p_list, *args, **kwargs):
 			v_res = np.concatenate(v_res, axis = 0)
 			resid[k] = np.linalg.norm(v_res, ord = 2)
 			
-			# Stop if G(v^(k))/G(v^(0)) falls below tolerance.
-			z = z_new
-			k = k + 1
-			finished = k >= max_iter or resid[k-1] <= eps_stop*resid[0]
+		# Stop if G(v^(k))/G(v^(0)) falls below tolerance.
+		z = z_new
+		k = k + 1
+		finished = k >= max_iter or resid[k-1] <= eps_stop*resid[0]
 	end = time()
 	
 	[p.terminate() for p in procs]
