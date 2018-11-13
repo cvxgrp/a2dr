@@ -39,7 +39,7 @@ class TestBasic(BaseTest):
 
 		# Problem data.
 		alpha = 0.5
-		A = np.random.randn(m*n).reshape(m,n)
+		A = np.random.randn(m,n)
 		xtrue = np.random.randn(n)
 		b = A.dot(xtrue) + np.random.randn(m)
 
