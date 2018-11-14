@@ -120,10 +120,6 @@ class TestBasic(BaseTest):
 		A_split = np.split(A, N)
 		b_split = np.split(b, N)
 		
-		# Step size.
-		AA = A.T.dot(A)
-		alpha = 1.8/np.linalg.norm(AA, ord = 2)
-		
 		# Minimize f_i(x) subject to x >= 0
 		# where f_i(x) = ||A_i*x - b_i||_2^2 for subproblem i = 1,...,N.
 		x = Variable(n)
