@@ -102,10 +102,56 @@ class TestBasic(BaseTest):
 		
 		# Compare results.
 		# self.compare_results(probs, obj_admm, obj_comb, x_admm, x_comb)
-		N = len(probs.variables())
+		K = len(probs.variables())
 		self.assertAlmostEqual(obj_admm, obj_comb)
-		for i in range(N):
+		for i in range(K):
 			self.assertItemsAlmostEqual(x_admm[i], x_comb[i], places = 3)
+	
+	def test_nnls(self):
+		# Solve the non-negative least squares problem
+		# Minimize (1/2) ||A*x - b||_2^2 subject to x >= 0.
+		m = 50
+		n = 100
+		N = 2   # Number of splits.
+		
+		# Problem data.
+		A = np.random.randn(m,n)
+		b = np.random.randn(m)
+		A_split = np.split(A, N)
+		b_split = np.split(b, N)
+		
+		# Step size.
+		AA = A.T.dot(A)
+		alpha = 1.8/np.linalg.norm(AA, ord = 2)
+		
+		# Minimize f_i(x) subject to x >= 0
+		# where f_i(x) = ||A_i*x - b_i||_2^2 for subproblem i = 1,...,N.
+		x = Variable(n)
+		constr = [x >= 0]
+		
+		p_list = []
+		for A_sub, b_sub in zip(A_split, b_split):
+			obj = 0.5*sum_squares(A_sub*x - b_sub)
+			p_list.append(Problem(Minimize(obj)))
+		p_list.append(Problem(Minimize(0), constr))
+		probs = Problems(p_list)
+		probs.pretty_vars()
+		
+		# Solve with consensus ADMM.
+		obj_admm = probs.solve(method = "consensus", rho_init = 0.5, eps = 0, \
+								max_iter = 4000, spectral = True)
+		x_admm = [x.value for x in probs.variables()]
+		# probs.plot_residuals(semilogy = True)
+		
+		# Solve combined problem.
+		obj_comb = probs.solve(method = "combined", solver = "OSQP")
+		x_comb = [x.value for x in probs.variables()]
+		
+		# Compare results.
+		K = len(probs.variables())
+		self.assertAlmostEqual(obj_admm, obj_comb)
+		for i in range(K):
+			self.assertItemsAlmostEqual(x_admm[i], x_comb[i])
 
 	def test_lasso(self):
 		m = 100

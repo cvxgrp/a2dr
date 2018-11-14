@@ -232,7 +232,7 @@ class Problems(object):
 		self._solver_stats = {"num_iters": solution["num_iters"],
 							  "solve_time": solution["solve_time"]}
 	
-	def plot_residuals(self):
+	def plot_residuals(self, show = True, semilogy = False):
 		"""Plot the sum of squared primal/dual residuals over all iterations.
 		"""
 		if self._solver_stats is None:
@@ -240,8 +240,12 @@ class Problems(object):
 		iters = range(self._solver_stats["num_iters"])
 		resid = np.column_stack((self._primal_residual, self._dual_residual))
 		
-		plt_resd = plt.plot(iters, resid, label = ["Primal", "Dual"])
+		if semilogy:
+			plt_resd = plt.plot(iters, resid, label = ["Primal", "Dual"])
+		else:
+			plt_resd = plt.plot(iters, resid, label = ["Primal", "Dual"])
 		plt.legend(plt_resd, ["Primal", "Dual"])
 		plt.xlabel("Iteration")
 		plt.ylabel("Residual")
-		plt.show()
+		if show:
+			plt.show()

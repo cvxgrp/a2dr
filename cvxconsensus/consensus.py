@@ -205,7 +205,7 @@ def x_average(prox_res):
 	
 	return {key: np.sum(np.array(x_list), axis = 0)/rho_sum[key] for key, x_list in x_merge.items()}
 
-def res_stop(res_ssq, eps = 1e-4):
+def res_stop(res_ssq, eps = 1e-6):
 	"""Calculate the sum of squared primal/dual residuals.
 	   Determine whether the stopping criterion is satisfied:
 	   ||r^(k)||^2 <= eps*max(\sum_i ||x_i^(k)||^2, \sum_i ||x_bar^(k)||^2) and
@@ -310,6 +310,9 @@ def consensus(p_list, *args, **kwargs):
 	eps = kwargs.pop("eps", 1e-6)   # Stopping tolerance.
 	resid = np.zeros((max_iter, 2))
 	
+	if max_iter < 0:
+		raise ValueError("max_iter must be a non-negative integer")
+	
 	if np.isscalar(rho_init):
 		rho_list = assign_rho(p_list, default = rho_init)
 	else:
@@ -328,7 +331,7 @@ def consensus(p_list, *args, **kwargs):
 
 	# ADMM loop.
 	i = 0
-	finished = False
+	finished = i >= max_iter
 	start = time()
 	while not finished:
 		# Gather and average x_i.
@@ -357,4 +360,4 @@ def consensus(p_list, *args, **kwargs):
 	end = time()
 	
 	[p.terminate() for p in procs]
-	return {"xbars": xbars, "residuals": resid[:(i+1),:], "num_iters": i+1, "solve_time": (end - start)}
+	return {"xbars": xbars, "residuals": resid[:i,:], "num_iters": i, "solve_time": (end - start)}
