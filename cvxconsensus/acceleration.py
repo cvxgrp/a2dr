@@ -98,7 +98,7 @@ def aa_weights(residuals, lam = None, *args, **kwargs):
 	# Solve for AA-II constrained LS weights.
 	alpha = Variable(G.shape[1])
 	obj = cvxpy.sum_squares(G * alpha)
-	reg = lam * sum_squares(alpha) if lam else 0   # Stabilization with l2 penalty.
+	reg = lam * cvxpy.sum_squares(alpha) if lam else 0   # Stabilization with l2 penalty.
 	constr = [cvxpy.sum(alpha) == 1]
 	prob = Problem(Minimize(obj + reg), constr)
 	prob.solve(*args, **kwargs)

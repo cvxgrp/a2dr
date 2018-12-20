@@ -224,7 +224,7 @@ class Problems(object):
 		self._solver_stats = {"num_iters": solution["num_iters"],
 							  "solve_time": solution["solve_time"]}
 	
-	def plot_residuals(self, normalize = True):
+	def plot_residuals(self, normalize = True, semilogy = False):
 		"""Plot the l2-normed residual over all iterations.
 		
 		Parameters
@@ -235,9 +235,12 @@ class Problems(object):
 		if self._solver_stats is None:
 			raise ValueError("Solver stats is empty. Nothing to plot.")
 		iters = range(self._solver_stats["num_iters"])
-		resid = self._residuals/self._residuals[0] if normalize else self._residuals
-		
-		plt.plot(iters, resid)
+		resid = self._residuals/self._residuals[0] if normalize and self._residuals[0] != 0 else self._residuals
+
+		if semilogy:
+			plt.semilogy(iters, resid)
+		else:
+			plt.plot(iters, resid)
 		plt.xlabel("Iteration")
 		plt.ylabel("Residual")
 		plt.show()

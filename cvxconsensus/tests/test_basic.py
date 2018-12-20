@@ -29,7 +29,7 @@ class TestBasic(BaseTest):
 	
 	def setUp(self):
 		np.random.seed(1)
-		self.MAX_ITER = 100
+		self.MAX_ITER = 1000
 	
 	def test_basic(self):
 		m = 100
@@ -60,14 +60,14 @@ class TestBasic(BaseTest):
 		x_comb = [x.value for x in probs.variables()]
 
 		# Compare results.
-		# self.compare_results(probs, obj_admm, obj_comb, x_admm, x_comb)
+		self.compare_results(probs, obj_admm, obj_comb, x_admm, x_comb)
 		N = len(probs.variables())
 		self.assertAlmostEqual(obj_admm, obj_comb)
 		for i in range(N):
 			self.assertItemsAlmostEqual(x_admm[i], x_comb[i])
 
 	def test_ols(self):
-		N = 2
+		N = 5
 		m = N*1000
 		n = 10
 		x = Variable(n)
@@ -88,9 +88,9 @@ class TestBasic(BaseTest):
 		probs.pretty_vars()
 		
 		# Solve with consensus ADMM.
-		obj_admm = probs.solve(method = "consensus", rho_init = 0.5, max_iter = self.MAX_ITER)
+		obj_admm = probs.solve(method = "consensus", rho_init = 100, max_iter = self.MAX_ITER)
 		x_admm = [x.value for x in probs.variables()]
-		# probs.plot_residuals()
+		# probs.plot_residuals(semilogy = True)
 		
 		# Solve combined problem.
 		# obj_comb = Problem(Minimize(sum_squares(A*x-b))).solve()
@@ -98,7 +98,7 @@ class TestBasic(BaseTest):
 		x_comb = [x.value for x in probs.variables()]
 		
 		# Compare results.
-		# self.compare_results(probs, obj_admm, obj_comb, x_admm, x_comb)
+		self.compare_results(probs, obj_admm, obj_comb, x_admm, x_comb)
 		N = len(probs.variables())
 		self.assertAlmostEqual(obj_admm, obj_comb)
 		for i in range(N):
@@ -134,7 +134,7 @@ class TestBasic(BaseTest):
 		x_comb = [x.value for x in probs.variables()]
 		
 		# Compare results.
-		# self.compare_results(probs, obj_admm, obj_comb, x_admm, x_comb)
+		self.compare_results(probs, obj_admm, obj_comb, x_admm, x_comb)
 		N = len(probs.variables())
 		self.assertAlmostEqual(obj_admm, obj_comb)
 		for i in range(N):
