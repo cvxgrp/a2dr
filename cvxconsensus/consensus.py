@@ -68,7 +68,7 @@ def w_project(prox_res, s_half):
 	"""Projection step update of w^(k+1) = (x^(k+1), z^(k+1)) in the
 	   consensus scaled Douglas-Rachford algorithm.
 	"""
-	ys_diff = defaultdict(list)
+	y_part = defaultdict(list)
 	var_cnt = defaultdict(float)
 	
 	for status, y_half in prox_res:
@@ -76,19 +76,19 @@ def w_project(prox_res, s_half):
 		if status in s.INF_OR_UNB:
 			raise RuntimeError("Proximal problem is infeasible or unbounded")
 		
-		# Store difference between y_i and consensus term s for each variable ID.
+		# Partition y_i by variable ID and count instances.
 		for key in y_half.keys():
-			ys_diff[key].append(y_half[key] - s_half[key])
+			y_part[key].append(y_half[key])
 			var_cnt[key] += 1.0
 	
-	if set(s_half.keys()) != set(ys_diff.keys()):
+	if set(s_half.keys()) != set(y_part.keys()):
 		raise RuntimeError("Mismatch between variable IDs of consensus and individual node terms")
 	
 	# Compute common matrix term and z update.
 	mat_term = {}
 	z_new = {}
 	for key in s_half.keys():
-		ys_sum = np.sum(np.array(ys_diff[key]), axis = 0)
+		ys_sum = np.sum(np.array(y_part[key]), axis = 0) - var_cnt[key]*s_half[key]
 		mat_term[key] = ys_sum/(1.0 + var_cnt[key])
 		z_new[key] = s_half[key] + ys_sum - var_cnt[key] * mat_term[key]
 	

@@ -18,10 +18,10 @@ along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 """
 
 import numpy as np
-from cvxpy import Variable, Parameter, Problem, Minimize
+from cvxpy import Variable, Problem, Minimize
 from cvxpy.atoms import *
-import cvxconsensus
-from cvxconsensus import Problems
+import cvxpy.settings as s
+from cvxconsensus.consensus import w_project
 from cvxconsensus.utilities import assign_rho, partition_vars
 from cvxconsensus.tests.base_test import BaseTest
 
@@ -68,3 +68,38 @@ class TestFunctions(BaseTest):
 		self.assertSetEqual(var_list[0]["public"], {self.y.id})
 		self.assertSetEqual(var_list[1]["private"], set())
 		self.assertSetEqual(var_list[1]["public"], {self.y.id})
+
+	def test_projection(self):
+		xid = self.x.id
+		y_half = {xid: np.random.randn(*self.x.shape)}
+		s_half = {xid: np.random.randn(*self.x.shape)}
+		mat_term, z_new = w_project([(s.OPTIMAL, y_half)], s_half)
+		self.assertItemsAlmostEqual(mat_term[xid], (y_half[xid] - s_half[xid])/2)
+		self.assertItemsAlmostEqual(z_new[xid], (y_half[xid] + s_half[xid])/2)
+
+		N = 5
+		prox_res = []
+		for i in range(N):
+			y_half = {xid: np.random.randn(*self.x.shape)}
+			prox_res.append((s.OPTIMAL, y_half))
+		s_half = {xid: np.random.randn(*self.x.shape)}
+		mat_term, z_new = w_project(prox_res, s_half)
+
+		y_halves = [y_half[xid] for status, y_half in prox_res]
+		self.assertItemsAlmostEqual(mat_term[xid], (sum(y_halves) - N*s_half[xid])/(N + 1))
+		self.assertItemsAlmostEqual(z_new[xid], (sum(y_halves) + s_half[xid])/(N + 1))
+
+		y_half1 = {self.x.id: np.random.randn(*self.x.shape), self.y.id: np.random.randn(*self.y.shape)}
+		y_half2 = {self.y.id: np.random.randn(*self.y.shape), self.z.id: np.random.randn(*self.z.shape)}
+		s_half = {self.x.id: np.random.randn(*self.x.shape), self.y.id: np.random.randn(*self.y.shape), \
+				  self.z.id: np.random.randn(*self.z.shape)}
+		prox_res = [(s.OPTIMAL, y_half1), (s.OPTIMAL_INACCURATE, y_half2)]
+		mat_term, z_new = w_project(prox_res, s_half)
+
+		y_halves = [y_half[self.y.id] for status, y_half in prox_res]
+		self.assertItemsAlmostEqual(mat_term[self.y.id], (sum(y_halves) - 2*s_half[self.y.id])/3)
+		self.assertItemsAlmostEqual(mat_term[self.x.id], (y_half1[self.x.id] - s_half[self.x.id])/2)
+		self.assertItemsAlmostEqual(mat_term[self.z.id], (y_half2[self.z.id] - s_half[self.z.id])/2)
+		self.assertItemsAlmostEqual(z_new[self.y.id], -s_half[self.y.id] + sum(y_halves) - 2*(sum(y_halves) - 2*s_half[self.y.id])/3)
+		self.assertItemsAlmostEqual(z_new[self.x.id], y_half1[self.x.id] - (y_half1[self.x.id] - s_half[self.x.id])/2)
+		self.assertItemsAlmostEqual(z_new[self.z.id], y_half2[self.z.id] - (y_half2[self.z.id] - s_half[self.z.id])/2)

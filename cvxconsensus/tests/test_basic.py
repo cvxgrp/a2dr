@@ -161,7 +161,7 @@ class TestBasic(BaseTest):
 		theta_true = np.random.randn(n,1)
 		idxs = np.random.choice(range(n), int((1-DENSITY)*n), replace = False)
 		for idx in idxs:
-			beta_true[idx] = 0
+			theta_true[idx] = 0
 
 		Z = np.random.binomial(1, 0.5, size=(m,n))
 		Y = np.sign(Z.dot(theta_true) + np.random.normal(0,sigma,size=(m,1)))
