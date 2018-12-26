@@ -202,7 +202,7 @@ def consensus(p_list, *args, **kwargs):
 
 	# Initialize consensus variables.
 	z = {key: np.zeros(var.shape) for key, var in var_all.items()}
-	s = z.copy()
+	s = {key: np.zeros(var.shape) for key, var in var_all.items()}
 	resid = np.zeros(max_iter)
 	
 	# Initialize AA-II parameters.
