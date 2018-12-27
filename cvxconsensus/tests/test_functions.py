@@ -21,7 +21,7 @@ import numpy as np
 from cvxpy import Variable, Problem, Minimize
 from cvxpy.atoms import *
 import cvxpy.settings as s
-from cvxconsensus.consensus import w_project
+from cvxconsensus.consensus import prox_step, w_project
 from cvxconsensus.utilities import assign_rho, partition_vars
 from cvxconsensus.tests.base_test import BaseTest
 
@@ -68,6 +68,31 @@ class TestFunctions(BaseTest):
 		self.assertSetEqual(var_list[0]["public"], {self.y.id})
 		self.assertSetEqual(var_list[1]["private"], set())
 		self.assertSetEqual(var_list[1]["public"], {self.y.id})
+
+	def test_prox_step(self):
+		rho = {self.x.id: 1.0}
+		obj = norm(self.x)
+		y_val = np.random.randn(*self.x.shape)
+
+		prox, v = prox_step(Problem(Minimize(obj)), rho)
+		v[self.x.id]["y"].value = y_val
+		prox.solve()
+		x_prox = self.x.value
+
+		p = Problem(Minimize(obj + (rho[self.x.id]/2.0)*sum_squares(self.x - y_val)))
+		p.solve()
+		self.assertItemsAlmostEqual(x_prox, self.x.value)
+
+		obj = 0
+		constr = [self.x >= 0]
+		prox, v = prox_step(Problem(Minimize(obj), constr), rho)
+		v[self.x.id]["y"].value = y_val
+		prox.solve()
+		x_prox = self.x.value
+
+		p = Problem(Minimize(obj + (rho[self.x.id]/2.0)*sum_squares(self.x - y_val)), constr)
+		p.solve()
+		self.assertItemsAlmostEqual(x_prox, self.x.value)
 
 	def test_projection(self):
 		xid = self.x.id

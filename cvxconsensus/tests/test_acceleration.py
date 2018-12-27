@@ -19,13 +19,21 @@ along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 
 import numpy as np
 import matplotlib.pyplot as plt
-from cvxpy import Variable, Parameter, Problem, Minimize
+from scipy.linalg import toeplitz
+from cvxpy import Variable, Problem, Minimize
 from cvxpy.atoms import *
 import cvxconsensus
 from cvxconsensus import Problems
 from cvxconsensus.tests.base_test import BaseTest
 
 def compare_residuals(res_sdrs, res_aa2, m_vals):
+	if not isinstance(res_aa2, list):
+		res_aa2 = [res_aa2]
+	if not isinstance(m_vals, list):
+		m_vals = [m_vals]
+	if len(m_vals) != len(res_aa2):
+		raise ValueError("Must have same number of AA-II residuals as memory parameter values")
+		
 	plt.semilogy(range(res_sdrs.shape[0]), res_sdrs, label = "S-DRS")
 	for i in range(len(m_vals)):
 		label = "AA-II S-DRS (m = {})".format(m_vals[i])
@@ -40,9 +48,9 @@ class TestAcceleration(BaseTest):
 	
 	def setUp(self):
 		np.random.seed(1)
-		self.MAX_ITER = 1000
+		self.MAX_ITER = 2000
 	
-	def test_lasso(self):	
+	def test_lasso(self):
 		m = 100
 		n = 10
 		DENSITY = 0.75
@@ -100,10 +108,11 @@ class TestAcceleration(BaseTest):
 		
 		# Step size.
 		AA = A.T.dot(A)
-		alpha = 1.8/np.linalg.norm(AA, ord = 2)
+		# alpha = 1.8/np.linalg.norm(AA, ord = 2)
+		alpha = 100
 		
-		# Minimize f_i(x) subject to x >= 0
-		# where f_i(x) = ||A_ix - b_i||_2^2 for subproblem i = 1,...,M.
+		# Minimize \sum_i f_i(x) subject to x >= 0
+		# where f_i(x) = ||A_ix - b_i||_2^2 for subproblem i = 1,...,N.
 		x = Variable(n)
 		constr = [x >= 0]
 		
@@ -130,6 +139,53 @@ class TestAcceleration(BaseTest):
 		# Solve combined problem.
 		obj_comb = probs.solve(method = "combined")
 		x_comb = [x.value for x in probs.variables()]
+		
+		# Compare results.
+		self.assertAlmostEqual(obj_aa2, obj_comb)
+		for i in range(N):
+			self.assertItemsAlmostEqual(x_aa2[i], x_comb[i])
+	
+	def test_toeplitz(self):
+		m = 50 
+		n = 100
+		N = 5
+		rho = 1000   # Step size.
+		tol = 1e-8   # Stopping tolerance.
+		m_accel = 10   # Memory size for Anderson acceleration.
+
+		# Problem data.
+		A = np.hstack((toeplitz(np.arange(0,m)+1), np.eye(m,n-m)))
+		b = (np.arange(0,m)+2)/100
+		A_split = np.split(A, N)
+		b_split = np.split(b, N)
+
+		# Minimize \sum_i f_i(x) subject to x >= 0
+		# where f_i(x) = ||A_ix - b_i||_2^2 for subproblem i = 1,...,N.
+		x = Variable(n)
+		constr = [x >= 0]
+		
+		p_list = []
+		for A_sub, b_sub in zip(A_split, b_split):
+			obj = sum_squares(A_sub*x - b_sub)
+			# p_list += [Problem(Minimize(obj), constr)]
+			p_list += [Problem(Minimize(obj))]
+		p_list += [Problem(Minimize(0), constr)]
+		probs = Problems(p_list)
+		probs.pretty_vars()
+		
+		# Solve with consensus ADMM.
+		obj_sdrs = probs.solve(method = "consensus", rho_init = rho, eps_stop = tol, max_iter = self.MAX_ITER)
+		res_sdrs = probs.residuals
+		
+		# Solve combined problem.
+		obj_comb = probs.solve(method = "combined")
+		x_comb = [x.value for x in probs.variables()]
+		
+		obj_aa2 = probs.solve(method = "consensus", rho_init = rho, eps_stop = tol, \
+								max_iter = self.MAX_ITER, anderson = True, m_accel = m_accel)
+		res_aa2 = probs.residuals
+		x_aa2 = [x.value for x in probs.variables()]
+		compare_residuals(res_sdrs, res_aa2, m_accel)
 		
 		# Compare results.
 		self.assertAlmostEqual(obj_aa2, obj_comb)
