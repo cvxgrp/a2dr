@@ -242,7 +242,8 @@ def consensus(p_list, *args, **kwargs):
 			diff = {}
 			s_res = []   # Save current residual for stopping criteria.
 			for key in var_all.keys():
-				diff[key] = z[key] - z_new[key]
+				# diff[key] = z[key] - z_new[key]
+				diff[key] = s[key] - z_new[key]
 				s_res.append(diff[key].flatten(order = "C"))
 			s_res = np.concatenate(s_res)
 			s_diff.append(diff)
@@ -269,12 +270,12 @@ def consensus(p_list, *args, **kwargs):
 		else:
 			s_res = []
 			for key in var_all.keys():
-				# Update s^(k+1) = s^(k) + z^(k+1) - z^(k+1/2).
-				s[key] += z_new[key] - z[key]
-				
 				# Save residual s^(k) - s^(k+1) for stopping criteria.
-				res = z[key] - z_new[key]
+				res = s[key] - z_new[key]
 				s_res.append(res.flatten(order = "C"))
+
+				# Update s^(k+1) = s^(k) + z^(k+1) - z^(k+1/2).
+				s[key] = z_new[key]
 			s_res = np.concatenate(s_res)
 			
 			# Compute l2-norm of residual G(v^(k)) = v^(k) - v^(k+1) 

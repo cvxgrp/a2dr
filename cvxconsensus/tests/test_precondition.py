@@ -84,7 +84,7 @@ class TestPrecondition(BaseTest):
 		res = probs.residuals
 		
 		# Solve with centering only.
-		probs = probs_nnls(A_split, b_split, center = True, scale = False)
+		probs = probs_nnls(A_split, b_split, center = False, scale = True)
 		probs.solve(method = "consensus", rho_init = rho, max_iter = self.MAX_ITER)
 		res_cnt = probs.residuals
 		
@@ -95,8 +95,8 @@ class TestPrecondition(BaseTest):
 		
 		# Plot and compare residuals.
 		plt.semilogy(range(res.shape[0]), res, label = "Original")
-		plt.semilogy(range(res_cnt.shape[0]), res_cnt, label = "Centered")
-		plt.semilogy(range(res_std.shape[0]), res_std, label = "Standardized")
+		plt.semilogy(range(res_cnt.shape[0]), res_cnt, label = "Scaled")
+		plt.semilogy(range(res_std.shape[0]), res_std, label = "Centered and Scaled")
 		plt.legend()
 		plt.xlabel("Iteration")
 		plt.ylabel("Residual")
