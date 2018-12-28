@@ -56,8 +56,7 @@ def prox_step(prob, rho_init):
 	for xvar in prob.variables():
 		xid = xvar.id
 		shape = xvar.shape
-		vmap[xid] = {"x": xvar, "z": Parameter(shape, value = np.zeros(shape)),
-		 		     "y": Parameter(shape, value = np.zeros(shape)),
+		vmap[xid] = {"x": xvar, "y": Parameter(shape, value = np.zeros(shape)),
 					 "rho": Parameter(value = rho_init[xid], nonneg = True)}
 		f += (vmap[xid]["rho"]/2.0)*sum_squares(xvar - vmap[xid]["y"])
 	
@@ -114,7 +113,7 @@ def run_worker(pipe, p, rho_init, anderson, m_accel, *args, **kwargs):
 		
 		# Project to obtain w^(k+1) = (x^(k+1), z^(k+1)).
 		pipe.send((prox.status, y_half))
-		mat_term, z_new, k = pipe.recv()
+		mat_term, s_half, k = pipe.recv()
 		
 		if anderson:
 			m_k = min(m_accel, k)   # Keep iterations (k - m_k) through k.
@@ -129,9 +128,7 @@ def run_worker(pipe, p, rho_init, anderson, m_accel, *args, **kwargs):
 			y_res = []
 			for key in v.keys():
 				# Update corresponding w^(k+1) parameters.
-				s_half = v[key]["z"].value
-				v[key]["x"].value = s_half + mat_term[key]
-				v[key]["z"].value = z_new[key]
+				v[key]["x"].value = s_half[key] + mat_term[key]
 				
 				# Save history of y^(k) - F(y^(k)) = x^(k+1/2) - x^(k+1),
 				# where F(.) is the consensus S-DRS mapping of v^(k+1) = F(v^(k)).
@@ -157,9 +154,7 @@ def run_worker(pipe, p, rho_init, anderson, m_accel, *args, **kwargs):
 			y_res = []
 			for key in v.keys():
 				# Update corresponding w^(k+1) parameters.
-				s_half = v[key]["z"].value
-				v[key]["x"].value = s_half + mat_term[key]
-				v[key]["z"].value = z_new[key]
+				v[key]["x"].value = s_half[key] + mat_term[key]
 				
 				# Update y^(k+1) = y^(k) + x^(k+1) - x^(k+1/2).
 				v[key]["y"].value += v[key]["x"].value - x_half[key]
@@ -219,11 +214,11 @@ def consensus(p_list, *args, **kwargs):
 		prox_res = [pipe.recv() for pipe in pipes]
 		
 		# Projection step for w^(k+1).
-		mat_term, z_new = w_project(prox_res, z)
+		mat_term, z_new = w_project(prox_res, s)
 	
-		# Scatter z^(k+1) and common matrix term.
+		# Scatter s^(k+1/2) and common matrix term.
 		for pipe in pipes:
-			pipe.send((mat_term, z_new, k))
+			pipe.send((mat_term, s, k))
 		
 		if anderson:
 			m_k = min(m_accel, k)   # Keep iterations (k - m_k) through k.
@@ -242,7 +237,6 @@ def consensus(p_list, *args, **kwargs):
 			diff = {}
 			s_res = []   # Save current residual for stopping criteria.
 			for key in var_all.keys():
-				# diff[key] = z[key] - z_new[key]
 				diff[key] = s[key] - z_new[key]
 				s_res.append(diff[key].flatten(order = "C"))
 			s_res = np.concatenate(s_res)
