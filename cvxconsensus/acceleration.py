@@ -102,4 +102,7 @@ def aa_weights(residuals, lam = None, *args, **kwargs):
 	constr = [cvxpy.sum(alpha) == 1]
 	prob = Problem(Minimize(obj + reg), constr)
 	prob.solve(*args, **kwargs)
+
+	if prob.status in cvxpy.settings.INF_OR_UNB:
+		raise RuntimeError("AA-II weights subproblem is infeasible or unbounded")
 	return alpha.value
