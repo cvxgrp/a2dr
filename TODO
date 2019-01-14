@@ -11,3 +11,11 @@
     b. Federated learning.
     c. Engineering design (power/area).
 
+1/13/2018
+============
+1. Compare results when AA-II weights problem is solved with/without l2-regularization.
+
+2. Add examples on the following topics:
+     a. Machine learning.
+     b. Sparse inverse covariance estimation.
+
