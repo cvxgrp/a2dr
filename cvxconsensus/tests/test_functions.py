@@ -30,6 +30,7 @@ class TestFunctions(BaseTest):
 	
 	def setUp(self):
 		np.random.seed(1)
+		self.m = 50
 		self.n = 10
 		self.x = Variable(10)
 		self.y = Variable(20)

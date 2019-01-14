@@ -59,12 +59,12 @@ def arr_to_dicts(arr, d_info):
 			val = arr[offset:(offset + size),j]
 			
 			# Reshape vector and add to dict.
-			val = np.reshape(val, shape = info["shape"])
+			val = np.reshape(val, newshape = info["shape"])
 			d[key] = val
 		dicts.append(d)
 	return dicts
 
-def aa_weights(residuals, lam = None, *args, **kwargs):
+def aa_weights(residuals, lam = None, type = "exact", *args, **kwargs):
 	""" Solve the constrained least-squares problem
 	   Minimize sum_squares(\sum_{j=0}^m w[j]*r^(k+1-m+j)
 	      subject to \sum_{j=0}^m w[j] = 1
@@ -94,15 +94,25 @@ def aa_weights(residuals, lam = None, *args, **kwargs):
 	#	G_blocks.append(arr)
 	G_blocks = [dicts_to_arr(res)[0] for res in residuals]
 	G = np.vstack(tuple(G_blocks))
-	
-	# Solve for AA-II constrained LS weights.
-	alpha = Variable(G.shape[1])
-	obj = cvxpy.sum_squares(G * alpha)
-	reg = lam * cvxpy.sum_squares(alpha) if lam else 0   # Stabilization with l2 penalty.
-	constr = [cvxpy.sum(alpha) == 1]
-	prob = Problem(Minimize(obj + reg), constr)
-	prob.solve(*args, **kwargs)
 
-	if prob.status in cvxpy.settings.INF_OR_UNB:
-		raise RuntimeError("AA-II weights subproblem is infeasible or unbounded")
-	return alpha.value
+	if type == "exact":
+		# Solve for AA-II weights using unconstrained LS in numpy.
+		e = np.ones((G.shape[1],))
+		reg = lam*np.eye(G.shape[1]) if lam else 0   # Stabilization with l2 penalty.
+		gamma = np.linalg.lstsq(G.T.dot(G) + reg, e, rcond = None)
+		alpha = gamma[0]/np.sum(gamma[0])
+		return alpha
+	elif type == "inexact":
+		# Solve for AA-II weights using constrained LS in CVXPY.
+		alpha = Variable(G.shape[1])
+		obj = cvxpy.sum_squares(G * alpha)
+		reg = lam * cvxpy.sum_squares(alpha) if lam else 0  # Stabilization with l2 penalty.
+		constr = [cvxpy.sum(alpha) == 1]
+		prob = Problem(Minimize(obj + reg), constr)
+		prob.solve(*args, **kwargs)
+
+		if prob.status in cvxpy.settings.INF_OR_UNB:
+			raise RuntimeError("AA-II weights subproblem is infeasible or unbounded")
+		return alpha.value
+	else:
+		raise ValueError("type must be either 'exact' or 'inexact'")

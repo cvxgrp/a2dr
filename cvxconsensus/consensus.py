@@ -251,7 +251,8 @@ def consensus(p_list, *args, **kwargs):
 			resid[k] = np.linalg.norm(v_res, ord = 2)
 			
 			# Compute and scatter AA-II weights.
-			alpha = aa_weights(y_diffs + [s_diff], solver = "OSQP")
+			# alpha = aa_weights(y_diffs + [s_diff], type = "inexact", solver = "OSQP", eps_abs = 1e-16)
+			alpha = aa_weights(y_diffs + [s_diff])
 			for pipe in pipes:
 				pipe.send(alpha)
 			

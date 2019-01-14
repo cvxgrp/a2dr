@@ -48,6 +48,8 @@ class TestAcceleration(BaseTest):
 	
 	def setUp(self):
 		np.random.seed(1)
+		self.eps_stop = 1e-8
+		self.eps_abs = 1e-16
 		self.MAX_ITER = 2000
 	
 	def test_lasso(self):
@@ -72,12 +74,13 @@ class TestAcceleration(BaseTest):
 		N = len(p_list)
 		
 		# Solve with consensus ADMM.
-		obj_sdrs = probs.solve(method = "consensus", rho_init = 1.0, max_iter = self.MAX_ITER)
+		obj_sdrs = probs.solve(method = "consensus", rho_init = 1.0, max_iter = self.MAX_ITER, \
+							   warm_start = False, eps_stop = self.eps_stop)
 		res_sdrs = probs.residuals
 		
 		# Solve with consensus ADMM using Anderson acceleration.
-		obj_aa2 = probs.solve(method = "consensus", rho_init = 1.0, \
-							   max_iter = self.MAX_ITER, anderson = True, m_accel = m_accel)
+		obj_aa2 = probs.solve(method = "consensus", rho_init = 1.0, max_iter = self.MAX_ITER, \
+							  warm_start = False, eps_stop = self.eps_stop, anderson = True, m_accel = m_accel)
 		res_aa2 = probs.residuals
 		x_aa2 = [x.value for x in probs.variables()]
 		compare_residuals(res_sdrs, [res_aa2], [m_accel])
@@ -107,7 +110,7 @@ class TestAcceleration(BaseTest):
 		b_split = np.split(b, N)
 		
 		# Step size.
-		AA = A.T.dot(A)
+		# AA = A.T.dot(A)
 		# alpha = 1.8/np.linalg.norm(AA, ord = 2)
 		alpha = 100
 		
@@ -124,14 +127,16 @@ class TestAcceleration(BaseTest):
 		probs.pretty_vars()
 		
 		# Solve with consensus ADMM.
-		obj_sdrs = probs.solve(method = "consensus", rho_init = alpha, max_iter = self.MAX_ITER)
+		obj_sdrs = probs.solve(method = "consensus", rho_init = alpha, max_iter = self.MAX_ITER, \
+							   warm_start = False, eps_stop = self.eps_stop, eps_abs = self.eps_abs)
 		res_sdrs = probs.residuals
 		
 		# Solve with consensus ADMM using Anderson acceleration.
 		res_aa2 = []
 		for i in range(len(m_accel)):
-			obj_aa2 = probs.solve(method = "consensus", rho_init = alpha, \
-								max_iter = self.MAX_ITER, anderson = True, m_accel = m_accel[i])
+			obj_aa2 = probs.solve(method = "consensus", rho_init = alpha, max_iter = self.MAX_ITER, \
+								  warm_start = False, eps_stop = self.eps_stop, eps_abs = self.eps_abs, \
+								  anderson = True, m_accel = m_accel[i])
 			res_aa2.append(probs.residuals)
 		x_aa2 = [x.value for x in probs.variables()]
 		compare_residuals(res_sdrs, res_aa2, m_accel)
@@ -150,7 +155,6 @@ class TestAcceleration(BaseTest):
 		n = 100
 		N = 5
 		rho = 1000   # Step size.
-		tol = 1e-8   # Stopping tolerance.
 		m_accel = 10   # Memory size for Anderson acceleration.
 
 		# Problem data.
@@ -174,15 +178,17 @@ class TestAcceleration(BaseTest):
 		probs.pretty_vars()
 		
 		# Solve with consensus ADMM.
-		obj_sdrs = probs.solve(method = "consensus", rho_init = rho, eps_stop = tol, max_iter = self.MAX_ITER)
+		obj_sdrs = probs.solve(method = "consensus", rho_init = rho, max_iter = self.MAX_ITER, \
+							   warm_start = False, eps_stop = self.eps_stop, eps_abs = self.eps_abs)
 		res_sdrs = probs.residuals
 		
 		# Solve combined problem.
 		obj_comb = probs.solve(method = "combined")
 		x_comb = [x.value for x in probs.variables()]
 		
-		obj_aa2 = probs.solve(method = "consensus", rho_init = rho, eps_stop = tol, \
-								max_iter = self.MAX_ITER, anderson = True, m_accel = m_accel)
+		obj_aa2 = probs.solve(method = "consensus", rho_init = rho, max_iter = self.MAX_ITER, \
+							  warm_start = False, eps_stop = self.eps_stop, eps_abs = self.eps_abs, \
+							  anderson = True, m_accel = m_accel)
 		res_aa2 = probs.residuals
 		x_aa2 = [x.value for x in probs.variables()]
 		compare_residuals(res_sdrs, res_aa2, m_accel)
