@@ -122,7 +122,9 @@ class TestAcceleration(BaseTest):
 		p_list = []
 		for A_sub, b_sub in zip(A_split, b_split):
 			obj = 0.5*sum_squares(A_sub*x - b_sub)
-			p_list += [Problem(Minimize(obj), constr)]
+			# p_list += [Problem(Minimize(obj), constr)]
+			p_list += [Problem(Minimize(obj))]
+		p_list += [Problem(Minimize(0), constr)]
 		probs = Problems(p_list)
 		probs.pretty_vars()
 		
