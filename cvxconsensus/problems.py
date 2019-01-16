@@ -215,7 +215,9 @@ class Problems(object):
 		# TODO: Save dual values (for constraints too?).
 		
 		# Save combined objective.
-		self._value = np.asscalar(self.objective.value)
+		self._value = self.objective.value
+		if not np.isscalar(self._value):
+			self._value = np.asscalar(self._value)
 		
 		# Save residual from fixed point mapping.
 		self._residuals = solution["residuals"]

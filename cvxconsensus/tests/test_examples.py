@@ -270,13 +270,14 @@ class TestExamples(BaseTest):
 		# Solve formation consensus problem.
 		probs = Problems([prob, prob_l, prob_r])
 		probs.solve(method = "consensus", solver = "ECOS", rho_init = rho, max_iter = self.MAX_ITER, \
-					warm_start = False, eps_stop = self.eps_stop)
+					warm_start = False, eps_stop = self.eps_stop, abstol = self.eps_abs)
 		res_sdrs = probs.residuals
 		print("Leader-Follower S-DRS Objective:", probs.value)
 
 		# Solve formation consensus problem with AA-II.
 		probs.solve(method = "consensus", solver = "ECOS", rho_init = rho, max_iter = self.MAX_ITER, \
-					warm_start = False, eps_stop = self.eps_stop, anderson = True, m_accel = m_accel)
+					warm_start = False, eps_stop = self.eps_stop, abstol = self.eps_abs, \
+					anderson = True, m_accel = m_accel)
 		res_aa2 = probs.residuals
 		print("Leader-Follower S-DRS with AA-II Objective:", probs.value)
 
