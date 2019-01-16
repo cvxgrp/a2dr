@@ -29,6 +29,11 @@ from cvxconsensus.tests.base_test import BaseTest
 
 class TestExamples(BaseTest):
 	"""Unit tests for examples"""
+
+	def setUp(self):
+		self.eps_stop = 1e-8
+		self.eps_abs = 1e-16
+		self.MAX_ITER = 1000
 	
 	def test_ols(self):
 		# Solve the following consensus problem using ADMM:
@@ -60,6 +65,10 @@ class TestExamples(BaseTest):
 		np.random.seed(1)
 		A = np.random.randn(m,n)
 		b = np.random.randn(m)
+
+		# Problem parameters.
+		rho = 1.0
+		m_accel = 5
 		
 		# Separate penalty from regularizer.
 		x = Variable(n)
@@ -70,10 +79,20 @@ class TestExamples(BaseTest):
 		
 		# Solve via consensus.
 		gamma.value = 1.0
-		probs.solve(method = "consensus", rho_init = 1.0, max_iter = 50)
-		print("Objective:", probs.value)
-		print("Solution:", x.value)
-	
+		probs.solve(method = "consensus", rho_init = rho, max_iter = self.MAX_ITER, \
+					warm_start = False, eps_stop = self.eps_stop)
+		res_sdrs = probs.residuals
+		print("S-DRS Objective:", probs.value)
+
+		# Solve via consensus with Anderson acceleration.
+		probs.solve(method = "consensus", rho_init = rho, max_iter = self.MAX_ITER, \
+					warm_start = False, eps_stop = self.eps_stop, anderson = True, m_accel = m_accel)
+		res_aa2 = probs.residuals
+		print("S-DRS with AA-II Objective:", probs.value)
+
+		# Plot and compare residuals.
+		self.compare_residuals(res_sdrs, [res_aa2], [m_accel])
+
 	def test_svm(self):
 		NUM_PROCS = 4
 		SPLIT_SIZE = 250
@@ -115,16 +134,20 @@ class TestExamples(BaseTest):
 	
 	def test_flow_control(self):
 		# Problem data.
+		np.random.seed(1)
 		m = 40
 		m_a = 20
 		n = 22
 		n_a = 5
 		n_b = 5
-		np.random.seed(1)
 		R = np.vstack((np.hstack((np.round(rand(m_a,n_a)), np.zeros((m_a,n_b)), np.round(rand(m_a,n-n_a-n_b)))),
 					   np.hstack((np.zeros((m-m_a,n_a)), np.round(rand(m-m_a,n_b)), np.round(rand(m-m_a,n-n_a-n_b))))
 					 ))
 		c = 5*rand(m)
+
+		# Problem parameters.
+		rho = 10
+		m_accel = 5
 		
 		# Find optimum directly.
 		f_star = Variable(n)
@@ -149,11 +172,23 @@ class TestExamples(BaseTest):
 		p_list = [Problem(Maximize(sum(sqrt(f_a)) + 0.5*sum(sqrt(x))), [R_a*f_a + S_a*x <= c_a]),
 				  Problem(Maximize(sum(sqrt(f_b)) + 0.5*sum(sqrt(x))), [R_b*f_b + S_b*x <= c_b])]
 		probs = Problems(p_list)
-		
+
 		# Solve via consensus.
-		probs.solve(method = "consensus", rho_init = 10, max_iter = 20)
-		print("Consensus Objective:", -probs.value)   # TODO: All problems recast as minimization, so flip sign of objective to compare
-		print("Consensus Solution:", np.hstack((f_a.value, f_b.value, x.value)))
+		probs.solve(method = "consensus", rho_init = rho, max_iter = self.MAX_ITER, \
+					warm_start = False, eps_stop = self.eps_stop)
+		res_sdrs = probs.residuals
+		print("S-DRS Objective:", -probs.value)  # TODO: All problems recast as minimization, so flip sign of objective to compare.
+		print("S-DRS Solution:", np.hstack((f_a.value, f_b.value, x.value)))
+
+		# Solve via consensus with Anderson acceleration.
+		probs.solve(method = "consensus", rho_init = rho, max_iter = self.MAX_ITER, \
+					warm_start = False, eps_stop = self.eps_stop, anderson = True, m_accel = m_accel)
+		res_aa2 = probs.residuals
+		print("S-DRS with AA-II Objective:", -probs.value)
+		print("S-DRS with AA-II Solution:", np.hstack((f_a.value, f_b.value, x.value)))
+
+		# Plot and compare residuals.
+		self.compare_residuals(res_sdrs, [res_aa2], [m_accel])
 	
 	def test_vehicle_formation(self):
 		# References:
@@ -171,7 +206,7 @@ class TestExamples(BaseTest):
 			plt.ylabel("Input (u(t))")
 			if title is not None:
 				plt.title(title)
-			# plt.show()
+			plt.show()
 
 		def plot_output(T, y, ydes, title = None):
 			plt.plot(range(T), y)
@@ -180,7 +215,7 @@ class TestExamples(BaseTest):
 			plt.ylabel("Output (y(t))")
 			if title is not None:
 				plt.title(title)
-			# plt.show()
+			plt.show()
 		
 		# Problem data.
 		T = 100
@@ -192,6 +227,10 @@ class TestExamples(BaseTest):
 		C = np.array([[-1, 0, 1]])
 		ydes = np.zeros((1,T))
 		ydes[0,30:70] = 10
+
+		# Problem parameters.
+		rho = 0.5
+		m_accel = 5
 		
 		# Define leader vehicle.
 		x = Variable((3,T+1))
@@ -230,8 +269,19 @@ class TestExamples(BaseTest):
 		
 		# Solve formation consensus problem.
 		probs = Problems([prob, prob_l, prob_r])
-		probs.solve(method = "consensus", rho_init = 0.5, solver = "ECOS")
-		print("Leader-Follower Objective:", probs.value)
+		probs.solve(method = "consensus", solver = "ECOS", rho_init = rho, max_iter = self.MAX_ITER, \
+					warm_start = False, eps_stop = self.eps_stop)
+		res_sdrs = probs.residuals
+		print("Leader-Follower S-DRS Objective:", probs.value)
+
+		# Solve formation consensus problem with AA-II.
+		probs.solve(method = "consensus", solver = "ECOS", rho_init = rho, max_iter = self.MAX_ITER, \
+					warm_start = False, eps_stop = self.eps_stop, anderson = True, m_accel = m_accel)
+		res_aa2 = probs.residuals
+		print("Leader-Follower S-DRS with AA-II Objective:", probs.value)
+
+		# Plot and compare residuals.
+		self.compare_residuals(res_sdrs, [res_aa2], [m_accel])
 		
 		# Plot input and output dynamics.
 		u_comb = np.column_stack((u.value.T, u_l.value.T, u_r.value.T))

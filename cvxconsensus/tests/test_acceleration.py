@@ -18,30 +18,11 @@ along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 """
 
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy.linalg import toeplitz
 from cvxpy import Variable, Problem, Minimize
 from cvxpy.atoms import *
-import cvxconsensus
 from cvxconsensus import Problems
 from cvxconsensus.tests.base_test import BaseTest
-
-def compare_residuals(res_sdrs, res_aa2, m_vals):
-	if not isinstance(res_aa2, list):
-		res_aa2 = [res_aa2]
-	if not isinstance(m_vals, list):
-		m_vals = [m_vals]
-	if len(m_vals) != len(res_aa2):
-		raise ValueError("Must have same number of AA-II residuals as memory parameter values")
-		
-	plt.semilogy(range(res_sdrs.shape[0]), res_sdrs, label = "S-DRS")
-	for i in range(len(m_vals)):
-		label = "AA-II S-DRS (m = {})".format(m_vals[i])
-		plt.semilogy(range(res_aa2[i].shape[0]), res_aa2[i], linestyle = "--", label = label)
-	plt.legend()
-	plt.xlabel("Iteration")
-	plt.ylabel("Residual")
-	plt.show()
 	
 class TestAcceleration(BaseTest):
 	"""Unit tests for Anderson acceleration of consensus ADMM"""
@@ -54,7 +35,7 @@ class TestAcceleration(BaseTest):
 	
 	def test_lasso(self):
 		m = 100
-		n = 10
+		n = 75
 		DENSITY = 0.75
 		m_accel = 5
 		
@@ -71,28 +52,26 @@ class TestAcceleration(BaseTest):
 		p_list = [Problem(Minimize(sum_squares(A*x-b))),
 				  Problem(Minimize(norm(x,1)))]
 		probs = Problems(p_list)
-		N = len(p_list)
 		
-		# Solve with consensus ADMM.
+		# Solve with consensus S-DRS.
 		obj_sdrs = probs.solve(method = "consensus", rho_init = 1.0, max_iter = self.MAX_ITER, \
 							   warm_start = False, eps_stop = self.eps_stop)
 		res_sdrs = probs.residuals
 		
-		# Solve with consensus ADMM using Anderson acceleration.
+		# Solve with consensus S-DRS using AA-II.
 		obj_aa2 = probs.solve(method = "consensus", rho_init = 1.0, max_iter = self.MAX_ITER, \
 							  warm_start = False, eps_stop = self.eps_stop, anderson = True, m_accel = m_accel)
 		res_aa2 = probs.residuals
 		x_aa2 = [x.value for x in probs.variables()]
-		compare_residuals(res_sdrs, [res_aa2], [m_accel])
+		self.compare_residuals(res_sdrs, [res_aa2], [m_accel])
 		
 		# Solve combined problem.
 		obj_comb = probs.solve(method = "combined")
 		x_comb = [x.value for x in probs.variables()]
 		
 		# Compare results.
-		N = len(probs.variables())
 		self.assertAlmostEqual(obj_aa2, obj_comb)
-		for i in range(N):
+		for i in range(len(x_comb)):
 			self.assertItemsAlmostEqual(x_aa2[i], x_comb[i])
 	
 	def test_nnls(self):
@@ -141,7 +120,7 @@ class TestAcceleration(BaseTest):
 								  anderson = True, m_accel = m_accel[i])
 			res_aa2.append(probs.residuals)
 		x_aa2 = [x.value for x in probs.variables()]
-		compare_residuals(res_sdrs, res_aa2, m_accel)
+		self.compare_residuals(res_sdrs, res_aa2, m_accel)
 		
 		# Solve combined problem.
 		obj_comb = probs.solve(method = "combined")
@@ -149,7 +128,7 @@ class TestAcceleration(BaseTest):
 		
 		# Compare results.
 		self.assertAlmostEqual(obj_aa2, obj_comb)
-		for i in range(N):
+		for i in range(len(x_comb)):
 			self.assertItemsAlmostEqual(x_aa2[i], x_comb[i])
 	
 	def test_toeplitz(self):
@@ -193,9 +172,9 @@ class TestAcceleration(BaseTest):
 							  anderson = True, m_accel = m_accel)
 		res_aa2 = probs.residuals
 		x_aa2 = [x.value for x in probs.variables()]
-		compare_residuals(res_sdrs, res_aa2, m_accel)
+		self.compare_residuals(res_sdrs, res_aa2, m_accel)
 		
 		# Compare results.
 		self.assertAlmostEqual(obj_aa2, obj_comb)
-		for i in range(N):
+		for i in range(len(x_comb)):
 			self.assertItemsAlmostEqual(x_aa2[i], x_comb[i])

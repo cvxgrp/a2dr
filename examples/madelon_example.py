@@ -1,28 +1,28 @@
 import os
 import numpy as np
-import matplotlib.pyplot as plt
 from cvxpy import *
 from cvxconsensus import *
+import matplotlib.pyplot as plt
 
 EXAMPLE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(EXAMPLE_DIR, 'data/')
 
 def compare_residuals(res_sdrs, res_aa2, m_vals):
-	if not isinstance(res_aa2, list):
-		res_aa2 = [res_aa2]
-	if not isinstance(m_vals, list):
-		m_vals = [m_vals]
-	if len(m_vals) != len(res_aa2):
-		raise ValueError("Must have same number of AA-II residuals as memory parameter values")
-	
-	plt.semilogy(range(res_sdrs.shape[0]), res_sdrs, label = "S-DRS")
-	for i in range(len(m_vals)):
-		label = "AA-II S-DRS (m = {})".format(m_vals[i])
-		plt.semilogy(range(res_aa2[i].shape[0]), res_aa2[i], linestyle = "--", label = label)
-	plt.legend()
-	plt.xlabel("Iteration")
-	plt.ylabel("Residual")
-	plt.show()
+    if not isinstance(res_aa2, list):
+        res_aa2 = [res_aa2]
+    if not isinstance(m_vals, list):
+        m_vals = [m_vals]
+    if len(m_vals) != len(res_aa2):
+        raise ValueError("Must have same number of AA-II residuals as memory parameter values")
+
+    plt.semilogy(range(res_sdrs.shape[0]), res_sdrs, label="S-DRS")
+    for i in range(len(m_vals)):
+        label = "AA-II S-DRS (m = {})".format(m_vals[i])
+        plt.semilogy(range(res_aa2[i].shape[0]), res_aa2[i], linestyle="--", label=label)
+    plt.legend()
+    plt.xlabel("Iteration")
+    plt.ylabel("Residual")
+    plt.show()
 
 def main():
 	# Solve the following consensus problem using S-DRS with AA-II:
@@ -58,12 +58,13 @@ def main():
 	probs = Problems(p_list)
 	probs.pretty_vars()
 	
-	# Solve with consensus ADMM.
+	# Solve with consensus S-DRS.
 	obj_sdrs = probs.solve(method = "consensus", rho_init = rho, max_iter = max_iter, \
 						   warm_start = False, eps_stop = eps_tol, eps_abs = eps_abs)
 	res_sdrs = probs.residuals
 	print("S-DRS Objective:", obj_sdrs)
-	
+
+	# Solve with consensus S-DRS using AA-II.
 	obj_aa2 = probs.solve(method = "consensus", rho_init = rho, max_iter = max_iter, \
 						  warm_start = False, eps_stop = eps_tol, eps_abs = eps_abs, \
 						  anderson = True, m_accel = m_accel)
