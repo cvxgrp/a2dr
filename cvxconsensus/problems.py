@@ -195,7 +195,7 @@ class Problems(object):
 			self.unpack_results(sol)
 			return self.value
 		else:
-			raise NotImplementedError
+			raise ValueError("method must be either 'combined' or 'consensus'")
 	
 	def unpack_results(self, solution):
 		"""Updates the problem state given consensus results.
