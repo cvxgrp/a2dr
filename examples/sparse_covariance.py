@@ -23,18 +23,19 @@ y_sample = sp.linalg.sqrtm(R).dot(np.random.randn(n, N))
 Y = np.cov(y_sample)
 
 # The alpha values for each attempt at generating a sparse inverse cov. matrix.
-alphas = [10, 2, 1]
+weights = [(0.2,0.2), (0.4,0.1), (0.6,0)]
 
 # Form the optimization problem with split
 # f_0(x) = log_det(S), f_1(x) = -trace(S*Y), f_2(x) = I(norm(S,1) <= alpha)
 # over the set of PSD matrices S.
 S = Variable(shape=(n,n), PSD=True)
 alpha = Parameter(nonneg=True)
-constraints = [norm(S,1) <= alpha]
+beta = Parameter(nonneg=True)
 
-p_list = [Problem(Maximize(log_det(S))),
-          Problem(Maximize(-trace(S*Y))),
-          Problem(Maximize(0), constraints)]
+p_list = [Problem(Minimize(-log_det(S))),
+          Problem(Minimize(trace(S*Y))),
+          Problem(Minimize(alpha*norm(S,1))),
+          Problem(Minimize(beta*norm(S,2)))]
 probs = Problems(p_list)
 probs.pretty_vars()
 
@@ -42,9 +43,10 @@ probs.pretty_vars()
 Ss = []
 
 # Solve the optimization problem for each value of alpha.
-for a_val in alphas:
+for a_val, b_val in weights:
     # Set alpha parameter and solve optimization problem
     alpha.value = a_val
+    beta.value = b_val
     # prob.solve(solver = "CVXOPT")
     # if prob.status != OPTIMAL:
     #    raise Exception('CVXPY Error')
@@ -60,7 +62,7 @@ for a_val in alphas:
     # Store this S in the list of results for later plotting.
     Ss += [S_val]
 
-    print('Completed optimization parameterized by alpha = {}, obj value = {}'.format(alpha.value, -probs.value))
+    print('Completed optimization parameterized by alpha = {}, obj value = {}'.format(alpha.value, probs.value))
 
 # Plot properties.
 plt.rc('text', usetex=True)
@@ -75,8 +77,8 @@ plt.spy(S_true)
 plt.title('Inverse of true covariance matrix', fontsize=16)
 
 # Plot sparsity pattern for each result, corresponding to a specific alpha.
-for i in range(len(alphas)):
+for i in range(len(weights)):
     plt.subplot(2, 2, 2+i)
     plt.spy(Ss[i])
-    plt.title('Estimated inv. cov matrix, $\\alpha$={}'.format(alphas[i]), fontsize=16)
+    plt.title('Estimated inv. cov matrix, $\\alpha$={}, $\\beta$={}'.format(weights[i][0], weights[i][1]), fontsize=16)
 plt.show()
