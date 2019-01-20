@@ -5,9 +5,8 @@ from cvxpy import *
 from cvxconsensus import *
 
 # Solve the following consensus problem:
-# Maximize log_det(S) - trace(S*Y)
-# subject to S is PSD and norm(S,1) <= alpha
-# where Y and alpha >= 0 are parameters
+# Minimize -log_det(S) + trace(S*Y) + alpha*norm(S,1) + beta*norm(S,2)
+# subject to S is PSD where Y, alpha >= 0, and beta >= 0 are parameters.
 
 # Problem data.
 np.random.seed(0)
@@ -22,11 +21,12 @@ R = np.linalg.inv(S_true)
 y_sample = sp.linalg.sqrtm(R).dot(np.random.randn(n, N))
 Y = np.cov(y_sample)
 
-# The alpha values for each attempt at generating a sparse inverse cov. matrix.
+# The regularization weights for each attempt at generating a sparse inverse cov. matrix.
 weights = [(0.2,0.2), (0.4,0.1), (0.6,0)]
 
 # Form the optimization problem with split
-# f_0(x) = log_det(S), f_1(x) = -trace(S*Y), f_2(x) = I(norm(S,1) <= alpha)
+# f_0(x) = -log_det(S), f_1(x) = trace(S*Y),
+# # f_2(x) = alpha*norm(S,1), f_3(x) = beta*norm(S,2)
 # over the set of PSD matrices S.
 S = Variable(shape=(n,n), PSD=True)
 alpha = Parameter(nonneg=True)
@@ -44,7 +44,7 @@ Ss = []
 
 # Solve the optimization problem for each value of alpha.
 for a_val, b_val in weights:
-    # Set alpha parameter and solve optimization problem
+    # Set alpha, beta parameters and solve optimization problem
     alpha.value = a_val
     beta.value = b_val
     # prob.solve(solver = "CVXOPT")
@@ -62,7 +62,7 @@ for a_val, b_val in weights:
     # Store this S in the list of results for later plotting.
     Ss += [S_val]
 
-    print('Completed optimization parameterized by alpha = {}, obj value = {}'.format(alpha.value, probs.value))
+    print('Completed optimization parameterized by alpha = {}, beta = {}, obj value = {}'.format(alpha.value, beta.value, probs.value))
 
 # Plot properties.
 plt.rc('text', usetex=True)
