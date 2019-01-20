@@ -1,14 +1,17 @@
 import pylab
 import math
+import uuid
 import numpy as np
 from cvxpy import *
+from cvxconsensus import *
+from collections import defaultdict
 
 # Adapted from https://github.com/cvxgrp/cvxpy/blob/master/examples/floor_packing.py
-
 class Box(object):
     """ A box in a floor packing problem. """
     ASPECT_RATIO = 5.0
     def __init__(self, min_area):
+        self.id = uuid.uuid4()
         self.min_area = min_area
         self.height = Variable()
         self.width = Variable()
@@ -58,20 +61,21 @@ class FloorPlan(object):
     @staticmethod
     def _order(boxes, horizontal):
         if len(boxes) == 0: return
-        constraints = []
+        constraints = defaultdict(list)
         curr = boxes[0]
         for box in boxes[1:]:
             if horizontal:
-                constraints.append(curr.right + FloorPlan.MARGIN <= box.left)
+                constraints[box.id].append(curr.right + FloorPlan.MARGIN <= box.left)
             else:
-                constraints.append(curr.top + FloorPlan.MARGIN <= box.bottom)
+                constraints[box.id].append(curr.top + FloorPlan.MARGIN <= box.bottom)
             curr = box
         return constraints
 
     # Compute minimum perimeter layout.
-    def layout(self):
-        constraints = []
+    def layout(self, *args, **kwargs):
+        size_constrs = {}
         for box in self.boxes:
+            constraints = []
             # Enforce that boxes lie in bounding box.
             constraints += [box.bottom >= FloorPlan.MARGIN,
                             box.top + FloorPlan.MARGIN <= self.height]
@@ -82,16 +86,27 @@ class FloorPlan(object):
                             box.width <= box.ASPECT_RATIO*box.height]
             # Enforce minimum area
             constraints += [
-            geo_mean(vstack((box.width, box.height))) >= math.sqrt(box.min_area)
-            ]
+                geo_mean(vstack((box.width, box.height))) >= math.sqrt(box.min_area)
+                ]
+            size_constrs[box.id] = constraints
 
         # Enforce the relative ordering of the boxes.
+        order_constrs = []
         for ordering in self.horizontal_orderings:
-            constraints += self._order(ordering, True)
+            order_constrs.append(self._order(ordering, True))
         for ordering in self.vertical_orderings:
-            constraints += self._order(ordering, False)
-        p = Problem(Minimize(2*(self.height + self.width)), constraints)
-        return p.solve()
+            order_constrs.append(self._order(ordering, False))
+
+        # Form a separate problem for each box.
+        p_list = []
+        for box in self.boxes:
+            constraints = size_constrs[box.id]
+            for constrs in order_constrs:
+                constraints += constrs[box.id]
+            p_list += [Problem(Minimize(0), constraints)]
+        p_list += [Problem(Minimize(2*(self.height + self.width)))]
+        probs = Problems(p_list)
+        return probs.solve(*args, **kwargs)
 
     # Show the layout with matplotlib
     def show(self):
@@ -113,10 +128,10 @@ class FloorPlan(object):
 
 boxes = [Box(180), Box(80), Box(80), Box(80), Box(80)]
 fp = FloorPlan(boxes)
-fp.horizontal_orderings.append( [boxes[0], boxes[2], boxes[4]] )
-fp.horizontal_orderings.append( [boxes[1], boxes[2]] )
-fp.horizontal_orderings.append( [boxes[3], boxes[4]] )
-fp.vertical_orderings.append( [boxes[1], boxes[0], boxes[3]] )
-fp.vertical_orderings.append( [boxes[2], boxes[3]] )
-fp.layout()
+fp.horizontal_orderings.append([boxes[0], boxes[2], boxes[4]])
+fp.horizontal_orderings.append([boxes[1], boxes[2]])
+fp.horizontal_orderings.append([boxes[3], boxes[4]])
+fp.vertical_orderings.append([boxes[1], boxes[0], boxes[3]])
+fp.vertical_orderings.append([boxes[2], boxes[3]])
+fp.layout(method = "consensus")
 fp.show()
