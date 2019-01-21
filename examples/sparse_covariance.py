@@ -47,13 +47,10 @@ for a_val, b_val in weights:
     # Set alpha, beta parameters and solve optimization problem
     alpha.value = a_val
     beta.value = b_val
-    # prob.solve(solver = "CVXOPT")
-    # if prob.status != OPTIMAL:
-    #    raise Exception('CVXPY Error')
-    probs.solve(method = "consensus", rho_init = 1.0, max_iter = 1000)
+    probs.solve(method = "consensus", rho_init = 1.0, max_iter = 50)
 
-    # If the covariance matrix R is desired, here is how it to create it.
-    R_hat = np.linalg.inv(S.value)
+    # If the covariance matrix R is desired, here is how to create it.
+    # R_hat = np.linalg.inv(S.value)
 
     # Threshold S element values to enforce exact zeros:
     S_val = S.value

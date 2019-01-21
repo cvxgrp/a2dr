@@ -106,7 +106,8 @@ class FloorPlan(object):
             p_list += [Problem(Minimize(0), constraints)]
         p_list += [Problem(Minimize(2*(self.height + self.width)))]
         probs = Problems(p_list)
-        return probs.solve(*args, **kwargs)
+        probs.solve(*args, **kwargs)
+        return probs
 
     # Show the layout with matplotlib
     def show(self):
@@ -133,5 +134,5 @@ fp.horizontal_orderings.append([boxes[1], boxes[2]])
 fp.horizontal_orderings.append([boxes[3], boxes[4]])
 fp.vertical_orderings.append([boxes[1], boxes[0], boxes[3]])
 fp.vertical_orderings.append([boxes[2], boxes[3]])
-fp.layout(method = "consensus")
+fp.layout(method = "consensus", rho_init = 1.0, max_iter = 1000)
 fp.show()
