@@ -25,8 +25,8 @@ import cvxpy.settings as s
 from cvxpy.problems.problem import Problem, Minimize
 from cvxpy.expressions.constants import Parameter
 from cvxpy.atoms import sum_squares
-from cvxconsensus.acceleration import aa_weights, dicts_to_arr
-from cvxconsensus.utilities import flip_obj, assign_rho, partition_vars
+from cvxconsensus.acceleration import aa_weights
+from cvxconsensus.utilities import flip_obj, assign_rho
 
 def prox_step(prob, rho_init):
 	"""Formulates the proximal operator for a given objective, constraints, and step size.
