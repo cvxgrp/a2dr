@@ -30,7 +30,7 @@ from cvxconsensus.utilities import flip_obj, assign_rho
 
 def prox_step(prob, rho_init):
 	"""Formulates the proximal operator for a given objective, constraints, and step size.
-	Parikh, Boyd. "Proximal Algorithms."
+	   Reference: N. Parikh and S. Boyd (2013). "Proximal Algorithms."
 	
 	Parameters
     ----------
