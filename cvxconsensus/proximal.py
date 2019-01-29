@@ -37,12 +37,12 @@ def prox_func(f, x, rho):
         return x
     elif isinstance(f, cvxpy.norm1):
         return np.maximum(np.abs(x) - rho, 0) * np.sign(x)
-    elif isinstance(f, cvxpy.norm2):
-        return np.maximum(1 - rho/np.norm(x,2), 0) * x
+    elif isinstance(f, cvxpy.Pnorm) and f.p == 2:
+        return np.maximum(1 - rho/np.linalg.norm(x,2), 0) * x
     elif isinstance(f, cvxpy.norm_inf):
         return x - rho*proj_l1(x/rho)
-    elif isinstance(f, cvxpy.sum_squares):
-        return (1 / (1 + rho/2)) * x
+    # elif isinstance(f, cvxpy.sum_squares):
+    #    return (1 / (1 + rho/2)) * x
     elif isinstance(f, cvxpy.abs):
         return max(x - 1/rho, 0) + min(x + 1/rho, 0)
     elif isinstance(f, cvxpy.entr):
@@ -51,12 +51,14 @@ def prox_func(f, x, rho):
         return x - sp.special.lambertw(np.exp(x - np.log(rho)))
     elif isinstance(f, cvxpy.huber):
         return x * rho / (1 + rho) if np.abs(x) < (1 + 1/rho) else x - np.sign(x) / rho
-    elif isinstance(f, cvxpy.square):
-        return rho * x / (1 + rho)
+    # elif isinstance(f, cvxpy.square):
+    #    return rho * x / (1 + rho)
     elif isinstance(f, cvxpy.max):
         return x - rho*proj_simplex(x/rho)
+    else:
+        raise ValueError("Unsupported atom instance {0}".format(f.__class__.__name__))
 
-def prox_func_mat(f, A, rho):
+def prox_func_mat(f, A, rho, constr = []):
     """Returns the proximal operator for matrix functions evaluated at A with scaling factor rho.
        \prox_{\rho * f}(A) = \argmin_Y f(Y) + 1/(2*\rho)*||Y - A||_2^2
 
@@ -72,5 +74,16 @@ def prox_func_mat(f, A, rho):
     elif isinstance(f, cvxpy.trace):
         s_new = np.full(s.shape, rho)
     elif isinstance(f, NegExpression) and isinstance(f.args[0], cvxpy.log_det):
-        s_new = (s + np.sqrt(s^2 + 4*rho))/2
+        s_new = (s + np.sqrt(s**2 + 4*rho))/2
+    elif isinstance(f, cvxpy.Variable) and f.is_symmetric() and \
+            len(constr) == 1 and isinstance(constr[0], cvxpy.constraints.PSD) and \
+            A.shape == A.T.shape and np.allclose(A, A.T, 1e-8):
+        s_new = np.maximum(s, 0)
+    elif isinstance(f, cvxpy.atoms.affine.sum.Sum) and \
+            len(f.args) == 1 and isinstance(f.args[0], cvxpy.abs):
+        return np.maximum(np.abs(A) - rho, 0) * np.sign(A)
+    elif isinstance(f, cvxpy.Pnorm) and f.p == 2:
+        return np.maximum(1 - rho / np.linalg.norm(A,"fro"), 0) * A
+    else:
+        raise ValueError("Unsupported atom instance {0}".format(f.__class__.__name__))
     return U.dot(np.diag(s_new)).dot(Vt)

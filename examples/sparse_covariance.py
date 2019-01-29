@@ -26,7 +26,7 @@ weights = [(0.2,0.2), (0.4,0.1), (0.6,0)]
 
 # Form the optimization problem with split
 # f_0(x) = -log_det(S), f_1(x) = trace(S*Y),
-# # f_2(x) = alpha*norm(S,1), f_3(x) = beta*norm(S,2)
+# f_2(x) = alpha*norm(S,1), f_3(x) = beta*norm(S,2)
 # over the set of PSD matrices S.
 S = Variable(shape=(n,n), PSD=True)
 alpha = Parameter(nonneg=True)
@@ -34,8 +34,8 @@ beta = Parameter(nonneg=True)
 
 p_list = [Problem(Minimize(-log_det(S))),
           Problem(Minimize(trace(S*Y))),
-          Problem(Minimize(alpha*norm(S,1))),
-          Problem(Minimize(beta*norm(S,2)))]
+          Problem(Minimize(alpha*sum(abs(S)))),
+          Problem(Minimize(beta*norm(S,"fro")))]
 probs = Problems(p_list)
 probs.pretty_vars()
 
