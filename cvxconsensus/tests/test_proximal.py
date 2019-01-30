@@ -21,7 +21,7 @@ import numpy as np
 from cvxpy.atoms import *
 from cvxpy.constraints.psd import PSD
 from cvxpy import Constant, Variable, Problem, Minimize
-from cvxconsensus.proximal import prox_func
+from cvxconsensus.proximal import ProxOperator, prox_func_vector, prox_func_matrix
 from cvxconsensus.tests.base_test import BaseTest
 
 class TestProximal(BaseTest):
@@ -36,27 +36,37 @@ class TestProximal(BaseTest):
         self.u = np.random.randn(*self.x.shape)
         self.A = np.random.randn(*self.Y.shape)
 
-    def compare_prox(self, expr, x_var, u_val, rho = 1.0, constr = [], places = 4):
-        u_prox = prox_func(expr, u_val, rho, constr)
+    def compare_prox_func(self, expr, x_var, u_val, rho = 1.0, constr = [], places = 4):
+        prox_func = prox_func_vector if np.isscalar(u_val) or len(u_val.shape) <= 1 else prox_func_matrix
+        u_prox = prox_func(expr, constr)(u_val, rho)
         Problem(Minimize(expr + 1/(2 * rho) * sum_squares(x_var - u_val))).solve()
         self.assertItemsAlmostEqual(u_prox, x_var.value, places)
 
     def test_prox_scalar(self):
-        self.compare_prox(Constant(0), self.x, self.u, self.rho)
-        self.compare_prox(norm1(self.x), self.x, self.u, self.rho)
-        self.compare_prox(pnorm(self.x,2), self.x, self.u, self.rho)
+        self.compare_prox_func(Constant(0), self.x, self.u, self.rho)
+        self.compare_prox_func(norm1(self.x), self.x, self.u, self.rho)
+        self.compare_prox_func(pnorm(self.x, 2), self.x, self.u, self.rho)
+        self.compare_prox_func(max(self.x), self.x, self.u, self.rho)
 
     def test_prox_matrix(self):
-        self.compare_prox(normNuc(self.Y), self.Y, self.A, self.rho)
-        self.compare_prox(norm(self.Y, "fro"), self.Y, self.A, self.rho)
-        self.compare_prox(sum(abs(self.Y)), self.Y, self.A, self.rho, places = 4)
-        self.compare_prox(trace(self.Y), self.Y, self.A, self.rho)
+        self.compare_prox_func(normNuc(self.Y), self.Y, self.A, self.rho)
+        self.compare_prox_func(norm(self.Y, "fro"), self.Y, self.A, self.rho)
+        self.compare_prox_func(sum(abs(self.Y)), self.Y, self.A, self.rho, places = 4)
+        self.compare_prox_func(trace(self.Y), self.Y, self.A, self.rho)
         # self.compare_prox(sigma_max(self.Y), self.Y, self.A, self.rho)
         # self.compare_prox(-log_det(self.Y), self.Y, self.A, self.rho, places = 3)
 
         B = np.random.randn(self.Y.shape[1],self.Y.shape[1])
-        self.compare_prox(trace(self.Y*B), self.Y, self.A, self.rho)
+        self.compare_prox_func(trace(self.Y * B), self.Y, self.A, self.rho)
 
         Y_symm = Variable(self.Y.shape, symmetric = True)
         A_symm = (self.A + self.A.T)/2
-        self.compare_prox(Constant(0), Y_symm, A_symm, self.rho, [PSD(Y_symm)])
+        self.compare_prox_func(Constant(0), Y_symm, A_symm, self.rho, [PSD(Y_symm)])
+
+    def test_prox_operator(self):
+        ProxOperator(Problem(Minimize(Constant(0))), {}).solve()
+        ProxOperator(Problem(Minimize(norm1(self.x))), {self.x.id: self.rho}).solve()
+
+        ProxOperator(Problem(Minimize(-log_det(self.Y))), {self.Y.id: self.rho}).solve()
+        ProxOperator(Problem(Minimize(norm(self.Y, "fro"))), {self.Y.id: self.rho}).solve()
+        ProxOperator(Problem(Minimize(sum(abs(self.Y)))), {self.Y.id: self.rho}).solve()
