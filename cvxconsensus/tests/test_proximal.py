@@ -54,6 +54,9 @@ class TestProximal(BaseTest):
         # self.compare_prox(sigma_max(self.Y), self.Y, self.A, self.rho)
         # self.compare_prox(-log_det(self.Y), self.Y, self.A, self.rho, places = 3)
 
+        B = np.random.randn(self.Y.shape[1],self.Y.shape[1])
+        self.compare_prox(trace(self.Y*B), self.Y, self.A, self.rho)
+
         Y_symm = Variable(self.Y.shape, symmetric = True)
         A_symm = (self.A + self.A.T)/2
         self.compare_prox(Constant(0), Y_symm, A_symm, self.rho, [PSD(Y_symm)])

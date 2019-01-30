@@ -1,7 +1,9 @@
-import cvxpy
-from cvxpy.atoms.affine.unary_operators import NegExpression
 import numpy as np
 import scipy as sp
+import cvxpy
+from cvxpy import Constant, Variable
+from cvxpy.atoms.affine.unary_operators import NegExpression
+from cvxpy.atoms.affine.binary_operators import MulExpression
 
 def proj_simplex(x, r = 1):
     """Project x onto a simplex with upper bound r.
@@ -38,7 +40,7 @@ def prox_func_scalar(f, u, rho):
        1) N. Parikh and S. Boyd (2013). "Proximal Algorithms." https://web.stanford.edu/~boyd/papers/pdf/prox_algs.pdf
        2) A. Beck (2017). "First-Order Methods in Optimization." https://archive.siam.org/books/mo25/mo25_ch6.pdf
     """
-    if isinstance(f, cvxpy.Constant):
+    if isinstance(f, Constant):
         return u
     elif isinstance(f, cvxpy.norm1):
         return np.maximum(np.abs(u) - rho, 0) * np.sign(u)
@@ -75,14 +77,20 @@ def prox_func_matrix(f, A, rho, constr = []):
     if isinstance(f, cvxpy.normNuc):
         s_new = np.maximum(s - rho, 0)
     elif isinstance(f, cvxpy.Pnorm) and f.p == 2 and \
-            isinstance(f.args[0], cvxpy.reshape) and isinstance(f.args[0].args[0], cvxpy.Variable) and \
+            isinstance(f.args[0], cvxpy.reshape) and isinstance(f.args[0].args[0], Variable) and \
             f.args[0].shape == (f.args[0].args[0].size,):
         prox_vec = prox_func_scalar(f, np.asarray(A).ravel(), rho)
         return np.reshape(prox_vec, A.shape)
     elif isinstance(f, cvxpy.sigma_max):
         s_new = s - prox_func_scalar(cvxpy.max(s), s, rho)
     elif isinstance(f, cvxpy.trace):
-        return A - np.diag(np.full(s.shape, rho))
+        if len(f.args) == 1 and isinstance(f.args[0], Variable):
+            return A - np.diag(np.full(s.shape, rho))
+        elif isinstance(f.args[0], MulExpression) and \
+                isinstance(f.args[0].args[0], Variable) and isinstance(f.args[0].args[1], Constant):
+            return A - rho*f.args[0].args[1].value.T
+        else:
+            raise ValueError("Unsupported atom instance {0}".format(f.__class__.__name__))
     elif isinstance(f, NegExpression) and isinstance(f.args[0], cvxpy.log_det):
         s_new = (s + np.sqrt(s**2 + 4*rho))/2
     elif isinstance(f, cvxpy.atoms.affine.sum.Sum) and \
@@ -90,9 +98,9 @@ def prox_func_matrix(f, A, rho, constr = []):
         return np.maximum(np.abs(A) - rho, 0) * np.sign(A)
     elif isinstance(f, cvxpy.Pnorm) and f.p == 2:
         return np.maximum(1 - rho / np.linalg.norm(A,"fro"), 0) * A
-    elif isinstance(f, cvxpy.Constant) and \
+    elif isinstance(f, Constant) and \
             len(constr) == 1 and isinstance(constr[0], cvxpy.constraints.PSD) and \
-            isinstance(constr[0].args[0], cvxpy.Variable) and constr[0].args[0].is_symmetric() and \
+            isinstance(constr[0].args[0], Variable) and constr[0].args[0].is_symmetric() and \
             A.shape == A.T.shape and np.allclose(A, A.T, 1e-8):
         s_new = np.maximum(s, 0)
     else:
