@@ -18,3 +18,8 @@
 2. Add examples on the following topics:
      a. Machine learning.
      b. Floor planning.
+
+1/29/2018
+============
+1. Finish implementation of simple proximal operator functions.
+2. General projection onto set of linear constraints in equation (9) of A2DR notes. Use numpy.linalg.lsqr to get the inverse of MM^T.

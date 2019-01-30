@@ -64,8 +64,8 @@ def prox_step(prob, rho_init):
 	return prox, vmap
 
 def w_project(prox_res, s_half):
-	"""Projection step update of w^(k+1) = (x^(k+1), z^(k+1)) in the
-	   consensus scaled Douglas-Rachford algorithm.
+	"""Projection step update of w^(k+1) = (x^(k+1), z^(k+1)) in the consensus scaled
+	   Douglas-Rachford algorithm.
 	"""
 	y_part = defaultdict(list)
 	var_cnt = defaultdict(float)

@@ -16,7 +16,6 @@ def proj_simplex(x, r = 1):
     idx = np.squeeze(np.argwhere(x_diff > 0))[-1]
     return np.maximum(x - theta[idx], 0)
 
-# Project x onto the l1 ball with radius r.
 def proj_l1(x, r = 1):
     """Project x onto the l1-ball with radius r.
        Duchi et al (2008). "Efficient Projections onto the l1-Ball for Learning in High Dimensions." Fig. 1 and Sect. 4.
@@ -25,40 +24,46 @@ def proj_l1(x, r = 1):
     beta = proj_simplex(np.abs(x), r)
     return np.sign(x) * beta
 
-def prox_func(f, x, rho):
-    """Returns the proximal operator for simple functions evaluated at x with scaling factor rho.
-       \prox_{\rho * f}(x) = \argmin_y f(y) + 1/(2*\rho)*||y - x||_2^2
+def prox_func(f, u, rho, constr = []):
+    if (np.isscalar(u) or len(u.shape) <= 1) and len(constr) == 0:
+        return prox_func_scalar(f, u, rho)
+    else:
+        return prox_func_matrix(f, u, rho, constr)
+
+def prox_func_scalar(f, u, rho):
+    """Returns the proximal operator for simple functions evaluated at u with scaling factor rho.
+       \prox_{\rho * f}(u) = \argmin_x f(x) + 1/(2*\rho)*||x - u||_2^2
 
        References:
        1) N. Parikh and S. Boyd (2013). "Proximal Algorithms." https://web.stanford.edu/~boyd/papers/pdf/prox_algs.pdf
        2) A. Beck (2017). "First-Order Methods in Optimization." https://archive.siam.org/books/mo25/mo25_ch6.pdf
     """
     if isinstance(f, cvxpy.Constant):
-        return x
+        return u
     elif isinstance(f, cvxpy.norm1):
-        return np.maximum(np.abs(x) - rho, 0) * np.sign(x)
+        return np.maximum(np.abs(u) - rho, 0) * np.sign(u)
     elif isinstance(f, cvxpy.Pnorm) and f.p == 2:
-        return np.maximum(1 - rho/np.linalg.norm(x,2), 0) * x
+        return np.maximum(1 - rho / np.linalg.norm(u, 2), 0) * u
     elif isinstance(f, cvxpy.norm_inf):
-        return x - rho*proj_l1(x/rho)
-    # elif isinstance(f, cvxpy.sum_squares):
-    #    return (1 / (1 + rho/2)) * x
+        return u - rho * proj_l1(u / rho)
+    elif isinstance(f, cvxpy.quad_over_lin) and f.args[1].value == 1:
+        return (1 / (1 + rho/2)) * u
     elif isinstance(f, cvxpy.abs):
-        return max(x - 1/rho, 0) + min(x + 1/rho, 0)
+        return max(u - 1 / rho, 0) + min(u + 1 / rho, 0)
     elif isinstance(f, cvxpy.entr):
-        return (sp.special.lambertw(rho*x - 1) * np.log(rho)) / rho
+        return (sp.special.lambertw(rho * u - 1) * np.log(rho)) / rho
     elif isinstance(f, cvxpy.exp):
-        return x - sp.special.lambertw(np.exp(x - np.log(rho)))
+        return u - sp.special.lambertw(np.exp(u - np.log(rho)))
     elif isinstance(f, cvxpy.huber):
-        return x * rho / (1 + rho) if np.abs(x) < (1 + 1/rho) else x - np.sign(x) / rho
-    # elif isinstance(f, cvxpy.square):
-    #    return rho * x / (1 + rho)
+        return u * rho / (1 + rho) if np.abs(u) < (1 + 1 / rho) else u - np.sign(u) / rho
+    elif isinstance(f, cvxpy.power) and f.p == 2:
+        return rho * u / (1 + rho)
     elif isinstance(f, cvxpy.max):
-        return x - rho*proj_simplex(x/rho)
+        return u - rho * proj_simplex(u / rho)
     else:
         raise ValueError("Unsupported atom instance {0}".format(f.__class__.__name__))
 
-def prox_func_mat(f, A, rho, constr = []):
+def prox_func_matrix(f, A, rho, constr = []):
     """Returns the proximal operator for matrix functions evaluated at A with scaling factor rho.
        \prox_{\rho * f}(A) = \argmin_Y f(Y) + 1/(2*\rho)*||Y - A||_2^2
 
@@ -69,21 +74,27 @@ def prox_func_mat(f, A, rho, constr = []):
     U, s, Vt = np.linalg.svd(A, full_matrices = False)
     if isinstance(f, cvxpy.normNuc):
         s_new = np.maximum(s - rho, 0)
-    elif isinstance(f, cvxpy.lambda_max):
-        s_new = s - prox_func(cvxpy.max, s, rho)
+    elif isinstance(f, cvxpy.Pnorm) and f.p == 2 and \
+            isinstance(f.args[0], cvxpy.reshape) and isinstance(f.args[0].args[0], cvxpy.Variable) and \
+            f.args[0].shape == (f.args[0].args[0].size,):
+        prox_vec = prox_func_scalar(f, np.asarray(A).ravel(), rho)
+        return np.reshape(prox_vec, A.shape)
+    elif isinstance(f, cvxpy.sigma_max):
+        s_new = s - prox_func_scalar(cvxpy.max(s), s, rho)
     elif isinstance(f, cvxpy.trace):
-        s_new = np.full(s.shape, rho)
+        return A - np.diag(np.full(s.shape, rho))
     elif isinstance(f, NegExpression) and isinstance(f.args[0], cvxpy.log_det):
         s_new = (s + np.sqrt(s**2 + 4*rho))/2
-    elif isinstance(f, cvxpy.Variable) and f.is_symmetric() and \
-            len(constr) == 1 and isinstance(constr[0], cvxpy.constraints.PSD) and \
-            A.shape == A.T.shape and np.allclose(A, A.T, 1e-8):
-        s_new = np.maximum(s, 0)
     elif isinstance(f, cvxpy.atoms.affine.sum.Sum) and \
             len(f.args) == 1 and isinstance(f.args[0], cvxpy.abs):
         return np.maximum(np.abs(A) - rho, 0) * np.sign(A)
     elif isinstance(f, cvxpy.Pnorm) and f.p == 2:
         return np.maximum(1 - rho / np.linalg.norm(A,"fro"), 0) * A
+    elif isinstance(f, cvxpy.Constant) and \
+            len(constr) == 1 and isinstance(constr[0], cvxpy.constraints.PSD) and \
+            isinstance(constr[0].args[0], cvxpy.Variable) and constr[0].args[0].is_symmetric() and \
+            A.shape == A.T.shape and np.allclose(A, A.T, 1e-8):
+        s_new = np.maximum(s, 0)
     else:
         raise ValueError("Unsupported atom instance {0}".format(f.__class__.__name__))
     return U.dot(np.diag(s_new)).dot(Vt)
