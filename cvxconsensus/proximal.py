@@ -4,6 +4,7 @@ import scipy as sp
 from cvxpy import Constant, Variable, Parameter, Problem, Minimize
 from cvxpy.atoms.affine.unary_operators import NegExpression
 from cvxpy.atoms.affine.binary_operators import MulExpression
+from cvxpy.atoms.affine.add_expr import AddExpression
 from cvxconsensus.utilities import flip_obj
 
 class ProxOperator(object):
@@ -68,20 +69,25 @@ def is_ortho_invar(f):
     return isinstance(f, (cvxpy.normNuc, cvxpy.sigma_max)) or \
            (isinstance(f, NegExpression) and isinstance(f.args[0], cvxpy.log_det))
 
+def is_symm_constr(c):
+    return isinstance(c, cvxpy.Zero) and isinstance(c.args[0], AddExpression) and \
+            isinstance(c.args[0].args[0], Variable) and isinstance(c.args[0].args[1], NegExpression) and \
+            isinstance(c.args[0].args[1].args[0], cvxpy.atoms.affine.transpose.transpose) and \
+            isinstance(c.args[0].args[1].args[0].args[0], Variable) and c.args[0].args[1].args[0].args[0].id == c.args[0].args[0].id
+
 def is_simple_prox(f, constr, vars, is_scalar):
     if len(vars) > 1:   # Single variable problems only.
         return False
 
-    if is_scalar:
-        # Reject if variable has attribute constraints.
-        for key, value in vars[0].attributes.items():
-            if (key == "sparsity" and value is not None) or value:
-                return False
+    # Reject if variable has attribute constraints.
+    for key, value in vars[0].attributes.items():
+        if (key == "sparsity" and value is not None) or value:
+            return False
 
+    if is_scalar:
         return len(constr) == 0 and ((isinstance(f, (Constant, cvxpy.norm1, cvxpy.norm_inf, cvxpy.abs, cvxpy.entr, cvxpy.exp, cvxpy.huber, cvxpy.max))) or \
                   (isinstance(f, (cvxpy.Pnorm, cvxpy.power)) and f.p == 2) or (isinstance(f, cvxpy.quad_over_lin) and f.args[1].value == 1))
     else:
-        # TODO: Replace symmetry attribute with a direct constraint X == X.T.
         return len(constr) == 0 and (isinstance(f, Constant) or \
                   (isinstance(f, cvxpy.atoms.affine.sum.Sum) and len(f.args) == 1 and isinstance(f.args[0], cvxpy.abs)) or \
                   (isinstance(f, cvxpy.Pnorm) and f.p == 2 and isinstance(f.args[0], cvxpy.reshape) and isinstance(f.args[0].args[0], Variable) and \
@@ -90,8 +96,9 @@ def is_simple_prox(f, constr, vars, is_scalar):
                        (isinstance(f.args[0], MulExpression) and isinstance(f.args[0].args[0], Variable) and isinstance(f.args[0].args[1], Constant))) or \
                   (is_ortho_invar(f) and (isinstance(f, (cvxpy.normNuc, cvxpy.sigma_max)) or \
                                           isinstance(f, NegExpression) and isinstance(f.args[0], cvxpy.log_det)))) or \
-              len(constr) == 1 and isinstance(f, Constant) and \
-                  (isinstance(constr[0], cvxpy.constraints.PSD) and isinstance(constr[0].args[0], Variable) and constr[0].args[0].is_symmetric())
+               len(constr) == 2 and isinstance(f, Constant) and \
+                  ((isinstance(constr[0], cvxpy.constraints.PSD) and is_symm_constr(constr[1])) or \
+                   (isinstance(constr[1], cvxpy.constraints.PSD) and is_symm_constr(constr[0])))
 
 def proj_simplex(x, r = 1):
     """Project x onto a simplex with upper bound r.
@@ -200,18 +207,16 @@ def prox_func_matrix(f, constr = []):
             return prox
         else:
             raise ValueError("Unsupported atom instance {0}".format(f.__class__.__name__))
-    elif len(constr) == 1 and isinstance(f, Constant):
-        if isinstance(constr[0], cvxpy.constraints.PSD) and \
-              isinstance(constr[0].args[0], Variable) and constr[0].args[0].is_symmetric():
-            def prox(A, rho):
-                if not (A.shape == A.T.shape and np.allclose(A, A.T, 1e-8)):
-                    raise ValueError("A must be a symmetric matrix")
-                U, s, Vt = np.linalg.svd(A, full_matrices = False)
-                s_new = np.maximum(s, 0)
-                return U.dot(np.diag(s_new)).dot(Vt)
-            return prox
-        else:
-            raise ValueError("Unsupported constraint instance {0}".format(constr[0].__class.__.__name__))
+    elif len(constr) == 2 and isinstance(f, Constant) and \
+            ((isinstance(constr[0], cvxpy.constraints.PSD) and is_symm_constr(constr[1])) or \
+             (isinstance(constr[1], cvxpy.constraints.PSD) and is_symm_constr(constr[0]))):
+        def prox(A, rho):
+            if not (A.shape == A.T.shape and np.allclose(A, A.T, 1e-8)):
+                raise ValueError("A must be a symmetric matrix")
+            U, s, Vt = np.linalg.svd(A, full_matrices = False)
+            s_new = np.maximum(s, 0)
+            return U.dot(np.diag(s_new)).dot(Vt)
+        return prox
     else:
-        raise NotImplementedError("Multiple constraints are unimplemented")
+        raise NotImplementedError("Multiple constraints are unimplemented except for [X >> 0, X == X.T]")
 

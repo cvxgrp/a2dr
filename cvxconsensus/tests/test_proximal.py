@@ -18,7 +18,6 @@ along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 """
 
 import numpy as np
-import cvxpy
 from cvxpy.atoms import *
 from cvxpy.constraints.psd import PSD
 from cvxpy import Constant, Variable, Problem, Minimize
