@@ -8,13 +8,13 @@ from cvxpy.atoms.affine.add_expr import AddExpression
 from cvxconsensus.utilities import flip_obj
 
 class ProxOperator(object):
-    def __init__(self, problem, rho_init, use_cvxpy = False):
+    def __init__(self, problem, y_vals = {}, rho_vals = {}, use_cvxpy = False):
         self.problem = problem
         self.variables = problem.variables()
 
         if use_cvxpy:
             self.is_simple = False
-            self.prox, self.var_map = self.build_prox_problem(problem, rho_init)
+            self.prox, self.var_map = self.build_prox_problem(problem, y_vals, rho_vals)
         else:
             if len(self.variables) == 0:   # Only constants.
                 self.is_simple = True
@@ -26,22 +26,24 @@ class ProxOperator(object):
                 objective = flip_obj(problem).args[0]
                 self.is_simple = is_simple_prox(objective, problem.constraints, self.variables, is_scalar)
                 if self.is_simple:
+                    x_id = x_var.id
+                    x_shape = x_var.shape
                     prox_func = prox_func_vector if is_scalar else prox_func_matrix
                     self.prox = prox_func(objective, problem.constraints)
-                    self.var_map = {x_var.id: {"x": x_var, "y": Parameter(x_var.shape, value=np.zeros(x_var.shape)),
-                                               "rho": Parameter(value=rho_init[x_var.id], nonneg=True)}}
+                    self.var_map = {x_id: {"x": x_var, "y": Parameter(x_shape, value = y_vals.get(x_id, np.zeros(x_shape))),
+                                            "rho": Parameter(value = rho_vals.get(x_id, 1.0), nonneg = True)}}
                 else:
-                    self.prox, self.var_map = self.build_prox_problem(problem, rho_init)
+                    self.prox, self.var_map = self.build_prox_problem(problem, y_vals, rho_vals)
             else:   # Multiple variables.
                 self.is_simple = False
-                self.prox, self.var_map = self.build_prox_problem(problem, rho_init)
+                self.prox, self.var_map = self.build_prox_problem(problem, y_vals, rho_vals)
 
     @property
     def status(self):
         return cvxpy.settings.OPTIMAL if self.is_simple else self.prox.status
 
     @staticmethod
-    def build_prox_problem(problem, rho_init):
+    def build_prox_problem(problem, y_vals = {}, rho_vals = {}):
         var_map = {}
         objective = flip_obj(problem).args[0]
 
@@ -49,8 +51,8 @@ class ProxOperator(object):
         for x_var in problem.variables():
             x_id = x_var.id
             x_shape = x_var.shape
-            var_map[x_id] = {"x": x_var, "y": Parameter(x_shape, value=np.zeros(x_shape)),
-                             "rho": Parameter(value=rho_init[x_id], nonneg=True)}
+            var_map[x_id] = {"x": x_var, "y": Parameter(x_shape, value = y_vals.get(x_id, np.zeros(x_shape))),
+                             "rho": Parameter(value = rho_vals.get(x_id, 1.0), nonneg = True)}
             objective += (var_map[x_id]["rho"] / 2.0) * cvxpy.sum_squares(x_var - var_map[x_id]["y"])
         prox = Problem(Minimize(objective), problem.constraints)
         return prox, var_map
@@ -58,7 +60,7 @@ class ProxOperator(object):
     def solve(self, *args, **kwargs):
         if len(self.variables) == 0:
             return
-        elif self.is_simple and len(self.variables) == 1:
+        elif self.is_simple:
             x_var = self.variables[0]
             v_map = self.var_map[x_var.id]
             x_var.value = self.prox(v_map["y"].value, v_map["rho"].value)
@@ -66,10 +68,12 @@ class ProxOperator(object):
             self.prox.solve(*args, **kwargs)
 
 def is_ortho_invar(f):
+    """Is the functional orthogonally invariant?"""
     return isinstance(f, (cvxpy.normNuc, cvxpy.sigma_max)) or \
            (isinstance(f, NegExpression) and isinstance(f.args[0], cvxpy.log_det))
 
 def is_symm_constr(c):
+    """Is this a symmetric constraint, X == X.T?"""
     return isinstance(c, cvxpy.Zero) and isinstance(c.args[0], AddExpression) and \
             isinstance(c.args[0].args[0], Variable) and isinstance(c.args[0].args[1], NegExpression) and \
             isinstance(c.args[0].args[1].args[0], cvxpy.atoms.affine.transpose.transpose) and \
@@ -213,9 +217,9 @@ def prox_func_matrix(f, constr = []):
         def prox(A, rho):
             if not (A.shape == A.T.shape and np.allclose(A, A.T, 1e-8)):
                 raise ValueError("A must be a symmetric matrix")
-            U, s, Vt = np.linalg.svd(A, full_matrices = False)
-            s_new = np.maximum(s, 0)
-            return U.dot(np.diag(s_new)).dot(Vt)
+            w, v = np.linalg.eig(A)
+            w_new = np.maximum(w, 0)
+            return v.dot(np.diag(w_new)).dot(v.T)
         return prox
     else:
         raise NotImplementedError("Multiple constraints are unimplemented except for [X >> 0, X == X.T]")

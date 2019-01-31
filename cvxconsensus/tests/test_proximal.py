@@ -39,13 +39,13 @@ class TestProximal(BaseTest):
     def compare_prox_func(self, expr, x_var, u_val, rho = 1.0, constr = [], places = 4):
         prox_func = prox_func_vector if np.isscalar(u_val) or len(u_val.shape) <= 1 else prox_func_matrix
         u_prox = prox_func(expr, constr)(u_val, rho)
-        Problem(Minimize(expr + (rho / 2.0) * sum_squares(x_var - u_val))).solve()
+        Problem(Minimize(expr + (rho / 2.0) * sum_squares(x_var - u_val)), constr).solve()
         self.assertItemsAlmostEqual(u_prox, x_var.value, places)
 
-    def compare_prox_operator(self, prob, rho_init = 1.0, places = 4):
-        ProxOperator(prob, rho_init, use_cvxpy = True).solve()
+    def compare_prox_oper(self, prob, y_vals, rho_vals = {}, places = 4):
+        ProxOperator(prob, y_vals, rho_vals, use_cvxpy = True).solve()
         var_cvxpy = [var.value for var in prob.variables()]
-        ProxOperator(prob, rho_init, use_cvxpy = False).solve()
+        ProxOperator(prob, y_vals, rho_vals, use_cvxpy = False).solve()
         var_simple = [var.value for var in prob.variables()]
         for i in range(len(var_simple)):
             self.assertItemsAlmostEqual(var_simple[i], var_cvxpy[i], places)
@@ -67,20 +67,25 @@ class TestProximal(BaseTest):
         B = np.random.randn(self.Y.shape[1],self.Y.shape[1])
         self.compare_prox_func(trace(self.Y * B), self.Y, self.A, self.rho)
 
-        Y_symm = Variable(self.Y.shape, symmetric = True)
         A_symm = (self.A + self.A.T)/2
-        self.compare_prox_func(Constant(0), Y_symm, A_symm, self.rho, [PSD(Y_symm)])
+        self.compare_prox_func(Constant(0), self.Y, A_symm, self.rho, [self.Y >> 0, self.Y == self.Y.T], places = 3)
 
     def test_prox_operator(self):
-        # TODO: Debug for when parameter y is a random value.
-        self.compare_prox_operator(Problem(Minimize(Constant(0)), {}))
-        self.compare_prox_operator(Problem(Minimize(norm1(self.x))), {self.x.id: self.rho})
+        x_to_u = {self.x.id: self.u}
+        x_to_rho = {self.x.id: self.rho}
+        self.compare_prox_oper(Problem(Minimize(Constant(0))), {}, {})
+        self.compare_prox_oper(Problem(Minimize(norm1(self.x))), x_to_u, x_to_rho)
 
-        # self.compare_prox_operator(Problem(Minimize(-log_det(self.Y))), {self.Y.id: self.rho})
-        self.compare_prox_operator(Problem(Minimize(normNuc(self.Y))), {self.Y.id: self.rho})
-        self.compare_prox_operator(Problem(Minimize(norm(self.Y, "fro"))), {self.Y.id: self.rho})
-        self.compare_prox_operator(Problem(Minimize(sum(abs(self.Y)))), {self.Y.id: self.rho})
-        self.compare_prox_operator(Problem(Minimize(trace(self.Y))), {self.Y.id: self.rho})
+        Y_to_A = {self.Y.id: self.A}
+        Y_to_rho = {self.Y.id: self.rho}
+        self.compare_prox_oper(Problem(Minimize(normNuc(self.Y))), Y_to_A, Y_to_rho)
+        self.compare_prox_oper(Problem(Minimize(norm(self.Y, "fro"))), Y_to_A, Y_to_rho)
+        self.compare_prox_oper(Problem(Minimize(sum(abs(self.Y)))), Y_to_A, Y_to_rho)
+        self.compare_prox_oper(Problem(Minimize(trace(self.Y))), Y_to_A, Y_to_rho)
+        # self.compare_prox_operator(Problem(Minimize(-log_det(self.Y))), Y_to_A, Y_to_rho)
 
         B = np.random.randn(self.Y.shape[1], self.Y.shape[1])
-        self.compare_prox_operator(Problem(Minimize(trace(self.Y * B))), {self.Y.id: self.rho})
+        self.compare_prox_oper(Problem(Minimize(trace(self.Y * B))), Y_to_A, Y_to_rho)
+
+        A_symm = (self.A + self.A.T)/2
+        self.compare_prox_oper(Problem(Minimize(0), [self.Y >> 0, self.Y == self.Y.T]), {self.Y.id: A_symm}, Y_to_rho, places = 3)

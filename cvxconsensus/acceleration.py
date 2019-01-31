@@ -20,7 +20,6 @@ along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 import cvxpy
 import numpy as np
 from cvxpy import Variable, Problem, Minimize
-from scipy.linalg import qr_insert, qr_delete, solve_triangular
 
 def dicts_to_arr(dicts):
 	d_cols = []
