@@ -7,28 +7,37 @@ from cvxpy.atoms.affine.binary_operators import MulExpression
 from cvxconsensus.utilities import flip_obj
 
 class ProxOperator(object):
-    def __init__(self, problem, rho_init):
+    def __init__(self, problem, rho_init, use_cvxpy = False):
         self.problem = problem
         self.variables = problem.variables()
 
-        if len(self.variables) == 0:   # Only constants.
-            self.is_simple = True
-            self.prox = prox_func_vector(problem.objective.args[0], problem.constraints)
-            self.var_map = {}
-        elif len(self.variables) == 1:   # Single variable.
-            x_var = self.variables[0]
-            is_scalar = len(x_var.shape) <= 1
-            self.is_simple = is_simple_prox(problem.objective.args[0], problem.constraints, is_scalar)
-            if self.is_simple:
-                prox_func = prox_func_vector if is_scalar else prox_func_matrix
-                self.prox = prox_func(problem.objective.args[0], problem.constraints)
-                self.var_map = {x_var.id: {"x": x_var, "y": Parameter(x_var.shape, value=np.zeros(x_var.shape)),
-                                           "rho": Parameter(value=rho_init[x_var.id], nonneg=True)}}
-            else:
-                self.prox, self.var_map = self.build_prox_problem(problem, rho_init)
-        else:   # Multiple variables.
+        if use_cvxpy:
             self.is_simple = False
             self.prox, self.var_map = self.build_prox_problem(problem, rho_init)
+        else:
+            if len(self.variables) == 0:   # Only constants.
+                self.is_simple = True
+                self.var_map = {}
+                self.prox = prox_func_vector(problem.objective.args[0], problem.constraints)
+            elif len(self.variables) == 1:   # Single variable.
+                x_var = self.variables[0]
+                is_scalar = len(x_var.shape) <= 1
+                objective = flip_obj(problem).args[0]
+                self.is_simple = is_simple_prox(objective, problem.constraints, self.variables, is_scalar)
+                if self.is_simple:
+                    prox_func = prox_func_vector if is_scalar else prox_func_matrix
+                    self.prox = prox_func(objective, problem.constraints)
+                    self.var_map = {x_var.id: {"x": x_var, "y": Parameter(x_var.shape, value=np.zeros(x_var.shape)),
+                                               "rho": Parameter(value=rho_init[x_var.id], nonneg=True)}}
+                else:
+                    self.prox, self.var_map = self.build_prox_problem(problem, rho_init)
+            else:   # Multiple variables.
+                self.is_simple = False
+                self.prox, self.var_map = self.build_prox_problem(problem, rho_init)
+
+    @property
+    def status(self):
+        return cvxpy.settings.OPTIMAL if self.is_simple else self.prox.status
 
     @staticmethod
     def build_prox_problem(problem, rho_init):
@@ -59,11 +68,20 @@ def is_ortho_invar(f):
     return isinstance(f, (cvxpy.normNuc, cvxpy.sigma_max)) or \
            (isinstance(f, NegExpression) and isinstance(f.args[0], cvxpy.log_det))
 
-def is_simple_prox(f, constr, is_scalar):
+def is_simple_prox(f, constr, vars, is_scalar):
+    if len(vars) > 1:   # Single variable problems only.
+        return False
+
     if is_scalar:
+        # Reject if variable has attribute constraints.
+        for key, value in vars[0].attributes.items():
+            if (key == "sparsity" and value is not None) or value:
+                return False
+
         return len(constr) == 0 and ((isinstance(f, (Constant, cvxpy.norm1, cvxpy.norm_inf, cvxpy.abs, cvxpy.entr, cvxpy.exp, cvxpy.huber, cvxpy.max))) or \
                   (isinstance(f, (cvxpy.Pnorm, cvxpy.power)) and f.p == 2) or (isinstance(f, cvxpy.quad_over_lin) and f.args[1].value == 1))
     else:
+        # TODO: Replace symmetry attribute with a direct constraint X == X.T.
         return len(constr) == 0 and (isinstance(f, Constant) or \
                   (isinstance(f, cvxpy.atoms.affine.sum.Sum) and len(f.args) == 1 and isinstance(f.args[0], cvxpy.abs)) or \
                   (isinstance(f, cvxpy.Pnorm) and f.p == 2 and isinstance(f.args[0], cvxpy.reshape) and isinstance(f.args[0].args[0], Variable) and \
@@ -85,7 +103,8 @@ def proj_simplex(x, r = 1):
     denom = 1 + np.arange(len(x_decr))
     theta = (x_cumsum - r)/denom
     x_diff = x_decr - theta
-    idx = np.squeeze(np.argwhere(x_diff > 0))[-1]
+    # idx = np.squeeze(np.argwhere(x_diff > 0))[-1]
+    idx = np.argwhere(x_diff > 0)[0][-1]
     return np.maximum(x - theta[idx], 0)
 
 def proj_l1(x, r = 1):
@@ -98,7 +117,7 @@ def proj_l1(x, r = 1):
 
 def prox_func_vector(f, constr = []):
     """Returns the proximal operator for simple functions evaluated at u with scaling factor rho.
-       \prox_{\rho * f}(u) = \argmin_x f(x) + 1/(2*\rho)*||x - u||_2^2
+       \prox_{(1/\rho) * f}(u) = \argmin_x f(x) + (\rho/2)*||x - u||_2^2
 
        References:
        1) N. Parikh and S. Boyd (2013). "Proximal Algorithms." https://web.stanford.edu/~boyd/papers/pdf/prox_algs.pdf
@@ -108,25 +127,25 @@ def prox_func_vector(f, constr = []):
         if isinstance(f, Constant):
             return lambda u, rho: u
         elif isinstance(f, cvxpy.norm1):
-            return lambda u, rho: np.maximum(np.abs(u) - rho, 0) * np.sign(u)
+            return lambda u, rho: np.maximum(np.abs(u) - 1.0/rho, 0) * np.sign(u)
         elif isinstance(f, cvxpy.Pnorm) and f.p == 2:
-            return lambda u, rho: np.maximum(1 - rho / np.linalg.norm(u, 2), 0) * u
+            return lambda u, rho: np.maximum(1 - 1.0 / (rho * np.linalg.norm(u, 2)), 0) * u
         elif isinstance(f, cvxpy.norm_inf):
-            return lambda u, rho: u - rho * proj_l1(u / rho)
+            return lambda u, rho: u - (1.0 / rho) * proj_l1(rho * u)
         elif isinstance(f, cvxpy.quad_over_lin) and f.args[1].value == 1:
-            return lambda u, rho: (1 / (1 + rho/2)) * u
+            return lambda u, rho: (1 / (1 + 1.0/(2 * rho))) * u
         elif isinstance(f, cvxpy.abs):
-            return lambda u, rho: np.maximum(u - 1 / rho, 0) + np.minimum(u + 1 / rho, 0)
+            return lambda u, rho: np.maximum(u - rho, 0) + np.minimum(u + rho, 0)
         elif isinstance(f, cvxpy.entr):
-            return lambda u, rho: (sp.special.lambertw(rho * u - 1) * np.log(rho)) / rho
+            return lambda u, rho: -(sp.special.lambertw(u / rho - 1) * np.log(rho)) * rho
         elif isinstance(f, cvxpy.exp):
-            return lambda u, rho: u - sp.special.lambertw(np.exp(u - np.log(rho)))
+            return lambda u, rho: u - sp.special.lambertw(np.exp(u + np.log(rho)))
         elif isinstance(f, cvxpy.huber):
-            return lambda u, rho: u * rho / (1 + rho) if np.abs(u) < (1 + 1 / rho) else u - np.sign(u) / rho
+            return lambda u, rho: u * 1.0 / (1 + rho) if np.abs(u) < (1 + rho) else u - np.sign(u) * rho
         elif isinstance(f, cvxpy.power) and f.p == 2:
-            return lambda u, rho: rho * u / (1 + rho)
+            return lambda u, rho: u / (1 + rho)
         elif isinstance(f, cvxpy.max):
-            return lambda u, rho: u - rho * proj_simplex(u / rho)
+            return lambda u, rho: u - proj_simplex(rho * u) / rho
         else:
             raise ValueError("Unsupported atom instance {0}".format(f.__class__.__name__))
     else:
@@ -134,7 +153,7 @@ def prox_func_vector(f, constr = []):
 
 def prox_func_matrix(f, constr = []):
     """Returns the proximal operator for matrix functions evaluated at A with scaling factor rho.
-       \prox_{\rho * f}(A) = \argmin_Y f(Y) + 1/(2*\rho)*||Y - A||_2^2
+       \prox_{(1/\rho) * f}(A) = \argmin_Y f(Y) + (\rho/2)*||Y - A||_2^2
 
        References:
        1) N. Parikh and S. Boyd (2013). "Proximal Algorithms." https://web.stanford.edu/~boyd/papers/pdf/prox_algs.pdf
@@ -143,15 +162,14 @@ def prox_func_matrix(f, constr = []):
     if len(constr) == 0:
         if isinstance(f, Constant):
             return lambda A, rho: A
-        if isinstance(f, cvxpy.atoms.affine.sum.Sum) and \
-           len(f.args) == 1 and isinstance(f.args[0], cvxpy.abs):
-            return lambda A, rho: np.maximum(np.abs(A) - rho, 0) * np.sign(A)
+        if isinstance(f, cvxpy.atoms.affine.sum.Sum) and len(f.args) == 1 and isinstance(f.args[0], cvxpy.abs):
+            return lambda A, rho: np.maximum(np.abs(A) - 1.0/rho, 0) * np.sign(A)
         elif isinstance(f, cvxpy.trace):
             if len(f.args) == 1 and isinstance(f.args[0], Variable):
-                return lambda A, rho: A - np.diag(np.full((A.shape[0],), rho))
+                return lambda A, rho: A - np.diag(np.full((A.shape[0],), 1.0/rho))
             elif isinstance(f.args[0], MulExpression) and \
                     isinstance(f.args[0].args[0], Variable) and isinstance(f.args[0].args[1], Constant):
-                return lambda A, rho: A - rho * f.args[0].args[1].value.T
+                return lambda A, rho: A - f.args[0].args[1].value.T / rho
             else:
                 raise ValueError("Unsupported atom instance {0}".format(f.__class__.__name__))
         elif isinstance(f, cvxpy.Pnorm) and f.p == 2 and \
@@ -159,16 +177,20 @@ def prox_func_matrix(f, constr = []):
                 f.args[0].shape == (f.args[0].args[0].size,):
             def prox(A, rho):
                 u = np.asarray(A).ravel()
-                prox_vec = np.maximum(1 - rho / np.linalg.norm(u, 2), 0) * u
-                return np.reshape(prox_vec, A.shape)
+                u_2norm = np.linalg.norm(u, 2)
+                if u_2norm < 1e-8:
+                    return A
+                else:
+                    prox_vec = np.maximum(1 - 1.0 / (rho * u_2norm), 0) * u
+                    return np.reshape(prox_vec, A.shape)
             return prox
         elif is_ortho_invar(f):
             if isinstance(f, cvxpy.normNuc):
-                prox_diag = lambda s, rho: np.maximum(s - rho, 0)
+                prox_diag = lambda s, rho: np.maximum(s - 1.0/rho, 0)
             elif isinstance(f, cvxpy.sigma_max):
-                prox_diag = lambda s, rho: rho * proj_simplex(s / rho)
+                prox_diag = lambda s, rho: 1.0/rho * proj_simplex(rho * s)
             elif isinstance(f, NegExpression) and isinstance(f.args[0], cvxpy.log_det):
-                prox_diag = lambda s, rho: (s + np.sqrt(s ** 2 + 4 * rho)) / 2
+                prox_diag = lambda s, rho: (s + np.sqrt(s ** 2 + 4.0/rho)) / 2
             else:
                 raise ValueError("Unimplemented orthogonally invariant function {0}".format(f.__class__.__name__))
             def prox(A, rho):

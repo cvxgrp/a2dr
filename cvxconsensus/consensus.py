@@ -27,6 +27,7 @@ from cvxpy.expressions.constants import Parameter
 from cvxpy.atoms import sum_squares
 from cvxconsensus.acceleration import aa_weights
 from cvxconsensus.utilities import flip_obj, assign_rho
+from cvxconsensus.proximal import ProxOperator
 
 def prox_step(prob, rho_init):
 	"""Formulates the proximal operator for a given objective, constraints, and step size.
@@ -93,9 +94,11 @@ def w_project(prox_res, s_half):
 	
 	return mat_term, z_new
 
-def run_worker(pipe, p, rho_init, anderson, m_accel, *args, **kwargs):
+def run_worker(pipe, p, rho_init, anderson, m_accel, use_cvxpy, *args, **kwargs):
 	# Initialize proximal problem.
-	prox, v = prox_step(p, rho_init)
+	# prox, v = prox_step(p, rho_init)
+	prox = ProxOperator(p, rho_init, use_cvxpy)
+	v = prox.var_map
 	
 	# Initialize AA-II parameters.
 	if anderson:
@@ -170,6 +173,7 @@ def consensus(p_list, *args, **kwargs):
 	max_iter = kwargs.pop("max_iter", 100)
 	rho_init = kwargs.pop("rho_init", dict())   # Step sizes.
 	eps_stop = kwargs.pop("eps_stop", 1e-6)     # Stopping tolerance.
+	use_cvxpy = kwargs.pop("use_cvxpy", False)	# Use CVXPY for proximal step?
 	
 	# AA-II parameters.
 	anderson = kwargs.pop("anderson", False)
@@ -192,7 +196,7 @@ def consensus(p_list, *args, **kwargs):
 		local, remote = Pipe()
 		pipes += [local]
 		procs += [Process(target = run_worker, args = (remote, p_list[i], rho_list[i], \
-							anderson, m_accel) + args, kwargs = kwargs)]
+							anderson, m_accel, use_cvxpy) + args, kwargs = kwargs)]
 		procs[-1].start()
 
 	# Initialize consensus variables.
