@@ -97,7 +97,7 @@ def w_project(prox_res, s_half):
 def run_worker(pipe, p, rho_init, anderson, m_accel, use_cvxpy, *args, **kwargs):
 	# Initialize proximal problem.
 	# prox, v = prox_step(p, rho_init)
-	prox = ProxOperator(p, rho_init, use_cvxpy)
+	prox = ProxOperator(p, rho_vals = rho_init, use_cvxpy = use_cvxpy)
 	v = prox.var_map
 	
 	# Initialize AA-II parameters.

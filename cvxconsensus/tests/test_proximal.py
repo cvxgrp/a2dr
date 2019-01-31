@@ -66,9 +66,7 @@ class TestProximal(BaseTest):
 
         B = np.random.randn(self.Y.shape[1],self.Y.shape[1])
         self.compare_prox_func(trace(self.Y * B), self.Y, self.A, self.rho)
-
-        A_symm = (self.A + self.A.T)/2
-        self.compare_prox_func(Constant(0), self.Y, A_symm, self.rho, [self.Y >> 0, self.Y == self.Y.T], places = 3)
+        self.compare_prox_func(Constant(0), self.Y, self.A, self.rho, [self.Y >> 0, self.Y == self.Y.T], places = 3)
 
     def test_prox_operator(self):
         x_to_u = {self.x.id: self.u}
@@ -82,10 +80,8 @@ class TestProximal(BaseTest):
         self.compare_prox_oper(Problem(Minimize(norm(self.Y, "fro"))), Y_to_A, Y_to_rho)
         self.compare_prox_oper(Problem(Minimize(sum(abs(self.Y)))), Y_to_A, Y_to_rho)
         self.compare_prox_oper(Problem(Minimize(trace(self.Y))), Y_to_A, Y_to_rho)
-        # self.compare_prox_operator(Problem(Minimize(-log_det(self.Y))), Y_to_A, Y_to_rho)
+        # self.compare_prox_oper(Problem(Minimize(-log_det(self.Y))), Y_to_A, Y_to_rho)
 
         B = np.random.randn(self.Y.shape[1], self.Y.shape[1])
         self.compare_prox_oper(Problem(Minimize(trace(self.Y * B))), Y_to_A, Y_to_rho)
-
-        A_symm = (self.A + self.A.T)/2
-        self.compare_prox_oper(Problem(Minimize(0), [self.Y >> 0, self.Y == self.Y.T]), {self.Y.id: A_symm}, Y_to_rho, places = 3)
+        self.compare_prox_oper(Problem(Minimize(0), [self.Y >> 0, self.Y == self.Y.T]), Y_to_A, Y_to_rho, places = 3)

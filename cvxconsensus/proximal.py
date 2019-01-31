@@ -24,6 +24,8 @@ class ProxOperator(object):
                 x_var = self.variables[0]
                 is_scalar = len(x_var.shape) <= 1
                 objective = flip_obj(problem).args[0]
+
+                # TODO: Factor out positive scalar multiplicative constant c from objective into rho -> rho/c.
                 self.is_simple = is_simple_prox(objective, problem.constraints, self.variables, is_scalar)
                 if self.is_simple:
                     x_id = x_var.id
@@ -215,8 +217,7 @@ def prox_func_matrix(f, constr = []):
             ((isinstance(constr[0], cvxpy.constraints.PSD) and is_symm_constr(constr[1])) or \
              (isinstance(constr[1], cvxpy.constraints.PSD) and is_symm_constr(constr[0]))):
         def prox(A, rho):
-            if not (A.shape == A.T.shape and np.allclose(A, A.T, 1e-8)):
-                raise ValueError("A must be a symmetric matrix")
+            A = (A + A.T)/2.0
             w, v = np.linalg.eig(A)
             w_new = np.maximum(w, 0)
             return v.dot(np.diag(w_new)).dot(v.T)
