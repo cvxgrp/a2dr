@@ -3,7 +3,7 @@ import numpy as np
 import scipy as sp
 from cvxpy import Constant, Variable, Parameter, Problem, Minimize
 from cvxpy.atoms.affine.unary_operators import NegExpression
-from cvxpy.atoms.affine.binary_operators import MulExpression
+from cvxpy.atoms.affine.binary_operators import MulExpression, multiply
 from cvxpy.atoms.affine.add_expr import AddExpression
 from cvxconsensus.utilities import flip_obj
 
@@ -24,16 +24,26 @@ class ProxOperator(object):
                 x_var = self.variables[0]
                 is_scalar = len(x_var.shape) <= 1
                 objective = flip_obj(problem).args[0]
+                if x_var.id not in rho_vals.keys():
+                    rho_vals[x_var.id] = 1.0
 
-                # TODO: Factor out positive scalar multiplicative constant c from objective into rho -> rho/c.
-                self.is_simple = is_simple_prox(objective, problem.constraints, self.variables, is_scalar)
+                # Factor out non-negative scalar constant c from objective and map rho -> rho/c.
+                is_scaled, expr, scale = sep_nonneg_scaled(objective.expr)
+                if is_scaled:
+                    if scale > 0:
+                        objective = Minimize(expr)
+                        rho_vals[x_var.id] /= scale
+                    elif scale == 0:
+                        objective = Minimize(0)
+                    problem = Problem(objective, problem.constraints)
+
+                # Check if objective has simple proximal operator form.
+                self.is_simple = is_simple_prox(objective.expr, problem.constraints, self.variables, is_scalar)
                 if self.is_simple:
-                    x_id = x_var.id
-                    x_shape = x_var.shape
                     prox_func = prox_func_vector if is_scalar else prox_func_matrix
-                    self.prox = prox_func(objective, problem.constraints)
-                    self.var_map = {x_id: {"x": x_var, "y": Parameter(x_shape, value = y_vals.get(x_id, np.zeros(x_shape))),
-                                            "rho": Parameter(value = rho_vals.get(x_id, 1.0), nonneg = True)}}
+                    self.prox = prox_func(objective.expr, problem.constraints)
+                    self.var_map = {x_var.id: {"x": x_var, "y": Parameter(x_var.shape, value = y_vals.get(x_var.id, np.zeros(x_var.shape))),
+                                               "rho": Parameter(value = rho_vals[x_var.id], nonneg = True)}}
                 else:
                     self.prox, self.var_map = self.build_prox_problem(problem, y_vals, rho_vals)
             else:   # Multiple variables.
@@ -69,8 +79,23 @@ class ProxOperator(object):
         else:
             self.prox.solve(*args, **kwargs)
 
+def sep_nonneg_scaled(f):
+    """Is this function multiplied by a non-negative scalar constant? If so, factor out scalar."""
+    def is_nonneg_scalar(arg):
+        return arg.is_constant() and arg.value is not None and len(np.unique(arg.value)) == 1 and arg.is_nonneg()
+
+    if isinstance(f, multiply):
+        if is_nonneg_scalar(f.args[0]):
+            return True, f.args[1], np.unique(f.args[0].value)[0]
+        elif is_nonneg_scalar(f.args[1]):
+            return True, f.args[0], np.unique(f.args[1].value)[0]
+        else:
+            return False, None, None
+    else:
+        return False, None, None
+
 def is_ortho_invar(f):
-    """Is the functional orthogonally invariant?"""
+    """Is this function orthogonally invariant?"""
     return isinstance(f, (cvxpy.normNuc, cvxpy.sigma_max)) or \
            (isinstance(f, NegExpression) and isinstance(f.args[0], cvxpy.log_det))
 
@@ -82,6 +107,7 @@ def is_symm_constr(c):
             isinstance(c.args[0].args[1].args[0].args[0], Variable) and c.args[0].args[1].args[0].args[0].id == c.args[0].args[0].id
 
 def is_simple_prox(f, constr, vars, is_scalar):
+    """Does this function/constraint have a simple proximal operator?"""
     if len(vars) > 1:   # Single variable problems only.
         return False
 

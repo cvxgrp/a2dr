@@ -73,6 +73,8 @@ class TestProximal(BaseTest):
         x_to_rho = {self.x.id: self.rho}
         self.compare_prox_oper(Problem(Minimize(Constant(0))), {}, {})
         self.compare_prox_oper(Problem(Minimize(norm1(self.x))), x_to_u, x_to_rho)
+        self.compare_prox_oper(Problem(Minimize(2*(norm1(self.x)))), x_to_u, x_to_rho)
+        self.compare_prox_oper(Problem(Minimize(2*(norm1(self.x)) + norm_inf(self.x))), x_to_u, x_to_rho)
 
         Y_to_A = {self.Y.id: self.A}
         Y_to_rho = {self.Y.id: self.rho}
@@ -85,3 +87,6 @@ class TestProximal(BaseTest):
         B = np.random.randn(self.Y.shape[1], self.Y.shape[1])
         self.compare_prox_oper(Problem(Minimize(trace(self.Y * B))), Y_to_A, Y_to_rho)
         self.compare_prox_oper(Problem(Minimize(0), [self.Y >> 0, self.Y == self.Y.T]), Y_to_A, Y_to_rho, places = 3)
+
+        self.compare_prox_oper(Problem(Minimize(2*norm(self.Y, "fro"))), Y_to_A, Y_to_rho)
+        self.compare_prox_oper(Problem(Minimize(2*sum(abs(self.Y)))), Y_to_A, Y_to_rho)
