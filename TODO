@@ -24,4 +24,6 @@
 1. Finish implementation of simple proximal operator functions.
 	a. Factor out any constant multiplicative term into rho, e.g. prox_{c*f}(x, rho) becomes prox_{f}(x, rho/c).
 	b. Enable user-specified initialization of proximal parameter y (for each unique variable id).
+
 2. General projection onto set of linear constraints in equation (9) of A2DR notes. Use numpy.linalg.lsqr to get the inverse of MM^T.
+

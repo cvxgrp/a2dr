@@ -35,16 +35,16 @@ def assign_rho(p_list, rho_init = dict(), default = 1.0):
 	for key in rho_init.keys():
 		if not key in vids:
 			raise ValueError("{} is not a valid variable id".format(key))
-			
-	return [{var.id: rho_init.get(var.id, default) for var in \
-				prob.variables()} for prob in p_list]
+	rho_list = [{var.id: rho_init.get(var.id, default) for var in prob.variables()} for prob in p_list]
+	rho_all = {var.id: rho_init.get(var.id, default) for prob in p_list for var in prob.variables()}
+	return rho_list, rho_all
 
 def partition_vars(p_list):
 	"""For each problem, partition variables into public (shared with at 
 	   least one other problem) and private (only exists in that problem).
 	"""
-	varmerge = [var.id for prob in p_list for var in prob.variables()]
-	var_count = Counter(varmerge)
+	var_merge = [var.id for prob in p_list for var in prob.variables()]
+	var_count = Counter(var_merge)
 	var_list = []
 	for prob in p_list:
 		var_dict = {"public": set(), "private": set()}

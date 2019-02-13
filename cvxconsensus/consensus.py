@@ -25,7 +25,7 @@ import cvxpy.settings as s
 from cvxpy.problems.problem import Problem, Minimize
 from cvxpy.expressions.constants import Parameter
 from cvxpy.atoms import sum_squares
-from cvxconsensus.acceleration import aa_weights
+from cvxconsensus.acceleration import aa_weights, dicts_to_arr
 from cvxconsensus.utilities import flip_obj, assign_rho
 from cvxconsensus.proximal import ProxOperator
 
@@ -93,6 +93,23 @@ def w_project(prox_res, s_half):
 		z_new[key] = s_half[key] + ys_sum - var_cnt[key] * mat_term[key]
 	
 	return mat_term, z_new
+
+# def w_project_gen(prox_res, s_half, rho_list, rho_all):
+#	rho_list_arrs, rho_list_info = dicts_to_arr(rho_list)
+#   rho_all_arrs, rho_all_info = dicts_to_arr([rho_all])
+#	Gamma = np.diag(np.concatenate(tuple(rho_list_arrs)))
+#	D = np.diag(rho_all_arrs)
+#	H = np.hstack((Gamma, D))
+#   TODO: Define ED_mat according to mapping.
+#	M = np.hstack((Gamma**(-0.5), -ED_mat))
+#
+#   TODO: Define v_half = (y_half, s_half) stacked.
+#	w_half = (H**0.5).dot(v_half)
+#
+#	Mw_sol = np.linalg.lstsq(M.T, w_half, rcond = None)
+#	M_annl = np.eye(len(w_half)) - M.T.dot(Mw_sol)
+#	w_proj = M_annl.dot(w_half)
+#	return (H**(-0.5)).dot(w_proj)
 
 def run_worker(pipe, p, rho_init, anderson, m_accel, use_cvxpy, *args, **kwargs):
 	# Initialize proximal problem.
@@ -184,9 +201,9 @@ def consensus(p_list, *args, **kwargs):
 	# Construct dictionary of step sizes for each node.
 	var_all = {var.id: var for prob in p_list for var in prob.variables()}
 	if np.isscalar(rho_init):
-		rho_list = assign_rho(p_list, default = rho_init)
+		rho_list, rho_all = assign_rho(p_list, default = rho_init)
 	else:
-		rho_list = assign_rho(p_list, rho_init = rho_init)
+		rho_list, rho_all = assign_rho(p_list, rho_init = rho_init)
 	# var_list = partition_vars(p_list)   # Public/private variable partition.
 	
 	# Set up the workers.

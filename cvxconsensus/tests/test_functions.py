@@ -38,23 +38,35 @@ class TestFunctions(BaseTest):
 	
 	def test_rho_init(self):
 		p_list = [Problem(Minimize(norm(self.x)))]
-		rho_list = assign_rho(p_list)
+		rho_list, rho_all = assign_rho(p_list)
 		self.assertDictEqual(rho_list[0], {self.x.id: 1.0})
+		self.assertDictEqual(rho_all, {self.x.id: 1.0})
 		
-		rho_list = assign_rho(p_list, default = 0.5)
+		rho_list, rho_all = assign_rho(p_list, default = 0.5)
 		self.assertDictEqual(rho_list[0], {self.x.id: 0.5})
+		self.assertDictEqual(rho_all, {self.x.id: 0.5})
 		
-		rho_list = assign_rho(p_list, rho_init = {self.x.id: 1.5})
+		rho_list, rho_all = assign_rho(p_list, rho_init = {self.x.id: 1.5})
 		self.assertDictEqual(rho_list[0], {self.x.id: 1.5})
+		self.assertDictEqual(rho_all, {self.x.id: 1.5})
 		
 		p_list.append(Problem(Minimize(0.5*sum_squares(self.y)), [norm(self.x) <= 10]))
-		rho_list = assign_rho(p_list)
+		rho_list, rho_all = assign_rho(p_list)
 		self.assertDictEqual(rho_list[0], {self.x.id: 1.0})
 		self.assertDictEqual(rho_list[1], {self.x.id: 1.0, self.y.id: 1.0})
+		self.assertDictEqual(rho_all, {self.x.id: 1.0, self.y.id: 1.0})
 		
-		rho_list = assign_rho(p_list, rho_init = {self.x.id: 2.0}, default = 0.5)
+		rho_list, rho_all = assign_rho(p_list, rho_init = {self.x.id: 2.0}, default = 0.5)
 		self.assertDictEqual(rho_list[0], {self.x.id: 2.0})
 		self.assertDictEqual(rho_list[1], {self.x.id: 2.0, self.y.id: 0.5})
+		self.assertDictEqual(rho_all, {self.x.id: 2.0, self.y.id: 0.5})
+
+		p_list.append(Problem(Minimize(norm(self.z))))
+		rho_list, rho_all = assign_rho(p_list, rho_init = {self.x.id: 2.0, self.z.id: 3.0}, default = 0.5)
+		self.assertDictEqual(rho_list[0], {self.x.id: 2.0})
+		self.assertDictEqual(rho_list[1], {self.x.id: 2.0, self.y.id: 0.5})
+		self.assertDictEqual(rho_list[2], {self.z.id: 3.0})
+		self.assertDictEqual(rho_all, {self.x.id: 2.0, self.y.id: 0.5, self.z.id: 3.0})
 	
 	def test_var_partition(self):
 		p_list = [Problem(Minimize(norm(self.x)))]
