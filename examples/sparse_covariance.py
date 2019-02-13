@@ -5,8 +5,8 @@ from cvxpy import *
 from cvxconsensus import *
 
 # Solve the following consensus problem:
-# Minimize -log_det(S) + trace(S*Y) + alpha*norm(S,1) + beta*norm(S,2)
-# subject to S is PSD where Y, alpha >= 0, and beta >= 0 are parameters.
+# Minimize -log_det(S) + trace(S*Y) + norm(S,1) + norm(S,"fro")
+# subject to S is symmetric PSD where Y is a parameter.
 
 # Problem data.
 np.random.seed(0)
@@ -21,33 +21,30 @@ R = np.linalg.inv(S_true)
 y_sample = sp.linalg.sqrtm(R).dot(np.random.randn(n, N))
 Y = np.cov(y_sample)
 
-# The regularization weights for each attempt at generating a sparse inverse cov. matrix.
-weights = [(0.2,0.2), (0.4,0.1), (0.6,0)]
+# The step size for each attempt at generating a sparse inverse cov. matrix.
+rhos = [15, 25, 45]
 
 # Form the optimization problem with split
 # f_0(x) = -log_det(S), f_1(x) = trace(S*Y),
-# f_2(x) = alpha*sum(abs(S)), f_3(x) = beta*norm(S,"fro")
+# f_2(x) = norm(S,1), f_3(x) = norm(S,"fro")
 # over the set of symmetric PSD matrices S.
-S = Variable(shape=(n,n), PSD=True)
-alpha = Parameter(nonneg=True)
-beta = Parameter(nonneg=True)
+S = Variable((n,n))
 
 p_list = [Problem(Minimize(-log_det(S))),
           Problem(Minimize(trace(S*Y))),
-          Problem(Minimize(alpha*sum(abs(S)))),
-          Problem(Minimize(beta*norm(S,"fro")))]
+          Problem(Minimize(sum(abs(S)))),
+          Problem(Minimize(norm(S,"fro"))),
+          Problem(Minimize(0), [S >> 0, S == S.T])]
 probs = Problems(p_list)
 probs.pretty_vars()
 
 # Empty list of result matrices S.
 Ss = []
 
-# Solve the optimization problem for each value of alpha.
-for a_val, b_val in weights:
-    # Set alpha, beta parameters and solve optimization problem
-    alpha.value = a_val
-    beta.value = b_val
-    probs.solve(method = "consensus", rho_init = 1.0, max_iter = 50)
+# Solve the optimization problem for each value of rho.
+for rho_val in rhos:
+    # Set step size parameter and solve optimization problem
+    probs.solve(method = "consensus", rho_init = rho_val, max_iter = 100)
 
     # If the covariance matrix R is desired, here is how to create it.
     # R_hat = np.linalg.inv(S.value)
@@ -59,7 +56,7 @@ for a_val, b_val in weights:
     # Store this S in the list of results for later plotting.
     Ss += [S_val]
 
-    print('Completed optimization parameterized by alpha = {}, beta = {}, obj value = {}'.format(alpha.value, beta.value, probs.value))
+    print('Completed optimization, rho = {0}, obj value = {1}'.format(rho_val, probs.value))
 
 # Plot properties.
 plt.rc('text', usetex=True)
@@ -74,8 +71,8 @@ plt.spy(S_true)
 plt.title('Inverse of true covariance matrix', fontsize=16)
 
 # Plot sparsity pattern for each result, corresponding to a specific alpha.
-for i in range(len(weights)):
+for i in range(len(rhos)):
     plt.subplot(2, 2, 2+i)
     plt.spy(Ss[i])
-    plt.title('Estimated inv. cov matrix, $\\alpha$={}, $\\beta$={}'.format(weights[i][0], weights[i][1]), fontsize=16)
+    plt.title('Estimated inv. cov matrix, $\\rho$={}'.format(rhos[i]), fontsize = 16)
 plt.show()
