@@ -25,7 +25,7 @@ import cvxpy.settings as s
 from cvxpy.problems.problem import Problem, Minimize
 from cvxpy.expressions.constants import Parameter
 from cvxpy.atoms import sum_squares
-from cvxconsensus.acceleration import aa_weights, dicts_to_arr
+from cvxconsensus.acceleration import aa_weights
 from cvxconsensus.utilities import flip_obj, assign_rho
 from cvxconsensus.proximal import ProxOperator
 
@@ -95,21 +95,22 @@ def w_project(prox_res, s_half):
 	return mat_term, z_new
 
 # def w_project_gen(prox_res, s_half, rho_list, rho_all):
-#	rho_list_arrs, rho_list_info = dicts_to_arr(rho_list)
-#   rho_all_arrs, rho_all_info = dicts_to_arr([rho_all])
-#	Gamma = np.diag(np.concatenate(tuple(rho_list_arrs)))
-#	D = np.diag(rho_all_arrs)
-#	H = np.hstack((Gamma, D))
+#   Gamma_diag = np.array([rho_val for rhos in rho_list for rho_val in rhos.values()])
+#   D_diag = np.array(list(rho_all.values()))
+#   H_diag = np.concatenate((Gamma_diag, D_diag))
 #   TODO: Define ED_mat according to mapping.
-#	M = np.hstack((Gamma**(-0.5), -ED_mat))
+#	M = np.hstack((np.diag(1.0/np.sqrt(Gamma_diag)), -ED_mat))
 #
 #   TODO: Define v_half = (y_half, s_half) stacked.
-#	w_half = (H**0.5).dot(v_half)
+#	w_half = np.diag(np.sqrt(H_diag)).dot(v_half)
 #
 #	Mw_sol = np.linalg.lstsq(M.T, w_half, rcond = None)
 #	M_annl = np.eye(len(w_half)) - M.T.dot(Mw_sol)
 #	w_proj = M_annl.dot(w_half)
-#	return (H**(-0.5)).dot(w_proj)
+#   w_new = np.diag(1.0/np.sqrt(H_diag)).dot(w_proj)
+#
+#   TODO: Partition back into x_new, z_new
+#   return x_new, z_new
 
 def run_worker(pipe, p, rho_init, anderson, m_accel, use_cvxpy, *args, **kwargs):
 	# Initialize proximal problem.
