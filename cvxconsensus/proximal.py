@@ -127,10 +127,10 @@ def is_simple_prox(f, constr, vars, is_scalar):
                   (isinstance(f, cvxpy.trace) and (len(f.args) == 1 and isinstance(f.args[0], Variable)) or \
                        (isinstance(f.args[0], MulExpression) and isinstance(f.args[0].args[0], Variable) and isinstance(f.args[0].args[1], Constant))) or \
                   (is_ortho_invar(f) and (isinstance(f, (cvxpy.normNuc, cvxpy.sigma_max)) or \
-                                          isinstance(f, NegExpression) and isinstance(f.args[0], cvxpy.log_det)))) or \
-               len(constr) == 2 and isinstance(f, Constant) and \
-                  ((isinstance(constr[0], cvxpy.constraints.PSD) and is_symm_constr(constr[1])) or \
-                   (isinstance(constr[1], cvxpy.constraints.PSD) and is_symm_constr(constr[0])))
+                                          isinstance(f, NegExpression) and isinstance(f.args[0], cvxpy.log_det)))) # or \
+               # len(constr) == 2 and isinstance(f, Constant) and \
+               #   ((isinstance(constr[0], cvxpy.constraints.PSD) and is_symm_constr(constr[1])) or \
+               #    (isinstance(constr[1], cvxpy.constraints.PSD) and is_symm_constr(constr[0])))
 
 def proj_simplex(x, r = 1):
     """Project x onto a simplex with upper bound r.

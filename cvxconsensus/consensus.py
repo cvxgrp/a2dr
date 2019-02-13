@@ -155,7 +155,7 @@ def run_worker(pipe, p, rho_init, anderson, m_accel, use_cvxpy, *args, **kwargs)
 				# where F(.) is the consensus S-DRS mapping of v^(k+1) = F(v^(k)).
 				diff[key] = x_half[key] - v[key]["x"].value
 				y_res.append(diff[key].flatten(order = "C"))
-			y_res = np.concatenate(y_res)
+			y_res = np.empty(0) if len(y_res) == 0 else np.concatenate(y_res)
 			
 			y_diff.append(diff)
 			if len(y_diff) > m_k + 1:
@@ -183,7 +183,7 @@ def run_worker(pipe, p, rho_init, anderson, m_accel, use_cvxpy, *args, **kwargs)
 				# Send residual y^(k) - y^(k+1) for stopping criteria.
 				res = x_half[key] - v[key]["x"].value
 				y_res.append(res.flatten(order = "C"))
-			y_res = np.concatenate(y_res)
+			y_res = np.empty(0) if len(y_res) == 0 else np.concatenate(y_res)
 			pipe.send(y_res)
 
 def consensus(p_list, *args, **kwargs):
@@ -261,7 +261,7 @@ def consensus(p_list, *args, **kwargs):
 			for key in var_all.keys():
 				diff[key] = s[key] - z_new[key]
 				s_res.append(diff[key].flatten(order = "C"))
-			s_res = np.concatenate(s_res)
+			s_res = np.empty(0) if len(s_res) == 0 else np.concatenate(s_res)
 			s_diff.append(diff)
 			if len(s_diff) > m_k + 1:
 				s_diff.pop(0)
@@ -293,7 +293,7 @@ def consensus(p_list, *args, **kwargs):
 
 				# Update s^(k+1) = s^(k) + z^(k+1) - z^(k+1/2).
 				s[key] = z_new[key]
-			s_res = np.concatenate(s_res)
+			s_res = np.empty(0) if len(s_res) == 0 else np.concatenate(s_res)
 			
 			# Compute l2-norm of residual G(v^(k)) = v^(k) - v^(k+1) 
 			# where v^(k) = (y^(k), s^(k)).
