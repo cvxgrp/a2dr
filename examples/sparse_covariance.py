@@ -5,8 +5,8 @@ from cvxpy import *
 from cvxconsensus import *
 
 # Solve the following consensus problem:
-# Minimize -log_det(S) + trace(S*Y) + alpha*norm(S,1) + beta*norm(S,2)
-# subject to S is PSD where Y, alpha >= 0, and beta >= 0 are parameters.
+# Minimize -log_det(S) + trace(S*Y) + norm(S,1) + norm(S,"fro")
+# subject to S is symmetric PSD where Y is a parameter.
 
 # Problem data.
 np.random.seed(0)
@@ -21,13 +21,13 @@ R = np.linalg.inv(S_true)
 y_sample = sp.linalg.sqrtm(R).dot(np.random.randn(n, N))
 Y = np.cov(y_sample)
 
-# The regularization weights for each attempt at generating a sparse inverse cov. matrix.
+# The step size for each attempt at generating a sparse inverse cov. matrix.
 rhos = [15, 25, 45]
 
 # Form the optimization problem with split
 # f_0(x) = -log_det(S), f_1(x) = trace(S*Y),
-# f_2(x) = norm(S,1), f_3(x) = norm(S,2)
-# over the set of PSD matrices S.
+# f_2(x) = norm(S,1), f_3(x) = norm(S,"fro")
+# over the set of symmetric PSD matrices S.
 S = Variable((n,n))
 
 p_list = [Problem(Minimize(-log_det(S))),
@@ -41,9 +41,9 @@ probs.pretty_vars()
 # Empty list of result matrices S.
 Ss = []
 
-# Solve the optimization problem for each value of alpha.
+# Solve the optimization problem for each value of rho.
 for rho_val in rhos:
-    # Set alpha, beta parameters and solve optimization problem
+    # Set step size parameter and solve optimization problem
     probs.solve(method = "consensus", rho_init = rho_val, max_iter = 100)
 
     # If the covariance matrix R is desired, here is how to create it.
