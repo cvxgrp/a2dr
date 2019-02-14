@@ -62,11 +62,15 @@ class TestProximal(BaseTest):
         self.compare_prox_func(sum(abs(self.Y)), self.Y, self.A, self.rho, places = 4)
         self.compare_prox_func(trace(self.Y), self.Y, self.A, self.rho)
         # self.compare_prox_func(sigma_max(self.Y), self.Y, self.A, self.rho)
-        # self.compare_prox_func(-log_det(self.Y), self.Y, self.A, self.rho, places = 3)
 
         B = np.random.randn(self.Y.shape[1],self.Y.shape[1])
         self.compare_prox_func(trace(self.Y * B), self.Y, self.A, self.rho)
-        self.compare_prox_func(Constant(0), self.Y, self.A, self.rho, [self.Y >> 0, self.Y == self.Y.T], places = 3)
+
+        A_symm = (self.A + self.A.T)/2.0
+        self.compare_prox_func(Constant(0), self.Y, A_symm, self.rho, [self.Y >> 0, self.Y == self.Y.T], places = 3)
+
+        A_spd = self.A.dot(self.A.T)
+        self.compare_prox_func(-log_det(self.Y), self.Y, A_spd, self.rho, places = 3)
 
     def test_prox_operator(self):
         x_to_u = {self.x.id: self.u}
