@@ -232,10 +232,20 @@ def prox_func_matrix(f, constr = []):
                 prox_diag = lambda s, rho: (s + np.sqrt(s ** 2 + 4.0/rho)) / 2
             else:
                 raise ValueError("Unimplemented orthogonally invariant function {0}".format(f.__class__.__name__))
-            def prox(A, rho):
+
+            def prox_inner(A, rho):
                 U, s, Vt = np.linalg.svd(A, full_matrices=False)
                 s_new = prox_diag(s, rho)
                 return U.dot(np.diag(s_new)).dot(Vt)
+
+            if isinstance(f, NegExpression) and isinstance(f.args[0], cvxpy.log_det):
+                def prox(A, rho):
+                    A_symm = (A + A.T) / 2.0
+                    if not (np.allclose(A, A_symm) and np.all(np.linalg.eigvals(A_symm) > 0)):
+                        raise Exception("Proximal operator for negative log-determinant only operates on symmetric positive definite matrices.")
+                    return prox_inner(A_symm, rho)
+            else:
+                prox = prox_inner
             return prox
         else:
             raise ValueError("Unsupported atom instance {0}".format(f.__class__.__name__))
@@ -243,8 +253,10 @@ def prox_func_matrix(f, constr = []):
             ((isinstance(constr[0], cvxpy.constraints.PSD) and is_symm_constr(constr[1])) or \
              (isinstance(constr[1], cvxpy.constraints.PSD) and is_symm_constr(constr[0]))):
         def prox(A, rho):
-            A = (A + A.T)/2.0
-            w, v = np.linalg.eig(A)
+            A_symm = (A + A.T)/2.0
+            if not np.allclose(A, A_symm):
+                raise Exception("Proximal operator for positive semidefinite cone only operates on symmetric matrices.")
+            w, v = np.linalg.eig(A_symm)
             w_new = np.maximum(w, 0)
             return v.dot(np.diag(w_new)).dot(v.T)
         return prox
