@@ -25,7 +25,7 @@ import cvxpy.settings as s
 from cvxpy.problems.problem import Problem, Minimize
 from cvxpy.expressions.constants import Parameter
 from cvxpy.atoms import sum_squares
-from cvxconsensus.acceleration import aa_weights
+from cvxconsensus.acceleration import aa_weights, dicts_to_arr, arr_to_dicts
 from cvxconsensus.utilities import flip_obj, assign_rho
 from cvxconsensus.proximal import ProxOperator
 
@@ -95,21 +95,41 @@ def w_project(prox_res, s_half):
 	return mat_term, z_new
 
 # def w_project_gen(prox_res, s_half, rho_list, rho_all):
+#   # Stack column vector v^(k+1/2) = (y^(k+1/2), s^(k+1/2)).
+#	y_halves = []
+#	for status, y_half in prox_res:
+#		# Check if proximal step converged.
+#		if status in s.INF_OR_UNB:
+#			raise RuntimeError("Proximal problem is infeasible or unbounded")
+#		y_halves.append(y_half)
+#   v_half_arr, v_half_info = dicts_to_arr(y_halves + [s_half])
+#	v_half_off = np.cumsum(np.array([v.size for v in v_half_arr]))
+#   v_half = np.concatenate(v_half_arr)
+#
+#	# TODO: Ensure key order matches that of vectorization.
 #   Gamma_diag = np.array([rho_val for rhos in rho_list for rho_val in rhos.values()])
 #   D_diag = np.array(list(rho_all.values()))
 #   H_diag = np.concatenate((Gamma_diag, D_diag))
+#	w_half = np.diag(np.sqrt(H_diag)).dot(v_half)
 #   TODO: Define ED_mat according to mapping.
 #	M = np.hstack((np.diag(1.0/np.sqrt(Gamma_diag)), -ED_mat))
 #
-#   TODO: Define v_half = (y_half, s_half) stacked.
-#	w_half = np.diag(np.sqrt(H_diag)).dot(v_half)
-#
+#	# Project into subspace to obtain w^(k+1).
 #	Mw_sol = np.linalg.lstsq(M.T, w_half, rcond = None)
 #	M_annl = np.eye(len(w_half)) - M.T.dot(Mw_sol)
 #	w_proj = M_annl.dot(w_half)
 #   w_new = np.diag(1.0/np.sqrt(H_diag)).dot(w_proj)
 #
-#   TODO: Partition back into x_new, z_new
+#   # Partition back into (x^(k+1), z^(k+1)) dictionaries.
+#	w_split = np.split(w_new, v_half_off[:-1])
+#	x_new = []
+#	for x_arr, x_info in zip(w_split[:-1], v_half_info[:-1]):
+#		x_arr = np.array([x_arr].T)
+#		x_dict = arr_to_dicts(x_arr, [x_info])[0]
+#		x_new.append(x_dict)
+#	z_arr = np.array([w_split[-1]]).T)
+#	z_info = v_half_info[-1]
+#	z_new = arr_to_dicts(z_arr, [z_info])[0]
 #   return x_new, z_new
 
 def run_worker(pipe, p, rho_init, anderson, m_accel, use_cvxpy, *args, **kwargs):
