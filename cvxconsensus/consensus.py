@@ -130,7 +130,7 @@ def w_project_gen(prox_res, s_half, rho_all):
 			# Place diagonal block at x_i^(k+1)'s corresponding position in z^(k+1).
 			ED_block = np.zeros((size, z_len))
 			z_off = z_info[key]["offset"]
-			ED_block[:,z_off:(z_off + size)] = np.diag(rho_vec)
+			ED_block[:,z_off:(z_off + size)] = np.diag(1.0 / np.sqrt(rho_vec))
 			ED_mat.append(ED_block)
 	Gamma_diag = np.concatenate(Gamma_diag)
 	ED_mat = np.vstack(ED_mat)

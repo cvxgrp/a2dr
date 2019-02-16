@@ -150,3 +150,36 @@ class TestFunctions(BaseTest):
 		x_new, z_new = w_project_gen([(s.OPTIMAL, y_half)], s_half, rho_all)
 		self.assertItemsAlmostEqual(x_new[0][xid], (y_half[xid] + s_half[xid])/2)
 		self.assertItemsAlmostEqual(z_new[xid], (y_half[xid] + s_half[xid])/2)
+
+		N = 5
+		rho_all = {xid: 0.5}
+		prox_res = []
+		for i in range(N):
+			y_half = {xid: np.random.randn(*self.x.shape)}
+			prox_res.append((s.OPTIMAL, y_half))
+		s_half = {xid: np.random.randn(*self.x.shape)}
+		x_new, z_new = w_project_gen(prox_res, s_half, rho_all)
+
+		y_halves = [y_half[xid] for status, y_half in prox_res]
+		xz_res = (sum(y_halves) + s_half[xid])/(N + 1)
+		for i in range(N):
+			self.assertItemsAlmostEqual(x_new[i][xid], xz_res)
+		self.assertItemsAlmostEqual(z_new[xid], xz_res)
+
+		rho_all = {self.x.id: 1.0, self.y.id: 0.5, self.z.id: 2.0}
+		y_half1 = {self.x.id: np.random.randn(*self.x.shape), self.y.id: np.random.randn(*self.y.shape)}
+		y_half2 = {self.y.id: np.random.randn(*self.y.shape), self.z.id: np.random.randn(*self.z.shape)}
+		s_half = {self.x.id: np.random.randn(*self.x.shape), self.y.id: np.random.randn(*self.y.shape), \
+				  self.z.id: np.random.randn(*self.z.shape)}
+		prox_res = [(s.OPTIMAL, y_half1), (s.OPTIMAL_INACCURATE, y_half2)]
+		x_new, z_new = w_project_gen(prox_res, s_half, rho_all)
+
+		y_halves = [y_half[self.y.id] for status, y_half in prox_res]
+		self.assertItemsAlmostEqual(x_new[0][self.x.id], s_half[self.x.id] + (y_half1[self.x.id] - s_half[self.x.id])/2)
+		self.assertItemsAlmostEqual(x_new[0][self.y.id], s_half[self.y.id] + (sum(y_halves) - 2*s_half[self.y.id])/3)
+		self.assertItemsAlmostEqual(x_new[1][self.y.id], s_half[self.y.id] + (sum(y_halves) - 2*s_half[self.y.id])/3)
+		self.assertItemsAlmostEqual(x_new[1][self.z.id], s_half[self.z.id] + (y_half2[self.z.id] - s_half[self.z.id])/2)
+
+		self.assertItemsAlmostEqual(z_new[self.y.id], -s_half[self.y.id] + sum(y_halves) - 2*(sum(y_halves) - 2*s_half[self.y.id])/3)
+		self.assertItemsAlmostEqual(z_new[self.x.id], y_half1[self.x.id] - (y_half1[self.x.id] - s_half[self.x.id])/2)
+		self.assertItemsAlmostEqual(z_new[self.z.id], y_half2[self.z.id] - (y_half2[self.z.id] - s_half[self.z.id])/2)
