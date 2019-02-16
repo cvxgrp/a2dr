@@ -20,48 +20,7 @@ along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 import cvxpy
 import numpy as np
 from cvxpy import Variable, Problem, Minimize
-
-def dicts_to_arr(dicts):
-	d_cols = []
-	d_info = []
-	
-	for d in dicts:
-		col = []
-		info = {}
-		offset = 0
-		for key, val in d.items():		
-			# Save shape and offset for later reconstruction.
-			info[key] = {"shape": val.shape, "offset": offset}
-			offset += val.size
-			
-			# Flatten into column-order array.
-			col.append(val.flatten(order = "C"))
-		
-		# Stack all dict values into single column.
-		col = np.concatenate(col)
-		d_cols.append(col)
-		d_info.append(info)
-	
-	arr = np.array(d_cols).T
-	return arr, d_info
-
-def arr_to_dicts(arr, d_info):
-	dicts = []
-	ncol = arr.shape[1]
-	
-	for j in range(ncol):
-		d = {}
-		for key, info in d_info[j].items():
-			# Select corresponding rows.
-			offset = info["offset"]
-			size = np.prod(info["shape"])
-			val = arr[offset:(offset + size),j]
-			
-			# Reshape vector and add to dict.
-			val = np.reshape(val, newshape = info["shape"])
-			d[key] = val
-		dicts.append(d)
-	return dicts
+from cvxconsensus.utilities import dicts_to_arr
 
 def aa_weights(residuals, lam = None, type = "exact", *args, **kwargs):
 	""" Solve the constrained least-squares problem
@@ -98,8 +57,8 @@ def aa_weights(residuals, lam = None, type = "exact", *args, **kwargs):
 		# Solve for AA-II weights using unconstrained LS in numpy.
 		e = np.ones((G.shape[1],))
 		reg = lam*np.eye(G.shape[1]) if lam else 0   # Stabilization with l2 penalty.
-		gamma = np.linalg.lstsq(G.T.dot(G) + reg, e, rcond = None)
-		alpha = gamma[0]/np.sum(gamma[0])
+		gamma = np.linalg.lstsq(G.T.dot(G) + reg, e, rcond = None)[0]
+		alpha = gamma/np.sum(gamma)
 		return alpha
 	elif type == "inexact":
 		# Solve for AA-II weights using constrained LS in CVXPY.

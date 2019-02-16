@@ -20,7 +20,6 @@ along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 import numpy as np
 from cvxpy import Variable, Parameter, Problem, Minimize
 from cvxpy.atoms import *
-import cvxconsensus
 from cvxconsensus import Problems
 from cvxconsensus.tests.base_test import BaseTest
 

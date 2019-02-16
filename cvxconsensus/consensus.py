@@ -22,12 +22,12 @@ from time import time
 from collections import defaultdict
 from multiprocessing import Process, Pipe
 import cvxpy.settings as s
-from cvxpy.problems.problem import Problem, Minimize
+from cvxpy.problems.problem import Problem
 from cvxpy.expressions.constants import Parameter
 from cvxpy.atoms import sum_squares
-from cvxconsensus.acceleration import aa_weights, dicts_to_arr, arr_to_dicts
-from cvxconsensus.utilities import flip_obj, assign_rho
+from cvxconsensus.acceleration import aa_weights
 from cvxconsensus.proximal import ProxOperator
+from cvxconsensus.utilities import *
 
 def prox_step(prob, rho_init):
 	"""Formulates the proximal operator for a given objective, constraints, and step size.
@@ -94,6 +94,38 @@ def w_project(prox_res, s_half):
 	
 	return mat_term, z_new
 
+def rho_mats(y_infos, z_info, rho_all):
+	z_sizes = [np.prod(info["shape"]) for info in z_info.values()]
+	z_len = int(np.sum(z_sizes))
+
+	# Create diagonal matrix of step sizes for all variables z^(k+1).
+	D_diag = []
+	for key, info in z_info.items():
+		size = int(np.prod(info["shape"]))
+		D_diag.append(np.full(size, rho_all[key]))
+	D_diag = np.concatenate(D_diag)
+
+	# Create diagonal matrix of step sizes for each node's variables x_i^(k+1).
+	Gamma_diag = []
+	ED_mat = []
+	for y_info in y_infos:
+		for key, info in y_info.items():
+			size = int(np.prod(info["shape"]))
+			rho_vec = np.full(size, rho_all[key])
+			Gamma_diag.append(rho_vec)
+
+			# Place diagonal block at x_i^(k+1)'s corresponding position in z^(k+1).
+			ED_block = np.zeros((size, z_len))
+			z_off = z_info[key]["offset"]
+			ED_block[:, z_off:(z_off + size)] = np.diag(1.0 / np.sqrt(rho_vec))
+			ED_mat.append(ED_block)
+	Gamma_diag = np.concatenate(Gamma_diag)
+	ED_mat = np.vstack(ED_mat)
+
+	H_diag = np.concatenate((Gamma_diag, D_diag))
+	M = np.hstack((np.diag(1.0 / np.sqrt(Gamma_diag)), -ED_mat))
+	return H_diag, M
+
 def w_project_gen(prox_res, s_half, rho_all):
 	"""Projection step update of w^(k+1) = (x^(k+1), z^(k+1)) in the consensus scaled
 	   Douglas-Rachford algorithm.
@@ -108,37 +140,10 @@ def w_project_gen(prox_res, s_half, rho_all):
 	v_half_arr, v_half_info = dicts_to_arr(y_halves + [s_half])
 	v_half_off = np.cumsum(np.array([val.size for val in v_half_arr.T]))
 	v_half = np.concatenate(v_half_arr.T)
-	z_info = v_half_info[-1]
-	z_len = np.sum([val.size for val in s_half.values()])
-
-	# Create diagonal matrix of step sizes for all variables z^(k+1).
-	D_diag = []
-	for key, info in z_info.items():
-		size = np.prod(info["shape"])
-		D_diag.append(np.full(size, rho_all[key]))
-	D_diag = np.concatenate(D_diag)
-
-	# Create diagonal matrix of step sizes for each node's variables x_i^(k+1).
-	Gamma_diag = []
-	ED_mat = []
-	for y_info in v_half_info[:-1]:
-		for key, info in y_info.items():
-			size = np.prod(info["shape"])
-			rho_vec = np.full(size, rho_all[key])
-			Gamma_diag.append(rho_vec)
-
-			# Place diagonal block at x_i^(k+1)'s corresponding position in z^(k+1).
-			ED_block = np.zeros((size, z_len))
-			z_off = z_info[key]["offset"]
-			ED_block[:,z_off:(z_off + size)] = np.diag(1.0 / np.sqrt(rho_vec))
-			ED_mat.append(ED_block)
-	Gamma_diag = np.concatenate(Gamma_diag)
-	ED_mat = np.vstack(ED_mat)
 
 	# Project into subspace to obtain w^(k+1) = (x^(k+1), z^(k+1)).
-	H_diag = np.concatenate((Gamma_diag, D_diag))
+	H_diag, M = rho_mats(v_half_info[:-1], v_half_info[-1], rho_all)
 	w_half = np.diag(np.sqrt(H_diag)).dot(v_half)   # w^(k+1/2) = H^(1/2)*v^(k+1/2)
-	M = np.hstack((np.diag(1.0 / np.sqrt(Gamma_diag)), -ED_mat))
 	Mw_sol = np.linalg.lstsq(M.T, w_half, rcond=None)[0]   # LS solution is (M*M^T)^(-1)*M*w^(k+1/2)
 	w_proj = w_half - M.T.dot(Mw_sol)   # w^(proj) = w^(k+1/2) - M^T*(M*M^T)^(-1)*M*w^(k+1/2)
 	w_new = np.diag(1.0 / np.sqrt(H_diag)).dot(w_proj)   # w^(k+1) = H^(-1/2)*w^(proj)
@@ -151,7 +156,7 @@ def w_project_gen(prox_res, s_half, rho_all):
 		x_dict = arr_to_dicts(x_arr, [x_info])[0]
 		x_new.append(x_dict)
 	z_arr = np.array([w_split[-1]]).T
-	z_new = arr_to_dicts(z_arr, [z_info])[0]
+	z_new = arr_to_dicts(z_arr, [v_half_info[-1]])[0]
 	return x_new, z_new
 
 def run_worker(pipe, p, rho_init, anderson, m_accel, use_cvxpy, *args, **kwargs):
@@ -176,7 +181,8 @@ def run_worker(pipe, p, rho_init, anderson, m_accel, use_cvxpy, *args, **kwargs)
 		
 		# Project to obtain w^(k+1) = (x^(k+1), z^(k+1)).
 		pipe.send((prox.status, y_half))
-		mat_term, s_half, k = pipe.recv()
+		# mat_term, s_half, k = pipe.recv()
+		x_new, k = pipe.recv()
 		
 		if anderson:
 			m_k = min(m_accel, k)   # Keep iterations (k - m_k) through k.
@@ -191,7 +197,8 @@ def run_worker(pipe, p, rho_init, anderson, m_accel, use_cvxpy, *args, **kwargs)
 			y_res = []
 			for key in v.keys():
 				# Update corresponding w^(k+1) parameters.
-				v[key]["x"].value = s_half[key] + mat_term[key]
+				# v[key]["x"].value = s_half[key] + mat_term[key]
+				v[key]["x"].value = x_new[key]
 				
 				# Save history of y^(k) - F(y^(k)) = x^(k+1/2) - x^(k+1),
 				# where F(.) is the consensus S-DRS mapping of v^(k+1) = F(v^(k)).
@@ -217,7 +224,8 @@ def run_worker(pipe, p, rho_init, anderson, m_accel, use_cvxpy, *args, **kwargs)
 			y_res = []
 			for key in v.keys():
 				# Update corresponding w^(k+1) parameters.
-				v[key]["x"].value = s_half[key] + mat_term[key]
+				# v[key]["x"].value = s_half[key] + mat_term[key]
+				v[key]["x"].value = x_new[key]
 				
 				# Update y^(k+1) = y^(k) + x^(k+1) - x^(k+1/2).
 				v[key]["y"].value += v[key]["x"].value - x_half[key]
@@ -233,7 +241,7 @@ def consensus(p_list, *args, **kwargs):
 	max_iter = kwargs.pop("max_iter", 100)
 	rho_init = kwargs.pop("rho_init", dict())   # Step sizes.
 	eps_stop = kwargs.pop("eps_stop", 1e-6)     # Stopping tolerance.
-	use_cvxpy = kwargs.pop("use_cvxpy", False)	# Use CVXPY for proximal step?
+	use_cvxpy = kwargs.pop("use_cvxpy", True)	# Use CVXPY for proximal step?
 	
 	# AA-II parameters.
 	anderson = kwargs.pop("anderson", False)
@@ -278,11 +286,14 @@ def consensus(p_list, *args, **kwargs):
 		prox_res = [pipe.recv() for pipe in pipes]
 		
 		# Projection step for w^(k+1).
-		mat_term, z_new = w_project(prox_res, s)
+		# mat_term, z_new = w_project(prox_res, s)
+		x_new, z_new = w_project_gen(prox_res, s, rho_all)
 	
 		# Scatter s^(k+1/2) and common matrix term.
-		for pipe in pipes:
-			pipe.send((mat_term, s, k))
+		# for pipe in pipes:
+		#	pipe.send((mat_term, s, k))
+		for x, pipe in zip(x_new, pipes):
+			pipe.send((x, k))
 		
 		if anderson:
 			m_k = min(m_accel, k)   # Keep iterations (k - m_k) through k.

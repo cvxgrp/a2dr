@@ -16,8 +16,9 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 """
-from cvxpy.problems.problem import Minimize
+import numpy as np
 from collections import Counter
+from cvxpy.problems.problem import Minimize
 
 def flip_obj(prob):
 	"""Helper function to flip sign of objective function.
@@ -55,3 +56,46 @@ def partition_vars(p_list):
 				var_dict["public"].add(var.id)
 		var_list.append(var_dict)
 	return var_list
+
+def dicts_to_arr(dicts):
+	d_cols = []
+	d_info = []
+
+	for d in dicts:
+		col = []
+		info = {}
+		offset = 0
+		for key, val in d.items():
+			# Save shape and offset for later reconstruction.
+			info[key] = {"shape": val.shape, "offset": offset}
+			offset += val.size
+
+			# Flatten into column-order array.
+			col.append(val.flatten(order="C"))
+
+		# Stack all dict values into single column.
+		col = np.concatenate(col)
+		d_cols.append(col)
+		d_info.append(info)
+
+	arr = np.array(d_cols).T
+	return arr, d_info
+
+
+def arr_to_dicts(arr, d_info):
+	dicts = []
+	ncol = arr.shape[1]
+
+	for j in range(ncol):
+		d = {}
+		for key, info in d_info[j].items():
+			# Select corresponding rows.
+			offset = info["offset"]
+			size = int(np.prod(info["shape"]))
+			val = arr[offset:(offset + size), j]
+
+			# Reshape vector and add to dict.
+			val = np.reshape(val, newshape=info["shape"])
+			d[key] = val
+		dicts.append(d)
+	return dicts

@@ -21,7 +21,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from cvxpy import Variable, Problem, Minimize
 from cvxpy.atoms import *
-import cvxconsensus
 from cvxconsensus import Problems
 from cvxconsensus.tests.base_test import BaseTest
 

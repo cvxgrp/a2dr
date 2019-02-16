@@ -158,7 +158,7 @@ class TestExamples(BaseTest):
 
 		# Form the optimization problem with split
 		# f_0(x) = -log_det(S), f_1(x) = trace(S*Y),
-		# # f_2(x) = alpha*norm(S,1), f_3(x) = beta*norm(S,2)
+		# f_2(x) = alpha*norm(S,1), f_3(x) = beta*norm(S,2)
 		# over the set of PSD matrices S.
 		S = Variable(shape=(n, n), PSD=True)
 		alpha = Parameter(nonneg=True)
