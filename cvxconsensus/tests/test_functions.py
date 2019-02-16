@@ -21,7 +21,7 @@ import numpy as np
 from cvxpy import Variable, Problem, Minimize
 from cvxpy.atoms import *
 import cvxpy.settings as s
-from cvxconsensus.consensus import prox_step, w_project
+from cvxconsensus.consensus import prox_step, w_project, w_project_gen
 from cvxconsensus.utilities import assign_rho, partition_vars
 from cvxconsensus.tests.base_test import BaseTest
 
@@ -141,3 +141,12 @@ class TestFunctions(BaseTest):
 		self.assertItemsAlmostEqual(z_new[self.y.id], -s_half[self.y.id] + sum(y_halves) - 2*(sum(y_halves) - 2*s_half[self.y.id])/3)
 		self.assertItemsAlmostEqual(z_new[self.x.id], y_half1[self.x.id] - (y_half1[self.x.id] - s_half[self.x.id])/2)
 		self.assertItemsAlmostEqual(z_new[self.z.id], y_half2[self.z.id] - (y_half2[self.z.id] - s_half[self.z.id])/2)
+
+	def test_projection_gen(self):
+		xid = self.x.id
+		rho_all = {xid: 1.0}
+		y_half = {xid: np.random.randn(*self.x.shape)}
+		s_half = {xid: np.random.randn(*self.x.shape)}
+		x_new, z_new = w_project_gen([(s.OPTIMAL, y_half)], s_half, rho_all)
+		self.assertItemsAlmostEqual(x_new[0][xid], (y_half[xid] + s_half[xid])/2)
+		self.assertItemsAlmostEqual(z_new[xid], (y_half[xid] + s_half[xid])/2)

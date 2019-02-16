@@ -106,8 +106,8 @@ def w_project_gen(prox_res, s_half, rho_all):
 			raise RuntimeError("Proximal problem is infeasible or unbounded")
 		y_halves.append(y_half)
 	v_half_arr, v_half_info = dicts_to_arr(y_halves + [s_half])
-	v_half_off = np.cumsum(np.array([v.size for v in v_half_arr]))
-	v_half = np.concatenate(v_half_arr)
+	v_half_off = np.cumsum(np.array([val.size for val in v_half_arr.T]))
+	v_half = np.concatenate(v_half_arr.T)
 	z_info = v_half_info[-1]
 	z_len = np.sum([val.size for val in s_half.values()])
 
@@ -135,20 +135,19 @@ def w_project_gen(prox_res, s_half, rho_all):
 	Gamma_diag = np.concatenate(Gamma_diag)
 	ED_mat = np.vstack(ED_mat)
 
-	# Project into subspace to obtain w^(k+1).
+	# Project into subspace to obtain w^(k+1) = (x^(k+1), z^(k+1)).
 	H_diag = np.concatenate((Gamma_diag, D_diag))
 	w_half = np.diag(np.sqrt(H_diag)).dot(v_half)   # w^(k+1/2) = H^(1/2)*v^(k+1/2)
 	M = np.hstack((np.diag(1.0 / np.sqrt(Gamma_diag)), -ED_mat))
-	Mw_sol = np.linalg.lstsq(M.T, w_half, rcond=None)
-	M_annl = np.eye(len(w_half)) - M.T.dot(Mw_sol)
-	w_proj = M_annl.dot(w_half)   # w^(proj) = (I - M^T(MM^T)^(-1)M)*w^(k+1/2)
+	Mw_sol = np.linalg.lstsq(M.T, w_half, rcond=None)[0]   # LS solution is (M*M^T)^(-1)*M*w^(k+1/2)
+	w_proj = w_half - M.T.dot(Mw_sol)   # w^(proj) = w^(k+1/2) - M^T*(M*M^T)^(-1)*M*w^(k+1/2)
 	w_new = np.diag(1.0 / np.sqrt(H_diag)).dot(w_proj)   # w^(k+1) = H^(-1/2)*w^(proj)
 
-	# Partition w^(k+1) = (x^(k+1), z^(k+1)) back into dictionaries.
+	# Partition x_i^(k+1) and z^(k+1) back into dictionaries.
 	w_split = np.split(w_new, v_half_off[:-1])
 	x_new = []
 	for x_arr, x_info in zip(w_split[:-1], v_half_info[:-1]):
-		x_arr = np.array([x_arr].T)
+		x_arr = np.array([x_arr]).T
 		x_dict = arr_to_dicts(x_arr, [x_info])[0]
 		x_new.append(x_dict)
 	z_arr = np.array([w_split[-1]]).T
