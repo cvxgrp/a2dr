@@ -58,6 +58,11 @@ def partition_vars(p_list):
 	return var_list
 
 def dicts_to_arr(dicts):
+	"""Convert a list of dictionaries into an array. The values in each dictionary are
+	   flattened and concatenated into a single vector, and these vectors are stacked
+	   into the columns of the array. Information for reconstructing the dictionaries
+	   is saved and returned as  well.
+	"""
 	d_cols = []
 	d_info = []
 
@@ -83,6 +88,9 @@ def dicts_to_arr(dicts):
 
 
 def arr_to_dicts(arr, d_info):
+	"""Convert an array into a list of dictionaries based on the provided offset and
+	   shape information. Each column corresponds to a single dictionary.
+	"""
 	dicts = []
 	ncol = arr.shape[1]
 

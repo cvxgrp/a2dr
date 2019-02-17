@@ -96,8 +96,8 @@ def sep_nonneg_scaled(f):
 
 def is_ortho_invar(f):
     """Is this function orthogonally invariant?"""
-    return isinstance(f, (cvxpy.normNuc, cvxpy.sigma_max)) or \
-           (isinstance(f, NegExpression) and isinstance(f.args[0], cvxpy.log_det))
+    return (isinstance(f, (cvxpy.normNuc, cvxpy.sigma_max)) and isinstance(f.args[0], Variable)) or \
+           (isinstance(f, NegExpression) and isinstance(f.args[0], cvxpy.log_det) and isinstance(f.args[0].args[0], Variable))
 
 def is_symm_constr(c):
     """Is this a symmetric constraint, X == X.T?"""
@@ -118,16 +118,16 @@ def is_simple_prox(f, constr, vars, is_scalar):
 
     if is_scalar:
         return len(constr) == 0 and ((isinstance(f, (Constant, cvxpy.norm1, cvxpy.norm_inf, cvxpy.abs, cvxpy.entr, cvxpy.exp, cvxpy.huber, cvxpy.max))) or \
-                  (isinstance(f, (cvxpy.Pnorm, cvxpy.power)) and f.p == 2) or (isinstance(f, cvxpy.quad_over_lin) and f.args[1].value == 1))
+                  (isinstance(f, (cvxpy.Pnorm, cvxpy.power)) and f.p == 2) or (isinstance(f, cvxpy.quad_over_lin) and f.args[1].value == 1)) and \
+                  (len(f.args) == 0 or isinstance(f.args[0], cvxpy.Variable))
     else:
         return len(constr) == 0 and (isinstance(f, Constant) or \
-                  (isinstance(f, cvxpy.atoms.affine.sum.Sum) and len(f.args) == 1 and isinstance(f.args[0], cvxpy.abs)) or \
-                  (isinstance(f, cvxpy.Pnorm) and f.p == 2 and isinstance(f.args[0], cvxpy.reshape) and isinstance(f.args[0].args[0], Variable) and \
-                       f.args[0].shape == (f.args[0].args[0].size,)) or \
+                  (isinstance(f, cvxpy.atoms.affine.sum.Sum) and len(f.args) == 1 and isinstance(f.args[0], cvxpy.abs) and isinstance(f.args[0].args[0], Variable)) or \
                   (isinstance(f, cvxpy.trace) and (len(f.args) == 1 and isinstance(f.args[0], Variable)) or \
                        (isinstance(f.args[0], MulExpression) and isinstance(f.args[0].args[0], Variable) and isinstance(f.args[0].args[1], Constant))) or \
-                  (is_ortho_invar(f) and (isinstance(f, (cvxpy.normNuc, cvxpy.sigma_max)) or \
-                                          isinstance(f, NegExpression) and isinstance(f.args[0], cvxpy.log_det)))) # or \
+                  (isinstance(f, cvxpy.Pnorm) and f.p == 2 and isinstance(f.args[0], cvxpy.reshape) and isinstance(f.args[0].args[0], Variable) and \
+                        f.args[0].shape == (f.args[0].args[0].size,)) or \
+                   is_ortho_invar(f)) # or \
                # len(constr) == 2 and isinstance(f, Constant) and \
                #   ((isinstance(constr[0], cvxpy.constraints.PSD) and is_symm_constr(constr[1])) or \
                #    (isinstance(constr[1], cvxpy.constraints.PSD) and is_symm_constr(constr[0])))
@@ -201,7 +201,8 @@ def prox_func_matrix(f, constr = []):
     if len(constr) == 0:
         if isinstance(f, Constant):
             return lambda A, rho: A
-        if isinstance(f, cvxpy.atoms.affine.sum.Sum) and len(f.args) == 1 and isinstance(f.args[0], cvxpy.abs):
+        if isinstance(f, cvxpy.atoms.affine.sum.Sum) and len(f.args) == 1 and isinstance(f.args[0], cvxpy.abs) and \
+                isinstance(f.args[0].args[0], Variable):
             return lambda A, rho: np.maximum(np.abs(A) - 1.0/rho, 0) * np.sign(A)
         elif isinstance(f, cvxpy.trace):
             if len(f.args) == 1 and isinstance(f.args[0], Variable):

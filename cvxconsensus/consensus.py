@@ -248,7 +248,7 @@ def consensus(p_list, *args, **kwargs):
 	max_iter = kwargs.pop("max_iter", 100)
 	rho_init = kwargs.pop("rho_init", dict())   # Step sizes.
 	eps_stop = kwargs.pop("eps_stop", 1e-6)     # Stopping tolerance.
-	use_cvxpy = kwargs.pop("use_cvxpy", True)	# Use CVXPY for proximal step?
+	use_cvxpy = kwargs.pop("use_cvxpy", False)	# Use CVXPY for proximal step?
 	
 	# AA-II parameters.
 	anderson = kwargs.pop("anderson", False)
