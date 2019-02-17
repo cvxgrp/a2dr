@@ -126,7 +126,7 @@ def rho_mats(y_infos, z_info, rho_all):
 	M = np.hstack((np.diag(1.0 / np.sqrt(Gamma_diag)), -ED_mat))
 	return H_diag, M
 
-def w_project_gen(prox_res, s_half, rho_all):
+def w_project_gen(prox_res, s_half, rho_all, v_offs, H_diag = None, M = None):
 	"""Projection step update of w^(k+1) = (x^(k+1), z^(k+1)) in the consensus scaled
 	   Douglas-Rachford algorithm.
 	"""
@@ -138,18 +138,19 @@ def w_project_gen(prox_res, s_half, rho_all):
 			raise RuntimeError("Proximal problem is infeasible or unbounded")
 		y_halves.append(y_half)
 	v_half_arr, v_half_info = dicts_to_arr(y_halves + [s_half])
-	v_half_off = np.cumsum(np.array([val.size for val in v_half_arr.T]))
 	v_half = np.concatenate(v_half_arr.T)
+	# v_offs = np.cumsum(np.array([val.size for val in v_half_arr.T]))[:-1]
 
 	# Project into subspace to obtain w^(k+1) = (x^(k+1), z^(k+1)).
-	H_diag, M = rho_mats(v_half_info[:-1], v_half_info[-1], rho_all)
+	if H_diag is None or M is None:
+		H_diag, M = rho_mats(v_half_info[:-1], v_half_info[-1], rho_all)
 	w_half = np.diag(np.sqrt(H_diag)).dot(v_half)   # w^(k+1/2) = H^(1/2)*v^(k+1/2)
 	Mw_sol = np.linalg.lstsq(M.T, w_half, rcond=None)[0]   # LS solution is (M*M^T)^(-1)*M*w^(k+1/2)
 	w_proj = w_half - M.T.dot(Mw_sol)   # w^(proj) = w^(k+1/2) - M^T*(M*M^T)^(-1)*M*w^(k+1/2)
 	w_new = np.diag(1.0 / np.sqrt(H_diag)).dot(w_proj)   # w^(k+1) = H^(-1/2)*w^(proj)
 
 	# Partition x_i^(k+1) and z^(k+1) back into dictionaries.
-	w_split = np.split(w_new, v_half_off[:-1])
+	w_split = np.split(w_new, v_offs)
 	x_new = []
 	for x_arr, x_info in zip(w_split[:-1], v_half_info[:-1]):
 		x_arr = np.array([x_arr]).T
@@ -271,6 +272,12 @@ def consensus(p_list, *args, **kwargs):
 	z = {key: np.zeros(var.shape) for key, var in var_all.items()}
 	s = {key: np.zeros(var.shape) for key, var in var_all.items()}
 	resid = np.zeros(max_iter)
+
+	# Compute and cache projection matrices.
+	x_vars = [{var.id: np.zeros(var.shape) for var in prob.variables()} for prob in p_list]
+	xz_arr, xz_info = dicts_to_arr(x_vars + [z])
+	xz_offs = np.cumsum(np.array([v.size for v in xz_arr.T]))[:-1]
+	H_diag, M = rho_mats(xz_info[:-1], xz_info[-1], rho_all)
 	
 	# Initialize AA-II parameters.
 	if anderson:
@@ -287,7 +294,7 @@ def consensus(p_list, *args, **kwargs):
 		
 		# Projection step for w^(k+1).
 		# mat_term, z_new = w_project(prox_res, s)
-		x_new, z_new = w_project_gen(prox_res, s, rho_all)
+		x_new, z_new = w_project_gen(prox_res, s, rho_all, xz_offs, H_diag, M)
 	
 		# Scatter s^(k+1/2) and common matrix term.
 		# for pipe in pipes:
