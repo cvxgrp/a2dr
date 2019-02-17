@@ -18,6 +18,7 @@ along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 """
 
 import numpy as np
+from scipy.linalg import solve_triangular
 from time import time
 from collections import defaultdict
 from multiprocessing import Process, Pipe
@@ -126,7 +127,7 @@ def rho_mats(y_infos, z_info, rho_all):
 	M = np.hstack((np.diag(1.0 / np.sqrt(Gamma_diag)), -ED_mat))
 	return H_diag, M
 
-def w_project_gen(prox_res, s_half, rho_all, v_offs, H_diag = None, M = None):
+def w_project_gen(prox_res, s_half, rho_all, v_offs = None, H_diag = None, M = None, MM_chol = None):
 	"""Projection step update of w^(k+1) = (x^(k+1), z^(k+1)) in the consensus scaled
 	   Douglas-Rachford algorithm.
 	"""
@@ -139,13 +140,18 @@ def w_project_gen(prox_res, s_half, rho_all, v_offs, H_diag = None, M = None):
 		y_halves.append(y_half)
 	v_half_arr, v_half_info = dicts_to_arr(y_halves + [s_half])
 	v_half = np.concatenate(v_half_arr.T)
-	# v_offs = np.cumsum(np.array([val.size for val in v_half_arr.T]))[:-1]
+	if v_offs is None:   # Save offsets to y_i^{k+1/2) and s^(k+1/2) sub-vectors.
+		v_offs = np.cumsum(np.array([val.size for val in v_half_arr.T]))[:-1]
 
 	# Project into subspace to obtain w^(k+1) = (x^(k+1), z^(k+1)).
 	if H_diag is None or M is None:
 		H_diag, M = rho_mats(v_half_info[:-1], v_half_info[-1], rho_all)
 	w_half = np.diag(np.sqrt(H_diag)).dot(v_half)   # w^(k+1/2) = H^(1/2)*v^(k+1/2)
-	Mw_sol = np.linalg.lstsq(M.T, w_half, rcond=None)[0]   # LS solution is (M*M^T)^(-1)*M*w^(k+1/2)
+	if MM_chol is not None:   # Solve (M*M^T)*a = M*w^(k+1/2) for a using Cholesky decomposition of M*M^T = L*L^T.
+		v_tmp = solve_triangular(MM_chol, M.dot(w_half), lower = True)   # Solve L*b = M*w^(k+1/2) for b.
+		Mw_sol = solve_triangular(MM_chol.T, v_tmp, lower = False)   # Solve L^T*a = b for a.
+	else:
+		Mw_sol = np.linalg.lstsq(M.T, w_half, rcond=None)[0]   # LS solution is (M*M^T)^(-1)*M*w^(k+1/2)
 	w_proj = w_half - M.T.dot(Mw_sol)   # w^(proj) = w^(k+1/2) - M^T*(M*M^T)^(-1)*M*w^(k+1/2)
 	w_new = np.diag(1.0 / np.sqrt(H_diag)).dot(w_proj)   # w^(k+1) = H^(-1/2)*w^(proj)
 
@@ -278,6 +284,7 @@ def consensus(p_list, *args, **kwargs):
 	xz_arr, xz_info = dicts_to_arr(x_vars + [z])
 	xz_offs = np.cumsum(np.array([v.size for v in xz_arr.T]))[:-1]
 	H_diag, M = rho_mats(xz_info[:-1], xz_info[-1], rho_all)
+	MM_chol = np.linalg.cholesky(M.dot(M.T))
 	
 	# Initialize AA-II parameters.
 	if anderson:
@@ -294,7 +301,7 @@ def consensus(p_list, *args, **kwargs):
 		
 		# Projection step for w^(k+1).
 		# mat_term, z_new = w_project(prox_res, s)
-		x_new, z_new = w_project_gen(prox_res, s, rho_all, xz_offs, H_diag, M)
+		x_new, z_new = w_project_gen(prox_res, s, rho_all, xz_offs, H_diag, M, MM_chol)
 	
 		# Scatter s^(k+1/2) and common matrix term.
 		# for pipe in pipes:
