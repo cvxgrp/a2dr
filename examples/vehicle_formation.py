@@ -79,7 +79,7 @@ def main():
 	
 	# Solve formation consensus problem.
 	probs = Problems([prob, prob_l, prob_r])
-	probs.solve(method = "consensus", rho_init = 0.5, solver = "ECOS")
+	probs.solve(method = "consensus", solver = "ECOS", rho_init = 0.5)
 	print("Leader-Follower Objective:", probs.value)
 	
 	# Plot input and output dynamics.

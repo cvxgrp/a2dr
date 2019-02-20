@@ -18,145 +18,29 @@ along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 """
 
 import numpy as np
+from scipy.linalg import solve_triangular
 from time import time
 from collections import defaultdict
 from multiprocessing import Process, Pipe
 import cvxpy.settings as s
-from cvxpy.problems.problem import Problem, Minimize
+from cvxpy.problems.problem import Problem
 from cvxpy.expressions.constants import Parameter
 from cvxpy.atoms import sum_squares
-from cvxconsensus.utilities import flip_obj, assign_rho, partition_vars
+from cvxconsensus.acceleration import aa_weights
+from cvxconsensus.proximal import ProxOperator
+from cvxconsensus.utilities import *
 
-# Spectral step size.
-def step_ls(p, d):
-	"""Least squares estimator for spectral step size.
-	
-	Parameters
-	----------
-	p : array
-	     Change in primal variable.
-	d : array
-	     Change in dual variable.
-	
-	Returns
-	----------
-	float
-	     The least squares estimate.
-	"""
-	sd = np.sum(d**2)/np.sum(p*d)   # Steepest descent
-	mg = np.sum(p*d)/np.sum(p**2)   # Minimum gradient
-	
-	if 2*mg > sd:
-		return mg
-	else:
-		return (sd - mg/2)
-
-def step_cor(p, d):
-	"""Correlation coefficient.
-	
-	Parameters
-	----------
-	p : array
-	     First vector.
-	d : array
-	     Second vector.
-	
-	Returns
-	----------
-	float
-	     The correlation between two vectors.
-	"""
-	return np.sum(p*d)/(np.linalg.norm(p)*np.linalg.norm(d))
-
-def step_safe(rho, a, b, a_cor, b_cor, eps = 0.2):
-	"""Safeguarding rule for spectral step size update.
-	
-	Parameters
-	----------
-    rho : float
-        The current step size.
-    a : float
-        Reciprocal of the curvature parameter alpha.
-    b : float
-        Reciprocal of the curvature parameter beta.
-    a_cor : float
-        Correlation of the curvature parameter alpha.
-    b_cor : float
-        Correlation of the curvature parameter beta.
-    eps : float, optional
-        The safeguarding threshold.
-	"""
-	if a_cor > eps and b_cor > eps:
-		return np.sqrt(a*b)
-	elif a_cor > eps and b_cor <= eps:
-		return a
-	elif a_cor <= eps and b_cor > eps:
-		return b
-	else:
-		return rho
-
-def step_spec(rho, k, dx, dxbar, dy, dyhat, eps = 0.2, C = 1e10):
-	"""Calculates the generalized spectral step size with safeguarding.
-	Xu, Taylor, et al. "Adaptive Consensus ADMM for Distributed Optimization."
-	
-	Parameters
-    ----------
-    rho : float
-        The current step size.
-    k : int
-        The current iteration.
-    dx : array
-        Change in primal value from the last step size update.
-    dxbar : array
-        Change in average primal value from the last step size update.
-    dy : array
-        Change in dual value from the last step size update.
-    dyhat : array
-        Change in intermediate dual value from the last step size update.
-    eps : float, optional
-        The safeguarding threshold.
-    C : float, optional
-        The convergence constant.
-    
-    Returns
-    ----------
-    float
-        The spectral step size for the next iteration.
-	"""
-	# Use old step size if unable to solve LS problem/correlations.
-	eps_fl = np.finfo(float).eps   # Machine precision.
-	if np.sum(dx**2) <= eps_fl or np.sum(dxbar**2) <= eps_fl or \
-	   np.sum(dy**2) <= eps_fl or np.sum(dyhat**2) <= eps_fl:
-		   return rho
-
-	# Compute spectral step size.
-	a_hat = step_ls(dx, dyhat)
-	b_hat = step_ls(dxbar, dy)
-	
-	# Estimate correlations.
-	a_cor = step_cor(dx, dyhat)
-	b_cor = step_cor(dxbar, dy)
-	
-	# Apply safeguarding rule.
-	scale = 1 + C/(1.0*k**2)
-	rho_hat = step_safe(rho, a_hat, b_hat, a_cor, b_cor, eps)
-	return max(min(rho_hat, scale*rho), rho/scale)
-
-def prox_step(prob, rho_init, scaled = False, spectral = False):
+def prox_step(prob, rho_init):
 	"""Formulates the proximal operator for a given objective, constraints, and step size.
-	Parikh, Boyd. "Proximal Algorithms."
+	   Reference: N. Parikh and S. Boyd (2013). "Proximal Algorithms."
 	
 	Parameters
     ----------
     prob : Problem
         The objective and constraints associated with the proximal operator.
         The sign of the objective function is flipped if `prob` is a maximization problem.
-    rho_init : float
-        The initial step size.
-    scaled : logical, optional
-    	Should the dual variable be scaled?
-	spectral : logical, optional
-	    Will spectral step sizes be used?
+    rho_init : dict
+        The initial step size indexed by unique variable id.
     
     Returns
     ----------
@@ -164,160 +48,221 @@ def prox_step(prob, rho_init, scaled = False, spectral = False):
         The proximal step problem.
     vmap : dict
         A map of each proximal variable id to a dictionary containing that variable `x`,
-        the mean variable parameter `xbar`, the associated dual parameter `y`, and the
-        step size parameter `rho`. If `spectral = True`, the estimated dual parameter 
-        `yhat` is also included.
+        the consensus variable parameter `z`, the associated dual parameter `y`, and the
+        step size parameter `rho`.
 	"""
-	vmap = {}   # Store consensus variables
+	vmap = {}   # Store consensus variables.
 	f = flip_obj(prob).args[0]
 	
 	# Add penalty for each variable.
 	for xvar in prob.variables():
 		xid = xvar.id
 		shape = xvar.shape
-		vmap[xid] = {"x": xvar, "xbar": Parameter(shape, value = np.zeros(shape)),
-		 		     "y": Parameter(shape, value = np.zeros(shape)),
+		vmap[xid] = {"x": xvar, "y": Parameter(shape, value = np.zeros(shape)),
 					 "rho": Parameter(value = rho_init[xid], nonneg = True)}
-		if spectral:
-			vmap[xid]["yhat"] = Parameter(shape, value = np.zeros(shape))
-		dual = vmap[xid]["y"] if scaled else vmap[xid]["y"]/vmap[xid]["rho"]
-		f += (vmap[xid]["rho"]/2.0)*sum_squares(xvar - vmap[xid]["xbar"] + dual)
+		f += (vmap[xid]["rho"]/2.0)*sum_squares(xvar - vmap[xid]["y"])
 	
 	prox = Problem(Minimize(f), prob.constraints)
 	return prox, vmap
 
-def x_average(prox_res):
-	"""Average the primal variables over the nodes in which they are present,
-	   weighted by each node's step size.
+def w_project(prox_res, s_half):
+	"""Projection step update of w^(k+1) = (x^(k+1), z^(k+1)) in the consensus scaled
+	   Douglas-Rachford algorithm using closed-form derivation.
 	"""
-	x_merge = defaultdict(list)
-	rho_sum = defaultdict(float)
+	y_part = defaultdict(list)
+	var_cnt = defaultdict(float)
 	
-	for status, vals in prox_res:
+	for status, y_half in prox_res:
 		# Check if proximal step converged.
 		if status in s.INF_OR_UNB:
 			raise RuntimeError("Proximal problem is infeasible or unbounded")
 		
-		# Merge dictionary of x values
-		for key, value in vals.items():
-			x_merge[key].append(value["rho"]*value["x"])
-			rho_sum[key] += value["rho"]
+		# Partition y_i by variable ID and count instances.
+		for key in y_half.keys():
+			y_part[key].append(y_half[key])
+			var_cnt[key] += 1.0
 	
-	return {key: np.sum(np.array(x_list), axis = 0)/rho_sum[key] for key, x_list in x_merge.items()}
+	if set(s_half.keys()) != set(y_part.keys()):
+		raise RuntimeError("Mismatch between variable IDs of consensus and individual node terms")
+	
+	# Compute common matrix term and z update.
+	mat_term = {}
+	z_new = {}
+	for key in s_half.keys():
+		ys_sum = np.sum(np.array(y_part[key]), axis = 0) - var_cnt[key]*s_half[key]
+		mat_term[key] = ys_sum/(1.0 + var_cnt[key])
+		z_new[key] = s_half[key] + ys_sum - var_cnt[key] * mat_term[key]
+	
+	return mat_term, z_new
 
-def res_stop(res_ssq, eps = 1e-6):
-	"""Calculate the sum of squared primal/dual residuals.
-	   Determine whether the stopping criterion is satisfied:
-	   ||r^(k)||^2 <= eps*max(\sum_i ||x_i^(k)||^2, \sum_i ||x_bar^(k)||^2) and
-	   ||d^(k)||^2 <= eps*\sum_i ||y_i^(k)||^2
+def rho_mats(y_infos, z_info, rho_all):
+	z_sizes = [np.prod(info["shape"]) for info in z_info.values()]
+	z_len = int(np.sum(z_sizes))
+
+	# Create diagonal matrix of step sizes for all variables z^(k+1).
+	D_diag = []
+	for key, info in z_info.items():
+		size = int(np.prod(info["shape"]))
+		D_diag.append(np.full(size, rho_all[key]))
+	D_diag = np.concatenate(D_diag)
+
+	# Create diagonal matrix of step sizes for each node's variables x_i^(k+1).
+	Gamma_diag = []
+	ED_mat = []
+	for y_info in y_infos:
+		for key, info in y_info.items():
+			size = int(np.prod(info["shape"]))
+			rho_vec = np.full(size, rho_all[key])
+			Gamma_diag.append(rho_vec)
+
+			# Place diagonal block at x_i^(k+1)'s corresponding position in z^(k+1).
+			ED_block = np.zeros((size, z_len))
+			z_off = z_info[key]["offset"]
+			ED_block[:, z_off:(z_off + size)] = np.diag(1.0 / np.sqrt(rho_vec))
+			ED_mat.append(ED_block)
+	Gamma_diag = np.concatenate(Gamma_diag)
+	ED_mat = np.vstack(ED_mat)
+
+	H_diag = np.concatenate((Gamma_diag, D_diag))
+	M = np.hstack((np.diag(1.0 / np.sqrt(Gamma_diag)), -ED_mat))
+	return H_diag, M
+
+def w_project_gen(prox_res, s_half, rho_all, v_offs = None, H_diag = None, M = None, MM_chol = None):
+	"""Projection step update of w^(k+1) = (x^(k+1), z^(k+1)) in the consensus scaled
+	   Douglas-Rachford algorithm.
 	"""
-	primal = np.sum([r["primal"] for r in res_ssq])
-	dual = np.sum([r["dual"] for r in res_ssq])
-	
-	x_ssq = np.sum([r["x"] for r in res_ssq])
-	xbar_ssq = np.sum([r["xbar"] for r in res_ssq])
-	u_ssq = np.sum([r["y"] for r  in res_ssq])
-	
-	eps_fl = np.finfo(float).eps   # Machine precision.
-	stopped = (primal <= eps*max(x_ssq, xbar_ssq) + eps_fl) and \
-			  (dual <= eps*u_ssq + eps_fl)
-	return primal, dual, stopped
+   	# Stack column vector v^(k+1/2) = (y^(k+1/2), s^(k+1/2)).
+	y_halves = []
+	for status, y_half in prox_res:
+		# Check if proximal step converged.
+		if status in s.INF_OR_UNB:
+			raise RuntimeError("Proximal problem is infeasible or unbounded")
+		y_halves.append(y_half)
+	v_half_arr, v_half_info = dicts_to_arr(y_halves + [s_half])
+	v_half = np.concatenate(v_half_arr.T)
+	if v_offs is None:   # Save offsets to y_i^{k+1/2) and s^(k+1/2) sub-vectors.
+		v_offs = np.cumsum(np.array([val.size for val in v_half_arr.T]))[:-1]
 
-def run_worker(pipe, p, var_split, rho_init, *args, **kwargs):
-	# Spectral step size parameters.
-	spectral = kwargs.pop("spectral", False)
-	Tf = kwargs.pop("Tf", 2)
-	eps = kwargs.pop("eps", 0.2)
-	C = kwargs.pop("C", 1e10)
+	# Project into subspace to obtain w^(k+1) = (x^(k+1), z^(k+1)).
+	if H_diag is None or M is None:
+		H_diag, M = rho_mats(v_half_info[:-1], v_half_info[-1], rho_all)
+	w_half = np.diag(np.sqrt(H_diag)).dot(v_half)   # w^(k+1/2) = H^(1/2)*v^(k+1/2)
+	if MM_chol is not None:   # Solve (M*M^T)*a = M*w^(k+1/2) for a using Cholesky decomposition of M*M^T = L*L^T.
+		v_tmp = solve_triangular(MM_chol, M.dot(w_half), lower = True)   # Solve L*b = M*w^(k+1/2) for b.
+		Mw_sol = solve_triangular(MM_chol.T, v_tmp, lower = False)   # Solve L^T*a = b for a.
+	else:
+		Mw_sol = np.linalg.lstsq(M.T, w_half, rcond=None)[0]   # LS solution is (M*M^T)^(-1)*M*w^(k+1/2)
+	w_proj = w_half - M.T.dot(Mw_sol)   # w^(proj) = w^(k+1/2) - M^T*(M*M^T)^(-1)*M*w^(k+1/2)
+	w_new = np.diag(1.0 / np.sqrt(H_diag)).dot(w_proj)   # w^(k+1) = H^(-1/2)*w^(proj)
+
+	# Partition x_i^(k+1) and z^(k+1) back into dictionaries.
+	w_split = np.split(w_new, v_offs)
+	x_new = []
+	for x_arr, x_info in zip(w_split[:-1], v_half_info[:-1]):
+		x_arr = np.array([x_arr]).T
+		x_dict = arr_to_dicts(x_arr, [x_info])[0]
+		x_new.append(x_dict)
+	z_arr = np.array([w_split[-1]]).T
+	z_new = arr_to_dicts(z_arr, [v_half_info[-1]])[0]
+	return x_new, z_new
+
+def run_worker(pipe, p, rho_init, anderson, m_accel, use_cvxpy, *args, **kwargs):
+	# Initialize proximal problem.
+	# prox, v = prox_step(p, rho_init)
+	prox = ProxOperator(p, rho_vals = rho_init, use_cvxpy = use_cvxpy)
+	v = prox.var_map
 	
-	# Initiate proximal problem.
-	prox, v = prox_step(p, rho_init, spectral = spectral)
+	# Initialize AA-II parameters.
+	if anderson:
+		y_hist = []   # History of y^(k).
+		y_diff = []   # History of y^(k) - F(y^(k)) fixed point mappings.
 	
-	# Initiate step size variables.
-	if spectral:
-		v_old = {key: {"x": np.zeros(vmap["x"].shape), "xbar": np.zeros(vmap["xbar"].shape),
-			           "y": np.zeros(vmap["y"].shape), "yhat": np.zeros(vmap["yhat"].shape)} \
-					for key, vmap in v.items()}
-	
-	# ADMM loop.
+	# Consensus S-DRS loop.
 	while True:	
-		# Proximal step for x^(k+1).
+		# Proximal step for x^(k+1/2).
 		prox.solve(*args, **kwargs)
+		x_half = {key: v[key]["x"].value for key in v.keys()}
 		
-		# Calculate x_bar^(k+1) for public variables.
-		vals_pub = {key: {"x": v[key]["x"].value, "rho": v[key]["rho"].value} \
-						for key in var_split["public"]}
-		pipe.send((prox.status, vals_pub))
-		xbars, i = pipe.recv()
+		# Calculate y^(k+1/2) = 2*x^(k+1/2) - y^(k).
+		y_half = {key: 2*x_half[key] - v[key]["y"].value for key in v.keys()}
 		
-		# Update y^(k+1) = y^(k) + rho^(k)*(x^(k+1) - x_bar^(k+1)).
-		ssq = {"primal": 0, "dual": 0, "x": 0, "xbar": 0, "y": 0}
-		for key in v.keys():
-			# Calculate residuals for the (k+1) step.
-			#    Primal: x^(k+1) - x_bar^(k+1)
-			#    Dual: rho^(k+1)*(x_bar^(k) - x_bar^(k+1))
-			xbar = xbars.get(key, v[key]["x"].value)
-			if v[key]["x"].value is None:
-				primal = -xbar
-			else:
-				primal = (v[key]["x"] - xbar).value
-			dual = (v[key]["rho"]*(v[key]["xbar"] - xbar)).value
+		# Project to obtain w^(k+1) = (x^(k+1), z^(k+1)).
+		pipe.send((prox.status, y_half))
+		# mat_term, s_half, k = pipe.recv()
+		x_new, k = pipe.recv()
+		
+		if anderson:
+			m_k = min(m_accel, k)   # Keep iterations (k - m_k) through k.
 			
-			# Set parameter values of x_bar^(k+1) and y^(k+1).
-			xbar_old = v[key]["xbar"].value
-			y_old = v[key]["y"].value
-			v[key]["xbar"].value = xbar
-			v[key]["y"].value += (v[key]["rho"]*(v[key]["x"] - v[key]["xbar"])).value
+			# Save history of y^(k).
+			y = {key: v[key]["y"].value for key in v.keys()}
+			y_hist.append(y)
+			if len(y_hist) > m_k + 1:
+				y_hist.pop(0)
 			
-			# Save stopping rule criteria.
-			ssq["primal"] += np.sum(np.square(primal))
-			ssq["dual"] += np.sum(np.square(dual))
-			if v[key]["x"].value is not None:
-				ssq["x"] += np.sum(np.square(v[key]["x"].value))
-			ssq["xbar"] += np.sum(np.square(v[key]["xbar"].value))
-			ssq["y"] += np.sum(np.square(v[key]["y"].value))
-			
-			# Spectral step size.
-			if spectral and i % Tf == 1:
-				# Calculate y_hat^(k+1) for step size update.
-				v[key]["yhat"] = y_old + v[key]["rho"]*(v[key]["x"] - xbar_old)
-
-				# Calculate change from old iterate.
-				dx = v[key]["x"].value - v_old[key]["x"]
-				dxbar = -v[key]["xbar"].value + v_old[key]["xbar"]
-				dy = v[key]["y"].value - v_old[key]["y"]
-				dyhat = v[key]["yhat"].value - v_old[key]["yhat"]
+			diff = {}
+			y_res = []
+			for key in v.keys():
+				# Update corresponding w^(k+1) parameters.
+				# v[key]["x"].value = s_half[key] + mat_term[key]
+				v[key]["x"].value = x_new[key]
 				
-				# Update step size.
-				v[key]["rho"].value = step_spec(v[key]["rho"].value, i, dx, dxbar, dy, dyhat, eps, C)
+				# Save history of y^(k) - F(y^(k)) = x^(k+1/2) - x^(k+1),
+				# where F(.) is the consensus S-DRS mapping of v^(k+1) = F(v^(k)).
+				diff[key] = x_half[key] - v[key]["x"].value
+				y_res.append(diff[key].flatten(order = "C"))
+			y_res = np.empty(0) if len(y_res) == 0 else np.concatenate(y_res)
+			
+			y_diff.append(diff)
+			if len(y_diff) > m_k + 1:
+				y_diff.pop(0)
+			
+			# Receive AA-II weights for y^(k+1).
+			pipe.send((y_diff, y_res))
+			alpha = pipe.recv()
+			
+			for key in v.keys():
+				# Weighted update of y^(k+1).
+				y_val = np.zeros(y_diff[0][key].shape)
+				for j in range(m_k + 1):
+					y_val += alpha[j] * (y_hist[j][key] - y_diff[j][key])
+				v[key]["y"].value = y_val
+		else:
+			y_res = []
+			for key in v.keys():
+				# Update corresponding w^(k+1) parameters.
+				# v[key]["x"].value = s_half[key] + mat_term[key]
+				v[key]["x"].value = x_new[key]
 				
-				# Update step size variables.
-				v_old[key]["x"] = v[key]["x"].value
-				v_old[key]["xbar"] = v[key]["xbar"].value
-				v_old[key]["y"] = v[key]["y"].value
-				v_old[key]["yhat"] = v[key]["yhat"].value
-		pipe.send(ssq)
-		
-		# Send private variable values if ADMM loop terminated.
-		finished = pipe.recv()
-		if finished:
-		 	pipe.send({key: v[key]["x"].value for key in var_split["private"]})
+				# Update y^(k+1) = y^(k) + x^(k+1) - x^(k+1/2).
+				v[key]["y"].value += v[key]["x"].value - x_half[key]
+				
+				# Send residual y^(k) - y^(k+1) for stopping criteria.
+				res = x_half[key] - v[key]["x"].value
+				y_res.append(res.flatten(order = "C"))
+			y_res = np.empty(0) if len(y_res) == 0 else np.concatenate(y_res)
+			pipe.send(y_res)
 
 def consensus(p_list, *args, **kwargs):
 	N = len(p_list)   # Number of problems.
 	max_iter = kwargs.pop("max_iter", 100)
-	rho_init = kwargs.pop("rho_init", dict())
-	eps = kwargs.pop("eps", 1e-6)   # Stopping tolerance.
-	resid = np.zeros((max_iter, 2))
+	rho_init = kwargs.pop("rho_init", dict())   # Step sizes.
+	eps_stop = kwargs.pop("eps_stop", 1e-6)     # Stopping tolerance.
+	use_cvxpy = kwargs.pop("use_cvxpy", False)	# Use CVXPY for proximal step?
 	
-	if max_iter < 0:
-		raise ValueError("max_iter must be a non-negative integer")
+	# AA-II parameters.
+	anderson = kwargs.pop("anderson", False)
+	m_accel = int(kwargs.pop("m_accel", 5))   # Maximum past iterations to keep (>= 0).
+	if m_accel < 0:
+		raise ValueError("m_accel must be a non-negative integer.")
 	
+	# Construct dictionary of step sizes for each node.
+	var_all = {var.id: var for prob in p_list for var in prob.variables()}
 	if np.isscalar(rho_init):
-		rho_list = assign_rho(p_list, default = rho_init)
+		rho_list, rho_all = assign_rho(p_list, default = rho_init)
 	else:
-		rho_list = assign_rho(p_list, rho_init = rho_init)
-	var_list = partition_vars(p_list)   # Public/private variable partition.
+		rho_list, rho_all = assign_rho(p_list, rho_init = rho_init)
+	# var_list = partition_vars(p_list)   # Public/private variable partition.
 	
 	# Set up the workers.
 	pipes = []
@@ -325,39 +270,111 @@ def consensus(p_list, *args, **kwargs):
 	for i in range(N):
 		local, remote = Pipe()
 		pipes += [local]
-		procs += [Process(target = run_worker, args = (remote, p_list[i], var_list[i], \
-							rho_list[i]) + args, kwargs = kwargs)]
+		procs += [Process(target = run_worker, args = (remote, p_list[i], rho_list[i], \
+							anderson, m_accel, use_cvxpy) + args, kwargs = kwargs)]
 		procs[-1].start()
 
-	# ADMM loop.
-	i = 0
-	finished = i >= max_iter
+	# Initialize consensus variables.
+	z = {key: np.zeros(var.shape) for key, var in var_all.items()}
+	s = {key: np.zeros(var.shape) for key, var in var_all.items()}
+	resid = np.zeros(max_iter)
+
+	# Compute and cache projection matrices.
+	x_vars = [{var.id: np.zeros(var.shape) for var in prob.variables()} for prob in p_list]
+	xz_arr, xz_info = dicts_to_arr(x_vars + [z])
+	xz_offs = np.cumsum(np.array([v.size for v in xz_arr.T]))[:-1]
+	H_diag, M = rho_mats(xz_info[:-1], xz_info[-1], rho_all)
+	MM_chol = np.linalg.cholesky(M.dot(M.T))
+	
+	# Initialize AA-II parameters.
+	if anderson:
+		s_hist = []   # History of s^(k).
+		s_diff = []   # History of s^(k) - F(s^(k)) fixed point mappings.
+
+	# Consensus S-DRS loop.
+	k = 0
+	finished = False
 	start = time()
 	while not finished:
-		# Gather and average x_i.
+		# Gather y_i^(k+1/2) from nodes.
 		prox_res = [pipe.recv() for pipe in pipes]
-		xbars = x_average(prox_res)
-	
-		# Scatter x_bar.
-		for pipe in pipes:
-			pipe.send((xbars, i))
 		
-		# Calculate normalized residuals.
-		ssq = [pipe.recv() for pipe in pipes]
-		primal, dual, stopped = res_stop(ssq, eps)
-		resid[i,:] = np.array([primal, dual])
-		
-		# Send finished flag to threads.
-		i = i + 1
-		finished = stopped or i >= max_iter
-		for pipe in pipes:
-		    pipe.send(finished)
+		# Projection step for w^(k+1).
+		# mat_term, z_new = w_project(prox_res, s)
+		x_new, z_new = w_project_gen(prox_res, s, rho_all, xz_offs, H_diag, M, MM_chol)
 	
-	# Gather private x_i values.
-	xprivs = [pipe.recv() for pipe in pipes]
-	for xpriv in xprivs:
-	    xbars.update(xpriv)
+		# Scatter s^(k+1/2) and common matrix term.
+		# for pipe in pipes:
+		# 	pipe.send((mat_term, s, k))
+		for x, pipe in zip(x_new, pipes):
+			pipe.send((x, k))
+		
+		if anderson:
+			m_k = min(m_accel, k)   # Keep iterations (k - m_k) through k.
+			
+			# Save history of s^(k).
+			s_hist.append(s.copy())
+			if len(s_hist) > m_k + 1:
+				s_hist.pop(0)
+			
+			# Receive history of y_i differences.
+			y_update = [pipe.recv() for pipe in pipes]
+			y_diffs, v_res = map(list, zip(*y_update))
+			
+			# Save history of s^(k) - F(s^(k)) = z^(k+1/2) - z^(k+1),
+			# where F(.) is the consensus S-DRS mapping of v^(k+1) = F(v^(k)).
+			diff = {}
+			s_res = []   # Save current residual for stopping criteria.
+			for key in var_all.keys():
+				diff[key] = s[key] - z_new[key]
+				s_res.append(diff[key].flatten(order = "C"))
+			s_res = np.empty(0) if len(s_res) == 0 else np.concatenate(s_res)
+			s_diff.append(diff)
+			if len(s_diff) > m_k + 1:
+				s_diff.pop(0)
+			
+			# Compute l2-norm of residual G(v^(k)) = v^(k) - v^(k+1) 
+			# where v^(k) = (y^(k), s^(k)).
+			v_res.append(s_res)
+			v_res = np.concatenate(v_res, axis = 0)
+			resid[k] = np.linalg.norm(v_res, ord = 2)
+			
+			# Compute and scatter AA-II weights.
+			# alpha = aa_weights(y_diffs + [s_diff], type = "inexact", solver = "OSQP", eps_abs = 1e-16)
+			alpha = aa_weights(y_diffs + [s_diff])
+			for pipe in pipes:
+				pipe.send(alpha)
+			
+			# Weighted update of s^(k+1).
+			for key in var_all.keys():
+				s_val = np.zeros(s_diff[0][key].shape)
+				for j in range(m_k + 1):
+					s_val += alpha[j] * (s_hist[j][key] - s_diff[j][key])
+				s[key] = s_val
+		else:
+			s_res = []
+			for key in var_all.keys():
+				# Save residual s^(k) - s^(k+1) for stopping criteria.
+				res = s[key] - z_new[key]
+				s_res.append(res.flatten(order = "C"))
+
+				# Update s^(k+1) = s^(k) + z^(k+1) - z^(k+1/2).
+				s[key] = z_new[key]
+			s_res = np.empty(0) if len(s_res) == 0 else np.concatenate(s_res)
+			
+			# Compute l2-norm of residual G(v^(k)) = v^(k) - v^(k+1) 
+			# where v^(k) = (y^(k), s^(k)).
+			v_res = [pipe.recv() for pipe in pipes]
+			v_res.append(s_res)
+			v_res = np.concatenate(v_res, axis = 0)
+			resid[k] = np.linalg.norm(v_res, ord = 2)
+			# rnorm = resid[k]/np.max(resid[k]) if anderson else resid[k]/resid[0]
+			
+		# Stop if G(v^(k))/G(v^(0)) falls below tolerance.
+		z = z_new
+		k = k + 1
+		finished = k >= max_iter or resid[k-1] <= eps_stop*resid[0]
 	end = time()
 	
 	[p.terminate() for p in procs]
-	return {"xbars": xbars, "residuals": resid[:i,:], "num_iters": i, "solve_time": (end - start)}
+	return {"zvals": z, "residuals": np.array(resid[:k]), "num_iters": k, "solve_time": (end - start)}

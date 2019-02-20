@@ -20,6 +20,7 @@ along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 # Base class for unit tests.
 from unittest import TestCase
 import numpy as np
+import matplotlib.pyplot as plt
 
 class BaseTest(TestCase):
     # AssertAlmostEqual for lists.
@@ -57,3 +58,20 @@ class BaseTest(TestCase):
         print("Base Objective: %f" % obj_comb)
         print("Iterations: %d" % probs.solver_stats["num_iters"])
         print("Elapsed Time: %f" % probs.solver_stats["solve_time"])
+
+    def compare_residuals(self, res_sdrs, res_aa2, m_vals):
+        if not isinstance(res_aa2, list):
+            res_aa2 = [res_aa2]
+        if not isinstance(m_vals, list):
+            m_vals = [m_vals]
+        if len(m_vals) != len(res_aa2):
+            raise ValueError("Must have same number of AA-II residuals as memory parameter values")
+
+        plt.semilogy(range(res_sdrs.shape[0]), res_sdrs, label="S-DRS")
+        for i in range(len(m_vals)):
+            label = "AA-II S-DRS (m = {})".format(m_vals[i])
+            plt.semilogy(range(res_aa2[i].shape[0]), res_aa2[i], linestyle="--", label=label)
+        plt.legend()
+        plt.xlabel("Iteration")
+        plt.ylabel("Residual")
+        plt.show()

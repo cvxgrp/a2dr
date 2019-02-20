@@ -20,7 +20,6 @@ along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 import numpy as np
 from cvxpy import Variable, Parameter, Problem, Minimize
 from cvxpy.atoms import *
-import cvxconsensus
 from cvxconsensus import Problems
 from cvxconsensus.tests.base_test import BaseTest
 
@@ -62,8 +61,7 @@ class TestStepSize(BaseTest):
 		probs.pretty_vars()
 		
 		# Solve with consensus ADMM.
-		obj_admm = probs.solve(method = "consensus", rho_init = rho_init, \
-								max_iter = self.MAX_ITER, spectral = False)
+		obj_admm = probs.solve(method = "consensus", rho_init = rho_init, max_iter = self.MAX_ITER)
 		x_admm = [x.value for x in probs.variables()]
 		# probs.plot_residuals()
 		

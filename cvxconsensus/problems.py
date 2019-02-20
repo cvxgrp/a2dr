@@ -43,8 +43,7 @@ class Problems(object):
 		self._problems = problems
 		self._value = None
 		self._status = None
-		self._primal_residual = None
-		self._dual_residual = None
+		self._residuals = None
 		self._solver_stats = None
 		
 		self.combined = self._combined()
@@ -72,18 +71,12 @@ class Problems(object):
 		return self._problems
 	
 	@property
-	def primal_residual(self):
-		"""list : The sum of squared primal residuals for each iteration, i.e.
-				  ||r^(k)||^2 where r_i^(k) = x_i^(k) - x_bar^(k).
+	def residuals(self):
+		"""list : The l2-normed residuals for each iteration, i.e.
+				  ||G(v^(k))||^2 where v^(k) = (y^(k), s^(k)) and G(.)
+				  is the mapping G(v^(k)) = v^(k) - v^(k+1).
 		"""
-		return self._primal_residual
-	
-	@property
-	def dual_residual(self):
-		"""list : The sum of squared dual residuals for each iteration, i.e.
-				  ||d^(k)||^2 where d_i^(k) = rho_i^(k)*(x_bar^(k-1) - x_bar^(k)).
-		"""
-		return self._dual_residual
+		return self._residuals
 	
 	def _combined(self):
 		"""Sum list of problems with sign flip if objective is maximization.
@@ -143,7 +136,7 @@ class Problems(object):
 		"""Accessor method for variables.
 
         Returns
-        -------
+        ----------
         list of :class:`~cvxpy.expressions.variable.Variable`
             A list of the variables in the combined problem.
         """
@@ -163,7 +156,7 @@ class Problems(object):
 		"""Accessor method for constants.
 
         Returns
-        -------
+        ----------
         list of :class:`~cvxpy.expressions.constants.constant.Constant`
             A list of the constants in the combined problem.
         """
@@ -202,7 +195,7 @@ class Problems(object):
 			self.unpack_results(sol)
 			return self.value
 		else:
-			raise NotImplementedError
+			raise ValueError("method must be either 'combined' or 'consensus'")
 	
 	def unpack_results(self, solution):
 		"""Updates the problem state given consensus results.
@@ -210,41 +203,50 @@ class Problems(object):
 		Updates problem.status, problem.value, and value of the primal variables.
 		
 		Parameters
-		-------
+		----------
 		solution : dict
-		     Consensus solution to the combined problem. "xbars" refers to the
+		     Consensus solution to the combined problem. "zvals" refers to the
 		     final average of the primal value over all the workers.
 		"""
 		# Save primal values.
 		for v in self.variables():
-			v.save_value(solution["xbars"][v.id])
+			v.save_value(solution["zvals"][v.id])
 	
 		# TODO: Save dual values (for constraints too?).
 		
 		# Save combined objective.
-		self._value = np.asscalar(self.objective.value)
+		self._value = self.objective.value
+		if not np.isscalar(self._value):
+			self._value = np.asscalar(self._value)
 		
-		# Save primal/dual residuals.
-		self._primal_residual = solution["residuals"][:,0]
-		self._dual_residual = solution["residuals"][:,1]
+		# Save residual from fixed point mapping.
+		self._residuals = solution["residuals"]
 		
 		# TODO: Handle statuses.
 		self._solver_stats = {"num_iters": solution["num_iters"],
 							  "solve_time": solution["solve_time"]}
 	
-	def plot_residuals(self, show = True, semilogy = False):
-		"""Plot the sum of squared primal/dual residuals over all iterations.
+	def plot_residuals(self, normalize = True, show = True, semilogy = False):
+		"""Plot the l2-normed residual over all iterations.
+		
+		Parameters
+		----------
+		show : logical
+			 Show the plot at the end?
+		normalize : logical
+		     Normalize the residuals by their initial iteration value?
+		semilogy : logical
+			 Plot the y-axis on a log scale?
 		"""
 		if self._solver_stats is None:
 			raise ValueError("Solver stats is empty. Nothing to plot.")
 		iters = range(self._solver_stats["num_iters"])
-		resid = np.column_stack((self._primal_residual, self._dual_residual))
-		
+		resid = self._residuals/self._residuals[0] if normalize and self._residuals[0] != 0 else self._residuals
+
 		if semilogy:
-			plt_resd = plt.plot(iters, resid, label = ["Primal", "Dual"])
+			plt.semilogy(iters, resid)
 		else:
-			plt_resd = plt.plot(iters, resid, label = ["Primal", "Dual"])
-		plt.legend(plt_resd, ["Primal", "Dual"])
+			plt.plot(iters, resid)
 		plt.xlabel("Iteration")
 		plt.ylabel("Residual")
 		if show:

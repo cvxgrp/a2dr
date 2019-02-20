@@ -20,7 +20,6 @@ along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 import numpy as np
 from cvxpy import Variable, Parameter, Problem, Minimize
 from cvxpy.atoms import *
-import cvxconsensus
 from cvxconsensus import Problems
 from cvxconsensus.tests.base_test import BaseTest
 
@@ -29,8 +28,7 @@ class TestBasic(BaseTest):
 	
 	def setUp(self):
 		np.random.seed(1)
-		self.MAX_ITER = 100
-		self.spectral = True
+		self.MAX_ITER = 1000
 	
 	def test_basic(self):
 		m = 100
@@ -40,7 +38,7 @@ class TestBasic(BaseTest):
 
 		# Problem data.
 		alpha = 0.5
-		A = np.random.randn(m*n).reshape(m,n)
+		A = np.random.randn(m,n)
 		xtrue = np.random.randn(n)
 		b = A.dot(xtrue) + np.random.randn(m)
 
@@ -52,8 +50,7 @@ class TestBasic(BaseTest):
 		probs.pretty_vars()
 		
 		# Solve with consensus ADMM.
-		obj_admm = probs.solve(method = "consensus", rho_init = 1.0, \
-								max_iter = self.MAX_ITER, spectral = self.spectral)
+		obj_admm = probs.solve(method = "consensus", rho_init = 1.0, max_iter = self.MAX_ITER)
 		x_admm = [x.value for x in probs.variables()]
 		# probs.plot_residuals()
 
@@ -62,14 +59,14 @@ class TestBasic(BaseTest):
 		x_comb = [x.value for x in probs.variables()]
 
 		# Compare results.
-		# self.compare_results(probs, obj_admm, obj_comb, x_admm, x_comb)
+		self.compare_results(probs, obj_admm, obj_comb, x_admm, x_comb)
 		N = len(probs.variables())
 		self.assertAlmostEqual(obj_admm, obj_comb)
 		for i in range(N):
 			self.assertItemsAlmostEqual(x_admm[i], x_comb[i])
 
 	def test_ols(self):
-		N = 2
+		N = 5
 		m = N*1000
 		n = 10
 		x = Variable(n)
@@ -90,10 +87,9 @@ class TestBasic(BaseTest):
 		probs.pretty_vars()
 		
 		# Solve with consensus ADMM.
-		obj_admm = probs.solve(method = "consensus", rho_init = 0.5, \
-								max_iter = self.MAX_ITER, spectral = self.spectral)
+		obj_admm = probs.solve(method = "consensus", rho_init = 100, max_iter = self.MAX_ITER)
 		x_admm = [x.value for x in probs.variables()]
-		# probs.plot_residuals()
+		# probs.plot_residuals(semilogy = True)
 		
 		# Solve combined problem.
 		# obj_comb = Problem(Minimize(sum_squares(A*x-b))).solve()
@@ -101,7 +97,7 @@ class TestBasic(BaseTest):
 		x_comb = [x.value for x in probs.variables()]
 		
 		# Compare results.
-		# self.compare_results(probs, obj_admm, obj_comb, x_admm, x_comb)
+		self.compare_results(probs, obj_admm, obj_comb, x_admm, x_comb)
 		K = len(probs.variables())
 		self.assertAlmostEqual(obj_admm, obj_comb)
 		for i in range(K):
@@ -170,8 +166,7 @@ class TestBasic(BaseTest):
 		N = len(p_list)
 		
 		# Solve with consensus ADMM.
-		obj_admm = probs.solve(method = "consensus", rho_init = 1.0, \
-								max_iter = self.MAX_ITER, spectral = self.spectral)
+		obj_admm = probs.solve(method = "consensus", rho_init = 1.0, max_iter = self.MAX_ITER)
 		x_admm = [x.value for x in probs.variables()]
 		# probs.plot_residuals()
 		
@@ -180,7 +175,7 @@ class TestBasic(BaseTest):
 		x_comb = [x.value for x in probs.variables()]
 		
 		# Compare results.
-		# self.compare_results(probs, obj_admm, obj_comb, x_admm, x_comb)
+		self.compare_results(probs, obj_admm, obj_comb, x_admm, x_comb)
 		N = len(probs.variables())
 		self.assertAlmostEqual(obj_admm, obj_comb)
 		for i in range(N):
@@ -207,7 +202,7 @@ class TestBasic(BaseTest):
 		theta_true = np.random.randn(n,1)
 		idxs = np.random.choice(range(n), int((1-DENSITY)*n), replace = False)
 		for idx in idxs:
-			beta_true[idx] = 0
+			theta_true[idx] = 0
 
 		Z = np.random.binomial(1, 0.5, size=(m,n))
 		Y = np.sign(Z.dot(theta_true) + np.random.normal(0,sigma,size=(m,1)))
@@ -226,8 +221,7 @@ class TestBasic(BaseTest):
 		N = len(p_list)
 		
 		# Solve with consensus ADMM.
-		obj_admm = probs.solve(method = "consensus", rho_init = 1.0, eps = 1e-8, \
-								max_iter = self.MAX_ITER, spectral = self.spectral)
+		obj_admm = probs.solve(method = "consensus", rho_init = 1.0, max_iter = self.MAX_ITER)
 		x_admm = [x.value for x in probs.variables()]
 		# probs.plot_residuals()
 		
