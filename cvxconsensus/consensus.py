@@ -305,7 +305,7 @@ def consensus(p_list, *args, **kwargs):
 	
 		# Scatter s^(k+1/2) and common matrix term.
 		# for pipe in pipes:
-		#	pipe.send((mat_term, s, k))
+		# 	pipe.send((mat_term, s, k))
 		for x, pipe in zip(x_new, pipes):
 			pipe.send((x, k))
 		

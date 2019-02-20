@@ -29,7 +29,7 @@ def main():
 
 	# Solve via consensus.
 	gamma.value = 1.0
-	probs.solve(method = "consensus", rho_init = 1.0, max_iter = 50)
+	probs.solve(method = "consensus", rho_init = 1.0, max_iter = 1000)
 	print("Objective:", probs.value)
 	print("Solution:", x.value)
 

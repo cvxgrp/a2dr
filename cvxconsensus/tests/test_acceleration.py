@@ -23,7 +23,7 @@ from cvxpy import Variable, Problem, Minimize
 from cvxpy.atoms import *
 from cvxconsensus import Problems
 from cvxconsensus.tests.base_test import BaseTest
-	
+
 class TestAcceleration(BaseTest):
 	"""Unit tests for Anderson acceleration of consensus ADMM"""
 	
@@ -107,7 +107,7 @@ class TestAcceleration(BaseTest):
 		probs = Problems(p_list)
 		probs.pretty_vars()
 		
-		# Solve with consensus ADMM.
+		# Solve with consensus S-DRS.
 		obj_sdrs = probs.solve(method = "consensus", rho_init = alpha, max_iter = self.MAX_ITER, \
 							   warm_start = False, eps_stop = self.eps_stop, eps_abs = self.eps_abs)
 		res_sdrs = probs.residuals
