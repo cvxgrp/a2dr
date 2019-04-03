@@ -3,6 +3,8 @@ from numpy.random import rand
 from cvxpy import *
 from cvxconsensus import *
 
+# Adapted from EE364B, Exercise 7.2: Block distributed flow control.
+# MatLAB code: dist_flow_ctrl.m, dist_flow_ctrl_data.m.
 def main():
 	# Problem data.
 	np.random.seed(1)
