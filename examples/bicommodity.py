@@ -22,7 +22,6 @@ def main():
     eps = 0.1
     NUM_SPLITS = 3   # Number of splits by node.
 
-    # Find optimum directly.
     x_star = Variable(n)
     y_star = Variable(n)
     obj = sum_squares(x_star + y_star) + eps*(sum_squares(x_star) + sum_squares(y_star))
