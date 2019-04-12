@@ -1,5 +1,4 @@
 import numpy as np
-from numpy.random import rand
 from cvxpy import *
 from cvxconsensus import *
 
