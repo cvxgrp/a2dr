@@ -68,7 +68,7 @@ def run_worker(pipe, prox, v_init, A, rho, anderson, m_accel):
         # Send x_i^(k+1) if A2DR terminated.
         finished = pipe.recv()
         if finished:
-            pipe.send(x_new)
+            pipe.send(x_half)
 
 # TODO: Warm start lstsq. Implement sparse handling. Check when A_list and b are None.
 def a2dr(p_list, v_init, A_list, b, *args, **kwargs):
