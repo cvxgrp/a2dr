@@ -19,28 +19,29 @@ along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 
 import cvxpy
 import numpy as np
+import scipy.sparse as sp
 from cvxpy import Variable, Problem, Minimize
 from cvxconsensus.utilities import dicts_to_arr
 
-def aa_weights(residuals, lam = None, type = "exact", *args, **kwargs):
+def aa_weights(residuals, lam=None, type="exact", *args, **kwargs):
 	""" Solve the constrained least-squares problem
 	   Minimize sum_squares(\sum_{j=0}^m w[j]*r^(k+1-m+j)
 	      subject to \sum_{j=0}^m w[j] = 1
-	
+
 	This can be transformed via a change of variables
 	   w[0] = g[0], w[j] = g[j] - g[j-1] for j = 1,...,m-1, and w[m] = 1-g[m-1]
 	into the unconstrained problem
 	   Minimize sum_squares(r^(k+1) - \sum_{j=0}^{m-1} g[j]*(r^(k+2-m+j) - r^(k+1-m+j)))
-	
+
 	Parameters
 	----------
 	primals : array
 	     A numpy array containing the primal residuals for the last `m+1`
-	     iterations, including the current iteration. If our current iteration 
+	     iterations, including the current iteration. If our current iteration
 	     is `k+1`, then column `j` is the residual from iteration `k+1-m+j`
-	     for `j = 0,...,m`, i.e., new residuals are appended (as the rightmost 
+	     for `j = 0,...,m`, i.e., new residuals are appended (as the rightmost
 	     column) to the array.
-	
+
 	Returns
     ----------
     An array of length `m` containing the solution to the least-squares problem.
@@ -56,9 +57,9 @@ def aa_weights(residuals, lam = None, type = "exact", *args, **kwargs):
 	if type == "exact":
 		# Solve for AA-II weights using unconstrained LS in numpy.
 		e = np.ones((G.shape[1],))
-		reg = lam*np.eye(G.shape[1]) if lam else 0   # Stabilization with l2 penalty.
-		gamma = np.linalg.lstsq(G.T.dot(G) + reg, e, rcond = None)[0]
-		alpha = gamma/np.sum(gamma)
+		reg = lam * np.eye(G.shape[1]) if lam else 0  # Stabilization with l2 penalty.
+		gamma = np.linalg.lstsq(G.T.dot(G) + reg, e, rcond=None)[0]
+		alpha = gamma / np.sum(gamma)
 		return alpha
 	elif type == "inexact":
 		# Solve for AA-II weights using constrained LS in CVXPY.
@@ -74,3 +75,14 @@ def aa_weights(residuals, lam = None, type = "exact", *args, **kwargs):
 		return alpha.value
 	else:
 		raise ValueError("type must be either 'exact' or 'inexact'")
+
+
+def aa_weights_alt(Y, g, reg = 0, *args, **kwargs):
+	if reg != 0:
+		m = Y.shape[1]
+		Y = np.vstack([Y, np.sqrt(reg)*np.eye(m)])
+		g = np.concatenate([g, np.zeros(m)])
+	gamma = np.linalg.lstsq(Y, g, *args, **kwargs)[0]
+	gamma = np.append(gamma, 1)
+	alpha = np.diff(gamma, n=1)
+	return alpha
