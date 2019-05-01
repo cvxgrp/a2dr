@@ -70,7 +70,7 @@ def run_worker(pipe, prox, v_init, A, rho, anderson, m_accel):
         if finished:
             pipe.send(x_half)
 
-# TODO: Warm start lstsq. Implement sparse handling. Check when A_list and b are None.
+# TODO: Warm start lstsq. Implement sparse handling.
 def a2dr(p_list, v_init, A_list, b, *args, **kwargs):
     # Problem parameters.
     N = len(p_list)  # Number of subproblems.
@@ -78,6 +78,21 @@ def a2dr(p_list, v_init, A_list, b, *args, **kwargs):
     rho_init = kwargs.pop("rho_init", 1.0)  # Step size.
     eps_abs = kwargs.pop("eps_abs", 1e-6)   # Absolute stopping tolerance.
     eps_rel = kwargs.pop("eps_rel", 1e-8)   # Relative stopping tolerance.
+
+    # DRS parameters.
+    if len(A_list) == 0:   # TODO: Deal with case of no linear constraints.
+        raise NotImplementedError
+    elif len(A_list) != N:
+        raise ValueError("A_list must be empty or contain exactly {} entries".format(N))
+
+    for i in range(N):
+        if A_list[i].shape[0] != b.shape[0]:
+            raise ValueError("Dimension mismatch: nrow(A_i) != nrow(b)")
+        elif A_list[i].shape[1] != v_init[i].shape[0]:
+            raise ValueError("Dimension mismatch: ncol(A_i) != nrow(v_i)")
+    n_sum = np.sum([v.size for v in v_init])
+    A = np.hstack(A_list)
+    AAT = A.dot(A.T)   # Store for projection step.
 
     # AA-II parameters.
     anderson = kwargs.pop("anderson", False)
@@ -95,11 +110,6 @@ def a2dr(p_list, v_init, A_list, b, *args, **kwargs):
         procs += [Process(target=run_worker, args=(remote, p_list[i], v_init[i], A_list[i], \
                                                    rho_init, anderson, m_accel) + args)]
         procs[-1].start()
-
-    # Initialize DRS variables.
-    n_sum = np.sum([v.size for v in v_init])
-    A = np.hstack(A_list)
-    AAT = A.dot(A.T)   # Store for projection step.
 
     # Initialize AA-II variables.
     if anderson:   # TODO: Store and update these efficiently as arrays.
