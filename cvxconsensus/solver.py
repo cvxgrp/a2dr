@@ -70,7 +70,7 @@ def run_worker(pipe, prox, v_init, A, rho, anderson, m_accel):
         if finished:
             pipe.send(x_half)
 
-# TODO: Warm start lstsq. Implement sparse handling.
+# TODO: Warm start lstsq. Implement sparse handling. Return full objective.
 def a2dr(p_list, v_init, A_list, b, *args, **kwargs):
     # Problem parameters.
     N = len(p_list)  # Number of subproblems.
@@ -97,8 +97,8 @@ def a2dr(p_list, v_init, A_list, b, *args, **kwargs):
     # AA-II parameters.
     anderson = kwargs.pop("anderson", False)
     m_accel = int(kwargs.pop("m_accel", 5))  # Maximum past iterations to keep (>= 0).
-    if m_accel < 0:
-        raise ValueError("m_accel must be a non-negative integer.")
+    if m_accel <= 0:
+        raise ValueError("m_accel must be a positive integer.")
     lam_accel = kwargs.pop("lam_accel", 0)   # AA-II regularization weight.
 
     # Set up the workers.
@@ -146,19 +146,19 @@ def a2dr(p_list, v_init, A_list, b, *args, **kwargs):
 
             # Save newest column y^(k-1) = g^(k) - g^(k-1) of matrix Y^(k).
             y_hist.append(g_new - g_vec)
-            if len(y_hist) > m_k:
+            if len(y_hist) > m_k + 1:
                 y_hist.pop(0)
             g_vec = g_new
 
             # Save newest column s^(k-1) = v^(k) - v^(k-1) of matrix S^(k).
             s_hist.append(v_res)
-            if len(s_hist) > m_k:
+            if len(s_hist) > m_k + 1:
                 s_hist.pop(0)
 
             # Compute and scatter AA-II weights.
-            Y_mat = np.hstack(y_hist)
-            S_mat = np.hstack(s_hist)
-            reg = lam_accel*(np.norm(Y_mat)**2 + np.norm(S_mat)**2)   # AA-II regularization.
+            Y_mat = np.column_stack(y_hist)
+            S_mat = np.column_stack(s_hist)
+            reg = lam_accel*(np.linalg.norm(Y_mat)**2 + np.linalg.norm(S_mat)**2)   # AA-II regularization.
             alpha = aa_weights_alt(Y_mat, g_new, reg, rcond=None)
             for pipe in pipes:
                 pipe.send(alpha)

@@ -1,0 +1,63 @@
+edge    ATLA-M5 ATLAng  CHINng  DNVRng  HSTNng  IPLSng  KSCYng  LOSAng  NYCMng  SNVAng  STTLng  WASHng
+ATLA-M5_ATLAng  -1  +1  0   0   0   0   0   0   0   0   0   0
+ATLAng_ATLA-M5  +1  -1  0   0   0   0   0   0   0   0   0   0
+ATLAng_HSTNng   0   -1  0   0   +1  0   0   0   0   0   0   0
+ATLAng_IPLSng   0   -1  0   0   0   +1  0   0   0   0   0   0
+ATLAng_WASHng   0   -1  0   0   0   0   0   0   0   0   0   +1
+CHINng_IPLSng   0   0   -1  0   0   +1  0   0   0   0   0   0
+CHINng_NYCMng   0   0   -1  0   0   0   0   0   +1  0   0   0
+DNVRng_KSCYng   0   0   0   -1  0   0   +1  0   0   0   0   0
+DNVRng_SNVAng   0   0   0   -1  0   0   0   0   0   +1  0   0
+DNVRng_STTLng   0   0   0   -1  0   0   0   0   0   0   +1  0
+HSTNng_ATLAng   0   +1  0   0   -1  0   0   0   0   0   0   0
+HSTNng_KSCYng   0   0   0   0   -1  0   +1  0   0   0   0   0
+HSTNng_LOSAng   0   0   0   0   -1  0   0   +1  0   0   0   0
+IPLSng_ATLAng   0   +1  0   0   0   -1  0   0   0   0   0   0
+IPLSng_CHINng   0   0   +1  0   0   -1  0   0   0   0   0   0
+IPLSng_KSCYng   0   0   0   0   0   -1  +1  0   0   0   0   0
+KSCYng_DNVRng   0   0   0   +1  0   0   -1  0   0   0   0   0
+KSCYng_HSTNng   0   0   0   0   +1  0   -1  0   0   0   0   0
+KSCYng_IPLSng   0   0   0   0   0   +1  -1  0   0   0   0   0
+LOSAng_HSTNng   0   0   0   0   +1  0   0   -1  0   0   0   0
+LOSAng_SNVAng   0   0   0   0   0   0   0   -1  0   +1  0   0
+NYCMng_CHINng   0   0   +1  0   0   0   0   0   -1  0   0   0
+NYCMng_WASHng   0   0   0   0   0   0   0   0   -1  0   0   +1
+SNVAng_DNVRng   0   0   0   +1  0   0   0   0   0   -1  0   0
+SNVAng_LOSAng   0   0   0   0   0   0   0   +1  0   -1  0   0
+SNVAng_STTLng   0   0   0   0   0   0   0   0   0   -1  +1  0
+STTLng_DNVRng   0   0   0   +1  0   0   0   0   0   0   -1  0
+STTLng_SNVAng   0   0   0   0   0   0   0   0   0   +1  -1  0
+WASHng_ATLAng   0   +1  0   0   0   0   0   0   0   0   0   -1
+WASHng_NYCMng   0   0   0   0   0   0   0   0   +1  0   0   -1
+
+edge	capacity(kbps)	OSPF
+ATLA-M5_ATLAng	9920000 1
+ATLAng_ATLA-M5	9920000 1
+ATLAng_HSTNng	9920000 1176
+ATLAng_IPLSng	2480000 587
+ATLAng_WASHng	9920000 846
+CHINng_IPLSng	9920000 260
+CHINng_NYCMng	9920000 700
+DNVRng_KSCYng	9920000 639
+DNVRng_SNVAng	9920000 1295
+DNVRng_STTLng	9920000 2095
+HSTNng_ATLAng	9920000 1176
+HSTNng_KSCYng	9920000 902
+HSTNng_LOSAng	9920000 1893
+IPLSng_ATLAng	2480000 587
+IPLSng_CHINng	9920000 260
+IPLSng_KSCYng	9920000 548
+KSCYng_DNVRng	9920000 639
+KSCYng_HSTNng	9920000 902
+KSCYng_IPLSng	9920000 548
+LOSAng_HSTNng	9920000 1893
+LOSAng_SNVAng	9920000 366
+NYCMng_CHINng	9920000 700
+NYCMng_WASHng	9920000 233
+SNVAng_DNVRng	9920000 1295
+SNVAng_LOSAng	9920000 366
+SNVAng_STTLng	9920000 861
+STTLng_DNVRng	9920000 2095
+STTLng_SNVAng	9920000 861
+WASHng_ATLAng	9920000 846
+WASHng_NYCMng	9920000 233

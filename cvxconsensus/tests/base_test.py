@@ -48,29 +48,48 @@ class BaseTest(TestCase):
         else:
             return mat
 
-    def compare_results(self, probs, obj_admm, obj_comb, x_admm, x_comb):
+    def plot_residuals(self, r_primal, r_dual, normalize = False, show = True, title = None, semilogy = False):
+        if normalize:
+            r_primal = r_primal / r_primal[0] if r_primal[0] != 0 else r_primal
+            r_dual = r_dual / r_dual[0] if r_dual[0] != 0 else r_dual
+
+        if semilogy:
+            plt.semilogy(range(len(r_primal)), r_primal, label = "Primal")
+            plt.semilogy(range(len(r_dual)), r_dual, label = "Dual")
+        else:
+            plt.plot(range(len(r_primal)), r_primal, label = "Primal")
+            plt.plot(range(len(r_dual)), r_dual, label = "Dual")
+        plt.legend()
+        plt.xlabel("Iteration")
+        plt.ylabel("Residual")
+        if title:
+            plt.title(title)
+        if show:
+            plt.show()
+
+    def compare_results(self, probs, obj_a2dr, obj_comb, x_a2dr, x_comb):
         N = len(probs.variables())
         for i in range(N):
-            print("\nADMM Solution:\n", x_admm[i])
+            print("\nA2DR Solution:\n", x_a2dr[i])
             print("Base Solution:\n", x_comb[i])
-            print("MSE: ", np.mean(np.square(x_admm[i] - x_comb[i])), "\n")
-        print("ADMM Objective: %f" % obj_admm)
+            print("MSE: ", np.mean(np.square(x_a2dr[i] - x_comb[i])), "\n")
+        print("A2DR Objective: %f" % obj_a2dr)
         print("Base Objective: %f" % obj_comb)
         print("Iterations: %d" % probs.solver_stats["num_iters"])
         print("Elapsed Time: %f" % probs.solver_stats["solve_time"])
 
-    def compare_residuals(self, res_sdrs, res_aa2, m_vals):
-        if not isinstance(res_aa2, list):
-            res_aa2 = [res_aa2]
+    def compare_residuals(self, res_sdrs, res_a2dr, m_vals):
+        if not isinstance(res_a2dr, list):
+            res_a2dr = [res_a2dr]
         if not isinstance(m_vals, list):
             m_vals = [m_vals]
-        if len(m_vals) != len(res_aa2):
+        if len(m_vals) != len(res_a2dr):
             raise ValueError("Must have same number of AA-II residuals as memory parameter values")
 
         plt.semilogy(range(res_sdrs.shape[0]), res_sdrs, label="S-DRS")
         for i in range(len(m_vals)):
             label = "AA-II S-DRS (m = {})".format(m_vals[i])
-            plt.semilogy(range(res_aa2[i].shape[0]), res_aa2[i], linestyle="--", label=label)
+            plt.semilogy(range(res_a2dr[i].shape[0]), res_a2dr[i], linestyle="--", label=label)
         plt.legend()
         plt.xlabel("Iteration")
         plt.ylabel("Residual")

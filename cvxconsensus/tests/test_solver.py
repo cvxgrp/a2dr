@@ -41,6 +41,7 @@ class TestSolver(BaseTest):
         self.MAX_ITER = 2000
 
     def test_nnls(self):
+        # minimize ||y - X\beta||_2^2 with respect to \beta.
         m = 100
         n = 10
         N = 4   # Number of splits.
@@ -48,37 +49,39 @@ class TestSolver(BaseTest):
         X = np.random.randn(m,n)
         y = X.dot(beta_true) + np.random.randn(m)
 
-        # Solve with CVXPY.
-        beta = Variable(n)
-        obj = sum_squares(X*beta - y)
-        constr = [beta >= 0]
-        prob = Problem(Minimize(obj), constr)
-        prob.solve(solver = "OSQP")
-
-        cvxpy_beta = beta.value
-        cvxpy_obj = prob.value
-        print("CVXPY Objective:", prob.value)
-        print("CVXPY Solution:", beta.value)
-
         # Solve with SciPy.
         sp_result = nnls(X, y)
-        print("Scipy Objective:", sp_result[1]**2)
-        print("SciPy Solution:", sp_result[0])
+        sp_beta = sp_result[0]
+        sp_obj = sp_result[1]**2   # SciPy objective is ||y - X\beta||_2.
+        print("Scipy Objective:", sp_obj)
+        print("SciPy Solution:", sp_beta)
 
-        # Split and solve with A2DR.
+        # Split problem.
         X_split = np.split(X,N)
         y_split = np.split(y,N)
         p_list = [prox_sum_squares(X_sub, y_sub) for X_sub, y_sub in zip(X_split, y_split)]
         p_list += [lambda u, rho: np.maximum(u, 0)]   # Projection onto non-negative orthant.
-        v_init = (N+1)*[np.random.randn(n)]
+        v_init = (N + 1)*[np.random.randn(n)]
         A_list = np.hsplit(np.eye(N*n),N) + [-np.vstack(N*(np.eye(n),))]
         b = np.zeros(N*n)
-        result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, anderson=False)
 
-        a2dr_beta = result["x_vals"][-1]
-        a2dr_obj = np.sum((X.dot(a2dr_beta) - y)**2)
+        # Solve with DRS.
+        drs_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, anderson=False)
+        drs_beta = drs_result["x_vals"][-1]
+        drs_obj = np.sum((y - X.dot(drs_beta))**2)
+        print("DRS Objective:", drs_obj)
+        print("DRS Solution:", drs_beta)
+
+        self.assertAlmostEqual(sp_obj, drs_obj)
+        self.assertItemsAlmostEqual(sp_beta, drs_beta, places=3)
+        self.plot_residuals(drs_result["primal"], drs_result["dual"], normalize=True, title="DRS Residuals", semilogy=True)
+
+        # Solve with A2DR.
+        a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, anderson=True)
+        a2dr_beta = a2dr_result["x_vals"][-1]
+        a2dr_obj = np.sum((y - X.dot(a2dr_beta))**2)
         print("A2DR Objective:", a2dr_obj)
         print("A2DR Solution:", a2dr_beta)
-
-        self.assertAlmostEqual(cvxpy_obj, a2dr_obj)
-        self.assertItemsAlmostEqual(cvxpy_beta, a2dr_beta, places=3)
+        # self.assertAlmostEqual(sp_obj, a2dr_obj)
+        # self.assertItemsAlmostEqual(sp_beta, a2dr_beta, places=3)
+        self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], normalize=True, title="A2DR Residuals", semilogy=True)
