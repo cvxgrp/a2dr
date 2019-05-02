@@ -73,18 +73,18 @@ class TestSolver(BaseTest):
         print("DRS Solution:", drs_beta)
 
         # Solve with A2DR (proximal point method with Anderson acceleration).
-        a2dr_result = a2dr(p_list, v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, eps_stop=self.eps_stop, anderson=True, m_accel=1)
+        a2dr_result = a2dr(p_list, v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, eps_stop=self.eps_stop, anderson=True)
         a2dr_beta = a2dr_result["x_vals"]
         a2dr_obj = np.sum([(yi - Xi.dot(beta)) ** 2 for yi, Xi, beta in zip(y_split, X_split, drs_beta)])
         print("A2DR Objective:", a2dr_obj)
         print("A2DR Solution:", a2dr_beta)
 
         # Compare results.
-        # self.assertAlmostEqual(np_obj, drs_obj)
-        # self.assertAlmostEqual(np_obj, a2dr_obj)
-        # for i in range(N):
-        #    self.assertItemsAlmostEqual(np_beta[i], drs_beta[i])
-        #    self.assertItemsAlmostEqual(np_beta[i], a2dr_beta[i])
+        self.assertAlmostEqual(np_obj, drs_obj)
+        self.assertAlmostEqual(np_obj, a2dr_obj)
+        for i in range(N):
+            self.assertItemsAlmostEqual(np_beta[i], drs_beta[i])
+            self.assertItemsAlmostEqual(np_beta[i], a2dr_beta[i])
 
         # Plot residuals.
         plt.semilogy(range(drs_result["num_iters"]), drs_result["dual"], label = "DRS")
@@ -126,8 +126,8 @@ class TestSolver(BaseTest):
         print("DRS Solution:", drs_beta)
         self.assertAlmostEqual(sp_obj, drs_obj)
         self.assertItemsAlmostEqual(sp_beta, drs_beta, places=3)
-        # self.plot_residuals(drs_result["primal"], drs_result["dual"], \
-        #                     normalize=True, title="DRS Residuals", semilogy=True)
+        self.plot_residuals(drs_result["primal"], drs_result["dual"], \
+                            normalize=True, title="DRS Residuals", semilogy=True)
 
         # Solve with A2DR.
         a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, anderson=True)
@@ -135,7 +135,7 @@ class TestSolver(BaseTest):
         a2dr_obj = np.sum((y - X.dot(a2dr_beta))**2)
         print("A2DR Objective:", a2dr_obj)
         print("A2DR Solution:", a2dr_beta)
-        # self.assertAlmostEqual(sp_obj, a2dr_obj)
-        # self.assertItemsAlmostEqual(sp_beta, a2dr_beta, places=3)
-        # self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], \
-        #                     normalize=True, title="A2DR Residuals", semilogy=True)
+        self.assertAlmostEqual(sp_obj, a2dr_obj)
+        self.assertItemsAlmostEqual(sp_beta, a2dr_beta, places=3)
+        self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], \
+                            normalize=True, title="A2DR Residuals", semilogy=True)

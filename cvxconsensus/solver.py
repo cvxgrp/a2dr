@@ -55,6 +55,7 @@ def prox_worker(pipe, prox, x_init, rho, anderson, m_accel, lam_accel):
             y_hist.append(g_new - g_vec)
             if len(y_hist) > m_k:
                 y_hist.pop(0)
+            g_vec = g_new
 
             # Save newest column s^(k-1) = x^(k) - x^(k-1) of matrix S^(k).
             s_hist.append(x_res)
@@ -68,11 +69,10 @@ def prox_worker(pipe, prox, x_init, rho, anderson, m_accel, lam_accel):
             alpha = aa_weights_alt(Y_mat, g_new, reg, rcond=None)
 
             # Weighted update of v^(k+1).
-            x_new = np.column_stack(F_hist).dot(alpha)
+            x_new = np.column_stack(F_hist).dot(alpha[:(k+1)])
 
             # Save x^(k+1) - x^(k) for next iteration.
             x_res = x_new - x_vec
-            g_vec = g_new
 
         # Send x^(k+1) if loop terminated.
         finished = pipe.recv()
@@ -118,8 +118,7 @@ def prox_point(p_list, v_init, *args, **kwargs):
 
         # Stop if residual norms fall below tolerance.
         k = k + 1
-        # finished = k >= max_iter or (resid[k-1] <= eps_abs + eps_rel * resid[0])
-        finished = k >= max_iter
+        finished = k >= max_iter or (resid[k-1] <= eps_abs + eps_rel * resid[0])
         for pipe in pipes:
             pipe.send(finished)
 
@@ -151,11 +150,11 @@ def a2dr_worker(pipe, prox, v_init, A, rho, anderson, m_accel):
         x_new = v_half - A.T.dot(d_half)
 
         if anderson:
-            m_k = min(m_accel, k)  # Keep F(v^(j)) for iterations (k-m_k) through k.
+            m_k = min(m_accel, k+1)  # Keep F(v^(j)) for iterations (k-m_k) through k.
 
             # Save history of F(v^(k)).
             F_hist.append(v_vec + x_new - x_half)
-            if len(F_hist) > m_k + 1:
+            if len(F_hist) > m_k + 2:
                 F_hist.pop(0)
 
             # Send s^(k) = v^(k) - v^(k-1) and g^(k) = v^(k) - F(v^(k)) = x^(k+1/2) - x^(k+1).
@@ -165,7 +164,7 @@ def a2dr_worker(pipe, prox, v_init, A, rho, anderson, m_accel):
             alpha = pipe.recv()
 
             # Weighted update of v^(k+1).
-            v_new = np.column_stack(F_hist).dot(alpha)
+            v_new = np.column_stack(F_hist).dot(alpha[:(k+1)])
 
             # Save v^(k+1) - v^(k) for next iteration.
             v_res = v_new - v_vec
