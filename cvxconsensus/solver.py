@@ -23,24 +23,63 @@ from multiprocessing import Process, Pipe
 from cvxconsensus.precondition import precondition
 from cvxconsensus.acceleration import aa_weights_alt
 
-def prox_worker(pipe, prox, x_init, rho, anderson, m_accel):
-    # Initialize AA-II parameters.
-    if anderson:   # TODO: Should we accelerate individual workers or joint problem?
-        G_hist = []
+def prox_worker(pipe, prox, x_init, rho, anderson, m_accel, lam_accel):
+    n = x_init.shape[0]
     x_vec = x_init.copy()
 
+    # Initialize AA-II parameters.
+    if anderson:   # TODO: Should we accelerate individual workers or joint problem?
+        x_res = np.zeros(n)  # s^(k-1) = x^(k) - x^(k-1).
+        g_vec = np.zeros(n)  # g^(k) = x^(k) - F(x^(k)).
+        F_hist = []  # History of F(x^(k))
+        s_hist = []  # History of s^(j) = x^(j+1) - x^(j), kept in S^(k) = [s^(k-m_k) ... s^(k-1)].
+        y_hist = []  # History of y^(j) = g^(j+1) - g^(j), kept in Y^(k) = [y^(k-m_k) ... y^(k-1)].
+
     # Proximal point loop.
+    k = 0
     while True:
         # Proximal step for x^(k+1).
         x_new = prox(x_vec, rho)
-        sse = np.sum((x_new - x_vec)**2)
-        pipe.send(sse)
-        x_vec = x_new
+        g_new = x_new - x_vec
+        pipe.send(np.sum(g_new**2))
+
+        if anderson:
+            m_k = min(m_accel, k)
+
+            # Save history of F(x^(k)).
+            F_hist.append(x_new)
+            if len(F_hist) > m_k + 1:
+                F_hist.pop(0)
+
+            # Save newest column y^(k-1) = g^(k) - g^(k-1) of matrix Y^(k).
+            y_hist.append(g_new - g_vec)
+            if len(y_hist) > m_k + 1:
+                y_hist.pop(0)
+            g_vec = g_new
+
+            # Save newest column s^(k-1) = x^(k) - x^(k-1) of matrix S^(k).
+            s_hist.append(x_res)
+            if len(s_hist) > m_k + 1:
+                s_hist.pop(0)
+
+            # Compute and scatter AA-II weights.
+            Y_mat = np.column_stack(y_hist)
+            S_mat = np.column_stack(s_hist)
+            reg = lam_accel * (np.linalg.norm(Y_mat) ** 2 + np.linalg.norm(S_mat) ** 2)  # AA-II regularization.
+            alpha = aa_weights_alt(Y_mat, g_new, reg, rcond=None)
+
+            # Weighted update of v^(k+1).
+            x_new = np.column_stack(F_hist).dot(alpha)
+
+            # Save x^(k+1) - x^(k) for next iteration.
+            x_res = x_new - x_vec
 
         # Send x^(k+1) if loop terminated.
         finished = pipe.recv()
         if finished:
             pipe.send(x_new)
+        x_vec = x_new
+        k = k + 1
 
 def prox_point(p_list, v_init, *args, **kwargs):
     # Problem parameters.
@@ -63,7 +102,8 @@ def prox_point(p_list, v_init, *args, **kwargs):
     for i in range(N):
         local, remote = Pipe()
         pipes += [local]
-        procs += [Process(target=prox_worker, args=(remote, p_list[i], v_init[i], rho_init, anderson, m_accel) + args)]
+        procs += [Process(target=prox_worker, args=(remote, p_list[i], v_init[i], rho_init, \
+                                                    anderson, m_accel, lam_accel) + args)]
         procs[-1].start()
 
     # Proximal point loop.
@@ -86,13 +126,15 @@ def prox_point(p_list, v_init, *args, **kwargs):
     x_final = [pipe.recv() for pipe in pipes]
     [p.terminate() for p in procs]
     end = time()
-    return {"x_vals": x_final, "residuals": np.array(resid[:k]), "num_iters": k, "solve_time": (end - start)}
+    return {"x_vals": x_final, "primal": np.zeros(k), "dual": np.array(resid[:k]), \
+            "num_iters": k, "solve_time": (end - start)}
 
 def a2dr_worker(pipe, prox, v_init, A, rho, anderson, m_accel):
     # Initialize AA-II parameters.
     if anderson:   # TODO: Store and update these efficiently as arrays.
         F_hist = []  # History of F(v^(k)).
     v_vec = v_init.copy()
+    v_res = np.zeros(v_init.shape[0])
 
     # A2DR loop.
     while True:
@@ -115,14 +157,17 @@ def a2dr_worker(pipe, prox, v_init, A, rho, anderson, m_accel):
             if len(F_hist) > m_k + 1:
                 F_hist.pop(0)
 
-            # Send v^(k) and g^(k) = v^(k) - F(v^(k)) = x^(k+1/2) - x^(k+1).
-            pipe.send(x_half - x_new)
+            # Send s^(k) = v^(k) - v^(k-1) and g^(k) = v^(k) - F(v^(k)) = x^(k+1/2) - x^(k+1).
+            pipe.send((v_res, x_half - x_new))
 
             # Receive AA-II weights for v^(k+1).
             alpha = pipe.recv()
 
             # Weighted update of v^(k+1).
             v_new = np.column_stack(F_hist).dot(alpha)
+
+            # Save v^(k+1) - v^(k) for next iteration.
+            v_res = v_new - v_vec
         else:
             # Update v^(k+1) = v^(k) + x^(k+1) - x^(k+1/2).
             v_new = v_vec + x_new - x_half
@@ -184,7 +229,6 @@ def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
 
     # Initialize AA-II variables.
     if anderson:   # TODO: Store and update these efficiently as arrays.
-        v_res = np.concatenate(v_init, axis=0)   # v^(k) - v^(k-1).
         g_vec = np.zeros(n_sum)   # g^(k) = v^(k) - F(v^(k)).
         s_hist = []  # History of s^(j) = v^(j+1) - v^(j), kept in S^(k) = [s^(k-m_k) ... s^(k-1)].
         y_hist = []  # History of y^(j) = g^(j+1) - g^(j), kept in Y^(k) = [y^(k-m_k) ... y^(k-1)].
@@ -211,8 +255,10 @@ def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
         if anderson:
             m_k = min(m_accel, k)  # Keep (y^(j), s^(j)) for iterations (k-m_k) through (k-1).
 
-            # Gather g_i^(k) = v_i^(k) - F(v_i^(k)) = x_i^(k+1/2) - x_i^(k+1).
-            g_new = [pipe.recv() for pipe in pipes]
+            # Gather s_i^(k) = v_i^(k) - v_i^(k-1) and g_i^(k) = v_i^(k) - F(v_i^(k)) = x_i^(k+1/2) - x_i^(k+1).
+            sg_update = [pipe.recv() for pipe in pipes]
+            s_new, g_new = map(list, zip(*sg_update))
+            s_new = np.concatenate(s_new, axis=0)
             g_new = np.concatenate(g_new, axis=0)
 
             # Save newest column y^(k-1) = g^(k) - g^(k-1) of matrix Y^(k).
@@ -222,7 +268,7 @@ def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
             g_vec = g_new
 
             # Save newest column s^(k-1) = v^(k) - v^(k-1) of matrix S^(k).
-            s_hist.append(v_res)
+            s_hist.append(s_new)
             if len(s_hist) > m_k + 1:
                 s_hist.pop(0)
 

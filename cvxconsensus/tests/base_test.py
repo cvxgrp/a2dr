@@ -78,7 +78,7 @@ class BaseTest(TestCase):
         print("Iterations: %d" % probs.solver_stats["num_iters"])
         print("Elapsed Time: %f" % probs.solver_stats["solve_time"])
 
-    def compare_residuals(self, res_sdrs, res_a2dr, m_vals):
+    def compare_residuals(self, res_drs, res_a2dr, m_vals):
         if not isinstance(res_a2dr, list):
             res_a2dr = [res_a2dr]
         if not isinstance(m_vals, list):
@@ -86,9 +86,9 @@ class BaseTest(TestCase):
         if len(m_vals) != len(res_a2dr):
             raise ValueError("Must have same number of AA-II residuals as memory parameter values")
 
-        plt.semilogy(range(res_sdrs.shape[0]), res_sdrs, label="S-DRS")
+        plt.semilogy(range(res_drs.shape[0]), res_drs, label="DRS")
         for i in range(len(m_vals)):
-            label = "AA-II S-DRS (m = {})".format(m_vals[i])
+            label = "A2DR (m = {})".format(m_vals[i])
             plt.semilogy(range(res_a2dr[i].shape[0]), res_a2dr[i], linestyle="--", label=label)
         plt.legend()
         plt.xlabel("Iteration")
