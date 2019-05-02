@@ -23,7 +23,72 @@ from multiprocessing import Process, Pipe
 from cvxconsensus.precondition import precondition
 from cvxconsensus.acceleration import aa_weights_alt
 
-def run_worker(pipe, prox, v_init, A, rho, anderson, m_accel):
+def prox_worker(pipe, prox, x_init, rho, anderson, m_accel):
+    # Initialize AA-II parameters.
+    if anderson:   # TODO: Should we accelerate individual workers or joint problem?
+        G_hist = []
+    x_vec = x_init.copy()
+
+    # Proximal point loop.
+    while True:
+        # Proximal step for x^(k+1).
+        x_new = prox(x_vec, rho)
+        sse = np.sum((x_new - x_vec)**2)
+        pipe.send(sse)
+        x_vec = x_new
+
+        # Send x^(k+1) if loop terminated.
+        finished = pipe.recv()
+        if finished:
+            pipe.send(x_new)
+
+def prox_point(p_list, v_init, *args, **kwargs):
+    # Problem parameters.
+    N = len(p_list)   # Number of subproblems.
+    max_iter = kwargs.pop("max_iter", 1000)
+    rho_init = kwargs.pop("rho_init", 1.0)  # Step size.
+    eps_abs = kwargs.pop("eps_abs", 1e-6)  # Absolute stopping tolerance.
+    eps_rel = kwargs.pop("eps_rel", 1e-8)  # Relative stopping tolerance.
+
+    # AA-II parameters.
+    anderson = kwargs.pop("anderson", False)
+    m_accel = int(kwargs.pop("m_accel", 5))  # Maximum past iterations to keep (>= 0).
+    if m_accel <= 0:
+        raise ValueError("m_accel must be a positive integer.")
+    lam_accel = kwargs.pop("lam_accel", 0)  # AA-II regularization weight.
+
+    # Set up the workers.
+    pipes = []
+    procs = []
+    for i in range(N):
+        local, remote = Pipe()
+        pipes += [local]
+        procs += [Process(target=prox_worker, args=(remote, p_list[i], v_init[i], rho_init, anderson, m_accel) + args)]
+        procs[-1].start()
+
+    # Proximal point loop.
+    k = 0
+    finished = False
+    resid = np.zeros(max_iter)
+
+    start = time()
+    while not finished:
+        x_sses = [pipe.recv() for pipe in pipes]
+        resid[k] = rho_init*np.sqrt(np.sum(x_sses))
+
+        # Stop if residual norms fall below tolerance.
+        k = k + 1
+        finished = k >= max_iter or (resid[k-1] <= eps_abs + eps_rel * resid[0])
+        for pipe in pipes:
+            pipe.send(finished)
+
+    # Gather and return x_i^(k+1) from nodes.
+    x_final = [pipe.recv() for pipe in pipes]
+    [p.terminate() for p in procs]
+    end = time()
+    return {"x_vals": x_final, "residuals": np.array(resid[:k]), "num_iters": k, "solve_time": (end - start)}
+
+def a2dr_worker(pipe, prox, v_init, A, rho, anderson, m_accel):
     # Initialize AA-II parameters.
     if anderson:   # TODO: Store and update these efficiently as arrays.
         F_hist = []  # History of F(v^(k)).
@@ -72,21 +137,21 @@ def run_worker(pipe, prox, v_init, A, rho, anderson, m_accel):
             pipe.send(x_half)
 
 # TODO: Warm start lstsq. Implement sparse handling. Return full objective.
-def a2dr(p_list, v_init, A_list, b, *args, **kwargs):
-    # Problem parameters.
+def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
     N = len(p_list)  # Number of subproblems.
+    if len(A_list) == 0:
+        return prox_point(p_list, v_init, *args, **kwargs)
+    elif len(A_list) != N:
+        raise ValueError("A_list must be empty or contain exactly {} entries".format(N))
+
+    # Problem parameters.
     max_iter = kwargs.pop("max_iter", 1000)
     rho_init = kwargs.pop("rho_init", 1.0)  # Step size.
     eps_abs = kwargs.pop("eps_abs", 1e-6)   # Absolute stopping tolerance.
     eps_rel = kwargs.pop("eps_rel", 1e-8)   # Relative stopping tolerance.
-    precond = kwargs.pop("precond", False)
+    precond = kwargs.pop("precond", False)  # Precondition A and b?
 
     # DRS parameters.
-    if len(A_list) == 0:   # TODO: Use proximal point method if no linear constraints.
-        raise NotImplementedError
-    elif len(A_list) != N:
-        raise ValueError("A_list must be empty or contain exactly {} entries".format(N))
-
     for i in range(N):
         if A_list[i].shape[0] != b.shape[0]:
             raise ValueError("Dimension mismatch: nrow(A_i) != nrow(b)")
@@ -113,7 +178,7 @@ def a2dr(p_list, v_init, A_list, b, *args, **kwargs):
     for i in range(N):
         local, remote = Pipe()
         pipes += [local]
-        procs += [Process(target=run_worker, args=(remote, p_list[i], v_init[i], A_list[i], \
+        procs += [Process(target=a2dr_worker, args=(remote, p_list[i], v_init[i], A_list[i], \
                                                    rho_init, anderson, m_accel) + args)]
         procs[-1].start()
 
@@ -188,7 +253,7 @@ def a2dr(p_list, v_init, A_list, b, *args, **kwargs):
     x_final = [pipe.recv() for pipe in pipes]
     [p.terminate() for p in procs]
     if precond:
-        x_final = [ei*x for x,ei in zip(x_final,e_pre)]
+        x_final = [ei*x for x, ei in zip(x_final, e_pre)]
     end = time()
     return {"x_vals": x_final, "primal": np.array(r_primal[:k]), "dual": np.array(r_dual[:k]), \
             "num_iters": k, "solve_time": (end - start)}

@@ -18,8 +18,8 @@ along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 """
 
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy.optimize import nnls
-from cvxpy import *
 from cvxconsensus.solver import a2dr
 from cvxconsensus.tests.base_test import BaseTest
 
@@ -40,8 +40,45 @@ class TestSolver(BaseTest):
         self.eps_abs = 1e-16
         self.MAX_ITER = 2000
 
+    def test_ols(self):
+        # minimize ||y - X\beta||_2^2 with respect to \beta >= 0.
+        m = 100
+        n = 10
+        N = 4  # Number of splits.
+        beta_true = np.array(np.arange(-n/2,n/2) + 1)
+        X = np.random.randn(m, n)
+        y = X.dot(beta_true) + np.random.randn(m)
+
+        # Split problem.
+        X_split = np.split(X, N)
+        y_split = np.split(y, N)
+        p_list = [prox_sum_squares(X_sub, y_sub) for X_sub, y_sub in zip(X_split, y_split)]
+        v_init = N*[np.random.randn(n)]
+
+        # Solve with NumPy.
+        np_beta = []
+        np_obj = 0
+        for i in range(N):
+            np_result = np.linalg.lstsq(X_split[i], y_split[i], rcond=None)
+            np_beta += [np_result[0]]
+            np_obj += np.sum(np_result[1])
+        print("NumPy Objective:", np_obj)
+        print("NumPy Solution:", np_beta)
+
+        # Solve with DRS (proximal point method).
+        drs_result = a2dr(p_list, v_init, max_iter=self.MAX_ITER, anderson=False)
+        drs_beta = drs_result["x_vals"]
+        drs_obj = np.sum([(yi - Xi.dot(beta))**2 for yi,Xi,beta in zip(y_split,X_split,drs_beta)])
+        print("DRS Objective:", drs_obj)
+        print("DRS Solution:", drs_beta)
+
+        # Compare results.
+        self.assertAlmostEqual(np_obj, drs_obj)
+        for i in range(N):
+            self.assertItemsAlmostEqual(np_beta[i], drs_beta[i])
+
     def test_nnls(self):
-        # minimize ||y - X\beta||_2^2 with respect to \beta.
+        # minimize ||y - X\beta||_2^2 with respect to \beta >= 0.
         m = 100
         n = 10
         N = 4   # Number of splits.
@@ -71,11 +108,10 @@ class TestSolver(BaseTest):
         drs_obj = np.sum((y - X.dot(drs_beta))**2)
         print("DRS Objective:", drs_obj)
         print("DRS Solution:", drs_beta)
-
         self.assertAlmostEqual(sp_obj, drs_obj)
         self.assertItemsAlmostEqual(sp_beta, drs_beta, places=3)
-        self.plot_residuals(drs_result["primal"], drs_result["dual"], \
-                            normalize=True, title="DRS Residuals", semilogy=True)
+        # self.plot_residuals(drs_result["primal"], drs_result["dual"], \
+        #                    normalize=True, title="DRS Residuals", semilogy=True)
 
         # Solve with A2DR.
         a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, anderson=True)
@@ -85,5 +121,5 @@ class TestSolver(BaseTest):
         print("A2DR Solution:", a2dr_beta)
         # self.assertAlmostEqual(sp_obj, a2dr_obj)
         # self.assertItemsAlmostEqual(sp_beta, a2dr_beta, places=3)
-        self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], \
-                            normalize=True, title="A2DR Residuals", semilogy=True)
+        # self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], \
+        #                    normalize=True, title="A2DR Residuals", semilogy=True)

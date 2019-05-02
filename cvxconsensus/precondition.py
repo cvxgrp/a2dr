@@ -37,14 +37,14 @@ def mat_equil(A, n_list, tol, max_iter):
     em, eN = np.ones(m), np.ones(N)
     d, e = em, eN
     
-    # form the size m-by-N matrix A_block, whose (i,j)-th entry is \sum_{k=n_1+...+n_{j-1}}}^{n_1+...+n_j} A_{ik}^2
+    # Form the size m-by-N matrix A_block, whose (i,j)-th entry is \sum_{k=n_1+...+n_{j-1}}}^{n_1+...+n_j} A_{ik}^2
     gamma = (m + N)/m/N * np.sqrt(np.finfo(float).eps)
     A2 = A ** 2 
     ave_list = [np.ones([n_i,1]) for n_i in n_list]
     A_block = A2.dot(block_diag(*ave_list))
     A_block_T = A_block.transpose()
     
-    # apply regularized Sinkhorn-Knopp on A_block
+    # Apply regularized Sinkhorn-Knopp on A_block
     for k in range(max_iter):
         d1 = N / (A_block.dot(e) + N * gamma * em)
         e1 = m / (A_block_T.dot(d) + m * gamma * eN)
@@ -62,7 +62,7 @@ def mat_equil(A, n_list, tol, max_iter):
     D = np.diag(d)
     B = D.dot(A.dot(E))
     
-    # rescale to have \|DAE\|_2 close to 1
+    # Rescale to have \|DAE\|_2 close to 1
     scale = np.linalg.norm(B, 'fro') / np.sqrt(np.min([m,N]))
     d_mean = np.mean(d)
     e_mean = np.mean(e)
