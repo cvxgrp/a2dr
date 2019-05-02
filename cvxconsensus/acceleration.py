@@ -82,6 +82,6 @@ def aa_weights_alt(Y, g, reg = 0, *args, **kwargs):
 		Y = np.vstack([Y, np.sqrt(reg)*np.eye(m)])
 		g = np.concatenate([g, np.zeros(m)])
 	gamma = np.linalg.lstsq(Y, g, *args, **kwargs)[0]
-	gamma = np.append(gamma, 1)
-	alpha = np.diff(gamma, n=1)
+	gamma_diff = np.diff(gamma, n=1)
+	alpha = np.concatenate(([gamma[0]], gamma_diff, [1-gamma[-1]]))
 	return alpha

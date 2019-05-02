@@ -44,7 +44,7 @@ def prox_worker(pipe, prox, x_init, rho, anderson, m_accel, lam_accel):
         pipe.send(np.sum(g_new**2))
 
         if anderson:
-            m_k = min(m_accel, k)
+            m_k = min(m_accel, k+1)
 
             # Save history of F(x^(k)).
             F_hist.append(x_new)
@@ -53,19 +53,18 @@ def prox_worker(pipe, prox, x_init, rho, anderson, m_accel, lam_accel):
 
             # Save newest column y^(k-1) = g^(k) - g^(k-1) of matrix Y^(k).
             y_hist.append(g_new - g_vec)
-            if len(y_hist) > m_k + 1:
+            if len(y_hist) > m_k:
                 y_hist.pop(0)
-            g_vec = g_new
 
             # Save newest column s^(k-1) = x^(k) - x^(k-1) of matrix S^(k).
             s_hist.append(x_res)
-            if len(s_hist) > m_k + 1:
+            if len(s_hist) > m_k:
                 s_hist.pop(0)
 
             # Compute and scatter AA-II weights.
             Y_mat = np.column_stack(y_hist)
             S_mat = np.column_stack(s_hist)
-            reg = lam_accel * (np.linalg.norm(Y_mat) ** 2 + np.linalg.norm(S_mat) ** 2)  # AA-II regularization.
+            reg = lam_accel*(np.linalg.norm(Y_mat)**2 + np.linalg.norm(S_mat)**2)  # AA-II regularization.
             alpha = aa_weights_alt(Y_mat, g_new, reg, rcond=None)
 
             # Weighted update of v^(k+1).
@@ -73,6 +72,7 @@ def prox_worker(pipe, prox, x_init, rho, anderson, m_accel, lam_accel):
 
             # Save x^(k+1) - x^(k) for next iteration.
             x_res = x_new - x_vec
+            g_vec = g_new
 
         # Send x^(k+1) if loop terminated.
         finished = pipe.recv()
@@ -118,7 +118,8 @@ def prox_point(p_list, v_init, *args, **kwargs):
 
         # Stop if residual norms fall below tolerance.
         k = k + 1
-        finished = k >= max_iter or (resid[k-1] <= eps_abs + eps_rel * resid[0])
+        # finished = k >= max_iter or (resid[k-1] <= eps_abs + eps_rel * resid[0])
+        finished = k >= max_iter
         for pipe in pipes:
             pipe.send(finished)
 
@@ -181,7 +182,7 @@ def a2dr_worker(pipe, prox, v_init, A, rho, anderson, m_accel):
         if finished:
             pipe.send(x_half)
 
-# TODO: Warm start lstsq. Implement sparse handling. Return full objective.
+# TODO: Warm start lstsq. Implement sparse handling.
 def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
     N = len(p_list)  # Number of subproblems.
     if len(A_list) == 0:

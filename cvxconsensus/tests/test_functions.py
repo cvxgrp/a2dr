@@ -22,6 +22,7 @@ from cvxpy import Variable, Problem, Minimize
 from cvxpy.atoms import *
 import cvxpy.settings as s
 from cvxconsensus.consensus import prox_step, w_project, w_project_gen
+from cvxconsensus.acceleration import aa_weights_alt
 from cvxconsensus.utilities import assign_rho, partition_vars
 from cvxconsensus.tests.base_test import BaseTest
 
@@ -81,6 +82,29 @@ class TestFunctions(BaseTest):
 		self.assertSetEqual(var_list[0]["public"], {self.y.id})
 		self.assertSetEqual(var_list[1]["private"], set())
 		self.assertSetEqual(var_list[1]["public"], {self.y.id})
+
+	def test_aa_weights_alt(self):
+		m = 100
+		n = 10
+		Y = np.random.randn(m,n)
+		g = np.random.randn(m)
+
+		gamma = Variable(n)
+		obj = sum_squares(g - Y*gamma)
+		prob = Problem(Minimize(obj))
+		prob.solve(solver = "OSQP")
+		print("CVXPY Gamma:", gamma.value)
+
+		alpha_cvxpy = np.zeros(n+1)
+		alpha_cvxpy[0] = gamma.value[0]
+		for i in range(1,n):
+			alpha_cvxpy[i] = gamma.value[i] - gamma.value[i-1]
+		alpha_cvxpy[n] = 1 - gamma.value[n-1]
+		print("CVXPY Alpha:", alpha_cvxpy)
+
+		alpha_aa2 = aa_weights_alt(Y, g, reg = 0, rcond = None)
+		print("AA2 Alpha:", alpha_aa2)
+		self.assertItemsAlmostEqual(alpha_aa2, alpha_cvxpy)
 
 	def test_prox_step(self):
 		rho = {self.x.id: 1.0}
