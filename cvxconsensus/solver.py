@@ -20,6 +20,7 @@ import numpy as np
 import scipy.sparse as sp
 from time import time
 from multiprocessing import Process, Pipe
+from cvxconsensus.precondition import precondition
 from cvxconsensus.acceleration import aa_weights_alt
 
 def run_worker(pipe, prox, v_init, A, rho, anderson, m_accel):
@@ -78,9 +79,10 @@ def a2dr(p_list, v_init, A_list, b, *args, **kwargs):
     rho_init = kwargs.pop("rho_init", 1.0)  # Step size.
     eps_abs = kwargs.pop("eps_abs", 1e-6)   # Absolute stopping tolerance.
     eps_rel = kwargs.pop("eps_rel", 1e-8)   # Relative stopping tolerance.
+    precond = kwargs.pop("precond", False)
 
     # DRS parameters.
-    if len(A_list) == 0:   # TODO: Deal with case of no linear constraints.
+    if len(A_list) == 0:   # TODO: Use proximal point method if no linear constraints.
         raise NotImplementedError
     elif len(A_list) != N:
         raise ValueError("A_list must be empty or contain exactly {} entries".format(N))
@@ -90,6 +92,10 @@ def a2dr(p_list, v_init, A_list, b, *args, **kwargs):
             raise ValueError("Dimension mismatch: nrow(A_i) != nrow(b)")
         elif A_list[i].shape[1] != v_init[i].shape[0]:
             raise ValueError("Dimension mismatch: ncol(A_i) != nrow(v_i)")
+
+    # Precondition data.
+    if precond:
+        p_list, A_list, b, e_pre = precondition(p_list, A_list, b, tol = eps_abs, max_iter = max_iter)
     n_sum = np.sum([v.size for v in v_init])
     A = np.hstack(A_list)
     AAT = A.dot(A.T)   # Store for projection step.
@@ -181,6 +187,8 @@ def a2dr(p_list, v_init, A_list, b, *args, **kwargs):
     # Gather and return x_i^(k+1) from nodes.
     x_final = [pipe.recv() for pipe in pipes]
     [p.terminate() for p in procs]
+    if precond:
+        x_final = [ei*x for x,ei in zip(x_final,e_pre)]
     end = time()
     return {"x_vals": x_final, "primal": np.array(r_primal[:k]), "dual": np.array(r_dual[:k]), \
             "num_iters": k, "solve_time": (end - start)}

@@ -1,9 +1,19 @@
 import numpy as np
 from scipy.linalg import block_diag
 
+def precondition(p_list, A_list, b, tol = 1e-6, max_iter = 1000):
+    n_list = [A.shape[1] for A in A_list]
+    A = np.hstack(A_list)
+    d, e, A_hat, k = mat_equil(A, n_list, tol, max_iter)
+
+    split_idx = np.cumsum(n_list)
+    A_eq_list = np.split(A_hat, split_idx, axis=1)[:-1]
+    p_eq_list = [lambda v, rho: prox(ei*v, rho/ei**2)/ei for prox, ei in zip(p_list, e)]
+    return p_eq_list, A_eq_list, d*b, e
+
 def mat_equil(A, n_list, tol, max_iter):
-    # block matrix equilibration using regularized Sinkhorn-Knopp
-    # reference: [POGS] http://stanford.edu/~boyd/papers/pdf/pogs.pdf
+    # Block matrix equilibration using regularized Sinkhorn-Knopp
+    # Reference: [POGS] http://stanford.edu/~boyd/papers/pdf/pogs.pdf
     '''
     1. Input
     A: a numpy 2d-array or matrix of size m-by-n to be equilibrated
@@ -62,5 +72,3 @@ def mat_equil(A, n_list, tol, max_iter):
     B = B / scale
     
     return d, e, B, k
-    
-    

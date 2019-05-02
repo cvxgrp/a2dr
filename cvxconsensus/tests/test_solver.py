@@ -25,9 +25,9 @@ from cvxconsensus.tests.base_test import BaseTest
 
 def prox_sum_squares(X, y, rcond = None):
     n = X.shape[1]
-    def prox(u, rho):
+    def prox(v, rho):
         A = np.vstack((X, np.sqrt(rho/2)*np.eye(n)))
-        b = np.concatenate((y, np.sqrt(rho/2)*u))
+        b = np.concatenate((y, np.sqrt(rho/2)*v))
         return np.linalg.lstsq(A, b, rcond=rcond)[0]
     return prox
 
@@ -74,7 +74,8 @@ class TestSolver(BaseTest):
 
         self.assertAlmostEqual(sp_obj, drs_obj)
         self.assertItemsAlmostEqual(sp_beta, drs_beta, places=3)
-        self.plot_residuals(drs_result["primal"], drs_result["dual"], normalize=True, title="DRS Residuals", semilogy=True)
+        self.plot_residuals(drs_result["primal"], drs_result["dual"], \
+                            normalize=True, title="DRS Residuals", semilogy=True)
 
         # Solve with A2DR.
         a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, anderson=True)
@@ -84,4 +85,5 @@ class TestSolver(BaseTest):
         print("A2DR Solution:", a2dr_beta)
         # self.assertAlmostEqual(sp_obj, a2dr_obj)
         # self.assertItemsAlmostEqual(sp_beta, a2dr_beta, places=3)
-        self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], normalize=True, title="A2DR Residuals", semilogy=True)
+        self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], \
+                            normalize=True, title="A2DR Residuals", semilogy=True)

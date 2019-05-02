@@ -76,7 +76,6 @@ def aa_weights(residuals, lam=None, type="exact", *args, **kwargs):
 	else:
 		raise ValueError("type must be either 'exact' or 'inexact'")
 
-
 def aa_weights_alt(Y, g, reg = 0, *args, **kwargs):
 	if reg != 0:
 		m = Y.shape[1]
