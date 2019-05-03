@@ -75,7 +75,7 @@ class TestSolver(BaseTest):
         # Solve with A2DR (proximal point method with Anderson acceleration).
         a2dr_result = a2dr(p_list, v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, eps_stop=self.eps_stop, anderson=True)
         a2dr_beta = a2dr_result["x_vals"]
-        a2dr_obj = np.sum([(yi - Xi.dot(beta)) ** 2 for yi, Xi, beta in zip(y_split, X_split, drs_beta)])
+        a2dr_obj = np.sum([(yi - Xi.dot(beta))**2 for yi, Xi, beta in zip(y_split, X_split, drs_beta)])
         print("A2DR Objective:", a2dr_obj)
         print("A2DR Solution:", a2dr_beta)
 
@@ -119,7 +119,7 @@ class TestSolver(BaseTest):
         b = np.zeros(N*n)
 
         # Solve with DRS.
-        drs_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, anderson=False)
+        drs_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, eps_stop=self.eps_stop, anderson=False)
         drs_beta = drs_result["x_vals"][-1]
         drs_obj = np.sum((y - X.dot(drs_beta))**2)
         print("DRS Objective:", drs_obj)
@@ -130,7 +130,7 @@ class TestSolver(BaseTest):
                             normalize=True, title="DRS Residuals", semilogy=True)
 
         # Solve with A2DR.
-        a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, anderson=True)
+        a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, eps_stop=self.eps_stop, anderson=True)
         a2dr_beta = a2dr_result["x_vals"][-1]
         a2dr_obj = np.sum((y - X.dot(a2dr_beta))**2)
         print("A2DR Objective:", a2dr_obj)

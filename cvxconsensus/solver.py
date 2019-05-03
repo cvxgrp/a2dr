@@ -20,114 +20,9 @@ import numpy as np
 import scipy.sparse as sp
 from time import time
 from multiprocessing import Process, Pipe
+from cvxconsensus import prox_point
 from cvxconsensus.precondition import precondition
-from cvxconsensus.acceleration import aa_weights_alt
-
-def prox_worker(pipe, prox, x_init, rho, anderson, m_accel, lam_accel):
-    n = x_init.shape[0]
-    x_vec = x_init.copy()
-
-    # Initialize AA-II parameters.
-    if anderson:   # TODO: Should we accelerate individual workers or joint problem?
-        x_res = np.zeros(n)  # s^(k-1) = x^(k) - x^(k-1).
-        g_vec = np.zeros(n)  # g^(k) = x^(k) - F(x^(k)).
-        F_hist = []  # History of F(x^(k))
-        s_hist = []  # History of s^(j) = x^(j+1) - x^(j), kept in S^(k) = [s^(k-m_k) ... s^(k-1)].
-        y_hist = []  # History of y^(j) = g^(j+1) - g^(j), kept in Y^(k) = [y^(k-m_k) ... y^(k-1)].
-
-    # Proximal point loop.
-    k = 0
-    while True:
-        # Proximal step for x^(k+1).
-        x_new = prox(x_vec, rho)
-        g_new = x_new - x_vec
-        pipe.send(np.sum(g_new**2))
-
-        if anderson:
-            m_k = min(m_accel, k+1)
-
-            # Save history of F(x^(k)).
-            F_hist.append(x_new)
-            if len(F_hist) > m_k + 1:
-                F_hist.pop(0)
-
-            # Save newest column y^(k-1) = g^(k) - g^(k-1) of matrix Y^(k).
-            y_hist.append(g_new - g_vec)
-            if len(y_hist) > m_k:
-                y_hist.pop(0)
-            g_vec = g_new
-
-            # Save newest column s^(k-1) = x^(k) - x^(k-1) of matrix S^(k).
-            s_hist.append(x_res)
-            if len(s_hist) > m_k:
-                s_hist.pop(0)
-
-            # Compute and scatter AA-II weights.
-            Y_mat = np.column_stack(y_hist)
-            S_mat = np.column_stack(s_hist)
-            reg = lam_accel*(np.linalg.norm(Y_mat)**2 + np.linalg.norm(S_mat)**2)  # AA-II regularization.
-            alpha = aa_weights_alt(Y_mat, g_new, reg, rcond=None)
-
-            # Weighted update of v^(k+1).
-            x_new = np.column_stack(F_hist).dot(alpha[:(k+1)])
-
-            # Save x^(k+1) - x^(k) for next iteration.
-            x_res = x_new - x_vec
-
-        # Send x^(k+1) if loop terminated.
-        finished = pipe.recv()
-        if finished:
-            pipe.send(x_new)
-        x_vec = x_new
-        k = k + 1
-
-def prox_point(p_list, v_init, *args, **kwargs):
-    # Problem parameters.
-    N = len(p_list)   # Number of subproblems.
-    max_iter = kwargs.pop("max_iter", 1000)
-    rho_init = kwargs.pop("rho_init", 1.0)  # Step size.
-    eps_abs = kwargs.pop("eps_abs", 1e-6)  # Absolute stopping tolerance.
-    eps_rel = kwargs.pop("eps_rel", 1e-8)  # Relative stopping tolerance.
-
-    # AA-II parameters.
-    anderson = kwargs.pop("anderson", False)
-    m_accel = int(kwargs.pop("m_accel", 5))  # Maximum past iterations to keep (>= 0).
-    if m_accel <= 0:
-        raise ValueError("m_accel must be a positive integer.")
-    lam_accel = kwargs.pop("lam_accel", 0)  # AA-II regularization weight.
-
-    # Set up the workers.
-    pipes = []
-    procs = []
-    for i in range(N):
-        local, remote = Pipe()
-        pipes += [local]
-        procs += [Process(target=prox_worker, args=(remote, p_list[i], v_init[i], rho_init, \
-                                                    anderson, m_accel, lam_accel) + args)]
-        procs[-1].start()
-
-    # Proximal point loop.
-    k = 0
-    finished = False
-    resid = np.zeros(max_iter)
-
-    start = time()
-    while not finished:
-        x_sses = [pipe.recv() for pipe in pipes]
-        resid[k] = rho_init*np.sqrt(np.sum(x_sses))
-
-        # Stop if residual norms fall below tolerance.
-        k = k + 1
-        finished = k >= max_iter or (resid[k-1] <= eps_abs + eps_rel * resid[0])
-        for pipe in pipes:
-            pipe.send(finished)
-
-    # Gather and return x_i^(k+1) from nodes.
-    x_final = [pipe.recv() for pipe in pipes]
-    [p.terminate() for p in procs]
-    end = time()
-    return {"x_vals": x_final, "primal": np.zeros(k), "dual": np.array(resid[:k]), \
-            "num_iters": k, "solve_time": (end - start)}
+from cvxconsensus.acceleration import aa_weights
 
 def a2dr_worker(pipe, prox, v_init, A, rho, anderson, m_accel):
     # Initialize AA-II parameters.
@@ -154,10 +49,10 @@ def a2dr_worker(pipe, prox, v_init, A, rho, anderson, m_accel):
 
             # Save history of F(v^(k)).
             F_hist.append(v_vec + x_new - x_half)
-            if len(F_hist) > m_k + 2:
+            if len(F_hist) > m_k + 1:
                 F_hist.pop(0)
 
-            # Send s^(k) = v^(k) - v^(k-1) and g^(k) = v^(k) - F(v^(k)) = x^(k+1/2) - x^(k+1).
+            # Send s^(k-1) = v^(k) - v^(k-1) and g^(k) = v^(k) - F(v^(k)) = x^(k+1/2) - x^(k+1).
             pipe.send((v_res, x_half - x_new))
 
             # Receive AA-II weights for v^(k+1).
@@ -176,19 +71,13 @@ def a2dr_worker(pipe, prox, v_init, A, rho, anderson, m_accel):
         pipe.send((A.dot(x_half), x_half - v_vec))
         v_vec = v_new
 
-        # Send x_i^(k+1) if A2DR terminated.
+        # Send x_i^(k+1/2) if A2DR terminated.
         finished = pipe.recv()
         if finished:
             pipe.send(x_half)
 
 # TODO: Warm start lstsq. Implement sparse handling.
 def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
-    N = len(p_list)  # Number of subproblems.
-    if len(A_list) == 0:
-        return prox_point(p_list, v_init, *args, **kwargs)
-    elif len(A_list) != N:
-        raise ValueError("A_list must be empty or contain exactly {} entries".format(N))
-
     # Problem parameters.
     max_iter = kwargs.pop("max_iter", 1000)
     rho_init = kwargs.pop("rho_init", 1.0)  # Step size.
@@ -196,7 +85,31 @@ def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
     eps_rel = kwargs.pop("eps_rel", 1e-8)   # Relative stopping tolerance.
     precond = kwargs.pop("precond", False)  # Precondition A and b?
 
+    # AA-II parameters.
+    anderson = kwargs.pop("anderson", False)
+    m_accel = int(kwargs.pop("m_accel", 5))  # Maximum past iterations to keep (>= 0).
+    lam_accel = kwargs.pop("lam_accel", 0)   # AA-II regularization weight.
+
+    # Validate parameters.
+    if max_iter <= 0:
+        raise ValueError("max_iter must be a positive integer.")
+    if rho_init <= 0:
+        raise ValueError("rho_init must be a positive scalar.")
+    if eps_abs < 0:
+        raise ValueError("eps_abs must be a non-negative scalar.")
+    if eps_rel < 0:
+        raise ValueError("eps_rel must be a non-negative scalar.")
+    if m_accel <= 0:
+        raise ValueError("m_accel must be a positive integer.")
+    if lam_accel < 0:
+        raise ValueError("lam_accel must be a non-negative scalar.")
+
     # DRS parameters.
+    N = len(p_list)   # Number of subproblems.
+    if len(A_list) == 0:
+        return prox_point(p_list, v_init, *args, **kwargs)
+    if len(A_list) != N:
+        raise ValueError("A_list must be empty or contain exactly {} entries".format(N))
     for i in range(N):
         if A_list[i].shape[0] != b.shape[0]:
             raise ValueError("Dimension mismatch: nrow(A_i) != nrow(b)")
@@ -206,16 +119,8 @@ def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
     # Precondition data.
     if precond:
         p_list, A_list, b, e_pre = precondition(p_list, A_list, b, tol = eps_abs, max_iter = max_iter)
-    n_sum = np.sum([v.size for v in v_init])
     A = np.hstack(A_list)
     AAT = A.dot(A.T)   # Store for projection step.
-
-    # AA-II parameters.
-    anderson = kwargs.pop("anderson", False)
-    m_accel = int(kwargs.pop("m_accel", 5))  # Maximum past iterations to keep (>= 0).
-    if m_accel <= 0:
-        raise ValueError("m_accel must be a positive integer.")
-    lam_accel = kwargs.pop("lam_accel", 0)   # AA-II regularization weight.
 
     # Set up the workers.
     pipes = []
@@ -224,11 +129,12 @@ def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
         local, remote = Pipe()
         pipes += [local]
         procs += [Process(target=a2dr_worker, args=(remote, p_list[i], v_init[i], A_list[i], \
-                                                   rho_init, anderson, m_accel) + args)]
+                                                    rho_init, anderson, m_accel) + args)]
         procs[-1].start()
 
     # Initialize AA-II variables.
     if anderson:   # TODO: Store and update these efficiently as arrays.
+        n_sum = np.sum([v.size for v in v_init])
         g_vec = np.zeros(n_sum)   # g^(k) = v^(k) - F(v^(k)).
         s_hist = []  # History of s^(j) = v^(j+1) - v^(j), kept in S^(k) = [s^(k-m_k) ... s^(k-1)].
         y_hist = []  # History of y^(j) = g^(j+1) - g^(j), kept in Y^(k) = [y^(k-m_k) ... y^(k-1)].
@@ -253,30 +159,30 @@ def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
             pipe.send((d_half, k))
 
         if anderson:
-            m_k = min(m_accel, k)  # Keep (y^(j), s^(j)) for iterations (k-m_k) through (k-1).
+            m_k = min(m_accel, k+1)  # Keep (y^(j), s^(j)) for iterations (k-m_k) through (k-1).
 
-            # Gather s_i^(k) = v_i^(k) - v_i^(k-1) and g_i^(k) = v_i^(k) - F(v_i^(k)) = x_i^(k+1/2) - x_i^(k+1).
+            # Gather s_i^(k-1) and g_i^(k) from nodes.
             sg_update = [pipe.recv() for pipe in pipes]
             s_new, g_new = map(list, zip(*sg_update))
-            s_new = np.concatenate(s_new, axis=0)
-            g_new = np.concatenate(g_new, axis=0)
+            s_new = np.concatenate(s_new, axis=0)   # s_i^(k-1) = v_i^(k) - v_i^(k-1).
+            g_new = np.concatenate(g_new, axis=0)   # g_i^(k) = v_i^(k) - F(v_i^(k)) = x_i^(k+1/2) - x_i^(k+1).
 
             # Save newest column y^(k-1) = g^(k) - g^(k-1) of matrix Y^(k).
             y_hist.append(g_new - g_vec)
-            if len(y_hist) > m_k + 1:
+            if len(y_hist) > m_k:
                 y_hist.pop(0)
             g_vec = g_new
 
             # Save newest column s^(k-1) = v^(k) - v^(k-1) of matrix S^(k).
             s_hist.append(s_new)
-            if len(s_hist) > m_k + 1:
+            if len(s_hist) > m_k:
                 s_hist.pop(0)
 
             # Compute and scatter AA-II weights.
             Y_mat = np.column_stack(y_hist)
             S_mat = np.column_stack(s_hist)
             reg = lam_accel*(np.linalg.norm(Y_mat)**2 + np.linalg.norm(S_mat)**2)   # AA-II regularization.
-            alpha = aa_weights_alt(Y_mat, g_new, reg, rcond=None)
+            alpha = aa_weights(Y_mat, g_new, reg, rcond=None)
             for pipe in pipes:
                 pipe.send(alpha)
 
@@ -295,7 +201,7 @@ def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
         for pipe in pipes:
             pipe.send(finished)
 
-    # Gather and return x_i^(k+1) from nodes.
+    # Gather and return x_i^(k+1/2) from nodes.
     x_final = [pipe.recv() for pipe in pipes]
     [p.terminate() for p in procs]
     if precond:

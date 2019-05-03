@@ -23,9 +23,9 @@ import scipy.sparse as sp
 from cvxpy import Variable, Problem, Minimize
 from cvxconsensus.utilities import dicts_to_arr
 
-def aa_weights(residuals, lam=None, type="exact", *args, **kwargs):
+def aa_weights_alt(residuals, lam=None, type="exact", *args, **kwargs):
 	""" Solve the constrained least-squares problem
-	   Minimize sum_squares(\sum_{j=0}^m w[j]*r^(k+1-m+j)
+	   Minimize sum_squares(\sum_{j=0}^m w[j]*r^(k+1-m+j))
 	      subject to \sum_{j=0}^m w[j] = 1
 
 	This can be transformed via a change of variables
@@ -35,7 +35,7 @@ def aa_weights(residuals, lam=None, type="exact", *args, **kwargs):
 
 	Parameters
 	----------
-	primals : array
+	residuals : array
 	     A numpy array containing the primal residuals for the last `m+1`
 	     iterations, including the current iteration. If our current iteration
 	     is `k+1`, then column `j` is the residual from iteration `k+1-m+j`
@@ -76,7 +76,23 @@ def aa_weights(residuals, lam=None, type="exact", *args, **kwargs):
 	else:
 		raise ValueError("type must be either 'exact' or 'inexact'")
 
-def aa_weights_alt(Y, g, reg = 0, *args, **kwargs):
+def aa_weights(Y, g, reg = 0, *args, **kwargs):
+	""" Solve the constrained least-squares problem
+		Minimize sum_squares(\sum_{j=0}^m w_j * G^(k-m+j))
+			subject to \sum_{j=0}^m w_j = 1.
+		with respect to w \in \reals^{m+1}.
+
+	This can be transformed via a change of variables
+		w_0 = c_0, w_j = c_j - c_{j-1} for j = 1,...,m-1, and w_m = 1 - c_{m-1}
+	into the unconstrained problem
+		Minimize sum_squares(g - Y*c)
+	with respect to c \in \reals^m, where g_i = G^(i) and Y_k = [y_{k-m},...,y_{k-1}]
+	for y_i = g_{i+1} - g_i.
+
+	We add a regularization term for stability, so the final problem we solve is
+		Minimize sum_squares(g - Y*c) + \lambda*sum_squares(c)
+	and return w as defined above.
+	"""
 	if reg != 0:
 		m = Y.shape[1]
 		Y = np.vstack([Y, np.sqrt(reg)*np.eye(m)])

@@ -22,7 +22,7 @@ from cvxpy import Variable, Problem, Minimize
 from cvxpy.atoms import *
 import cvxpy.settings as s
 from cvxconsensus.consensus import prox_step, w_project, w_project_gen
-from cvxconsensus.acceleration import aa_weights_alt
+from cvxconsensus.acceleration import aa_weights
 from cvxconsensus.utilities import assign_rho, partition_vars
 from cvxconsensus.tests.base_test import BaseTest
 
@@ -102,7 +102,7 @@ class TestFunctions(BaseTest):
 		alpha_cvxpy[n] = 1 - gamma.value[n-1]
 		print("CVXPY Alpha:", alpha_cvxpy)
 
-		alpha_aa2 = aa_weights_alt(Y, g, reg = 0, rcond = None)
+		alpha_aa2 = aa_weights(Y, g, reg = 0, rcond = None)
 		print("AA2 Alpha:", alpha_aa2)
 		self.assertItemsAlmostEqual(alpha_aa2, alpha_cvxpy)
 

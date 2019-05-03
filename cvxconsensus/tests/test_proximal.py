@@ -17,10 +17,8 @@ You should have received a copy of the GNU General Public License
 along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 """
 
-import numpy as np
 from cvxpy.atoms import *
-from cvxpy import Constant, Variable, Problem, Minimize
-from cvxconsensus.proximal import *
+from cvxconsensus.proximal.prox_operators import *
 from cvxconsensus.tests.base_test import BaseTest
 
 class TestProximal(BaseTest):

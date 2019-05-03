@@ -17,9 +17,7 @@ You should have received a copy of the GNU General Public License
 along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 """
 
-import numpy as np
 from scipy.sparse import csc_matrix
-from scipy.linalg import solve_triangular
 from sksparse.cholmod import cholesky_AAt
 from time import time
 from collections import defaultdict
@@ -28,8 +26,8 @@ import cvxpy.settings as s
 from cvxpy.problems.problem import Problem
 from cvxpy.expressions.constants import Parameter
 from cvxpy.atoms import sum_squares
-from cvxconsensus.acceleration import aa_weights
-from cvxconsensus.proximal import ProxOperator
+from cvxconsensus.acceleration import aa_weights_alt
+from cvxconsensus.proximal.prox_operators import ProxOperator
 from cvxconsensus.utilities import *
 
 def prox_step(prob, rho_init):
@@ -346,7 +344,7 @@ def consensus(p_list, *args, **kwargs):
 			
 			# Compute and scatter AA-II weights.
 			# alpha = aa_weights(y_diffs + [s_diff], type = "inexact", solver = "OSQP", eps_abs = 1e-16)
-			alpha = aa_weights(y_diffs + [s_diff])
+			alpha = aa_weights_alt(y_diffs + [s_diff])
 			for pipe in pipes:
 				pipe.send(alpha)
 			
