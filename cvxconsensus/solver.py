@@ -20,7 +20,7 @@ import numpy as np
 import scipy.sparse as sp
 from time import time
 from multiprocessing import Process, Pipe
-from cvxconsensus import prox_point
+from cvxconsensus.proximal.prox_point import prox_point
 from cvxconsensus.precondition import precondition
 from cvxconsensus.acceleration import aa_weights
 
@@ -106,6 +106,8 @@ def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
 
     # DRS parameters.
     N = len(p_list)   # Number of subproblems.
+    if len(v_init) != N:
+        raise ValueError("p_list and v_init must contain the same number of entries")
     if len(A_list) == 0:
         return prox_point(p_list, v_init, *args, **kwargs)
     if len(A_list) != N:

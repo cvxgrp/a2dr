@@ -18,9 +18,11 @@ along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 """
 
 import numpy as np
+import scipy as sp
 import matplotlib.pyplot as plt
+from cvxpy import *
 from scipy.optimize import nnls
-from cvxconsensus.solver import a2dr
+from cvxconsensus import a2dr
 from cvxconsensus.tests.base_test import BaseTest
 
 def prox_sum_squares(X, y, rcond = None):
@@ -30,6 +32,29 @@ def prox_sum_squares(X, y, rcond = None):
         b = np.concatenate((y, np.sqrt(rho/2)*v))
         return np.linalg.lstsq(A, b, rcond=rcond)[0]
     return prox
+
+def prox_neg_log_det(v, rho):
+    n = int(np.sqrt(v.shape[0]))
+    A = np.reshape(v, (n,n), order='C')
+    A_symm = (A + A.T) / 2.0
+    if not (np.allclose(A, A_symm) and np.all(np.linalg.eigvals(A_symm) > 0)):
+        raise Exception(
+            "Proximal operator for negative log-determinant only operates on symmetric positive definite matrices.")
+    U, s, Vt = np.linalg.svd(A_symm, full_matrices=False)
+    s_new = (s + np.sqrt(s ** 2 + 4.0/rho)) / 2
+    A_new = U.dot(np.diag(s_new)).dot(Vt)
+    return A_new.ravel(order='C')
+
+def prox_pos_semidef(v, rho):
+    n = int(np.sqrt(v.shape[0]))
+    A = np.reshape(v, (n,n), order='C')
+    A_symm = (A + A.T) / 2.0
+    if not np.allclose(A, A_symm):
+        raise Exception("Proximal operator for positive semidefinite cone only operates on symmetric matrices.")
+    w, v = np.linalg.eig(A_symm)
+    w_new = np.maximum(w, 0)
+    A_new = v.dot(np.diag(w_new)).dot(v.T)
+    return A_new.ravel(order='C')
 
 class TestSolver(BaseTest):
     """Unit tests for internal A2DR solver."""
@@ -144,6 +169,83 @@ class TestSolver(BaseTest):
         plt.semilogy(range(drs_result["num_iters"]), drs_result["primal"], color="blue", linestyle="--", label="Primal (DRS)")
         plt.semilogy(range(a2dr_result["num_iters"]), a2dr_result["primal"], color="blue", label="Primal (A2DR)")
         plt.semilogy(range(drs_result["num_iters"]), drs_result["dual"], color="darkorange", linestyle="--", label="Dual (DRS)")
+        plt.semilogy(range(a2dr_result["num_iters"]), a2dr_result["dual"], color="darkorange", label="Dual (A2DR) ")
+        plt.title("Residuals")
+        plt.legend()
+        plt.show()
+
+    def test_sparse_covariance(self):
+        # minimize -log(det(S)) + trace(S*Y) + \alpha*norm(S,1)
+        #   subject to S is PSD, where Y and \alpha >= are parameters.
+
+        # Problem data.
+        m = 10  # Dimension of matrix.
+        n = m*m   # Length of vectorized matrix.
+        K = 1000  # Number of samples.
+        A = np.random.randn(m,m)
+        A[sp.sparse.rand(m,m,0.85).todense().nonzero()] = 0
+        S_true = A.dot(A.T) + 0.05 * np.eye(m)
+        R = np.linalg.inv(S_true)
+        y_sample = sp.linalg.sqrtm(R).dot(np.random.randn(m,K))
+        Y = np.cov(y_sample)
+
+        # Solve with CVXPY.
+        S = Variable((m,m), PSD=True)
+        alpha = Parameter(nonneg=True)
+        obj = -log_det(S) + trace(S*Y) + alpha*norm1(S)
+        prob = Problem(Minimize(obj))
+
+        alpha.value = 1.0
+        prob.solve()
+        cvxpy_obj = prob.value
+        cvxpy_S = S.value
+        print("CVXPY Objective:", cvxpy_obj)
+        # print("CVXPY Solution:", cvxpy_S)
+
+        # Split problem as f_1(S) = -log(det(S)), f_2(S) = trace(S*Y),
+        #   f_3(S) = \alpha*norm(S,1), f_4(S) = I(S is PSD).
+        N = 3
+        p_list = [prox_neg_log_det,
+                  lambda v, rho: v - Y.ravel(order='C')/rho,
+                  lambda v, rho: np.maximum(np.abs(v) - alpha.value/rho, 0) * np.sign(v),
+                  prox_pos_semidef]
+        S_init = np.random.randn(m,m)
+        S_init = S_init.dot(S_init.T)   # Ensure starting point is PSD.
+        v_init = (N + 1)*[S_init.ravel(order='C')]
+        A_list = np.hsplit(np.eye(N*n),N) + [-np.vstack(N*(np.eye(n),))]
+        b = np.zeros(N*n)
+
+        # Solve with DRS.
+        # TODO: This fails because S is no longer PSD after a few iterations.
+        drs_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
+                          eps_stop=self.eps_stop, anderson=False)
+        drs_S = drs_result["x_vals"][-1].reshape((m,m), order='C')
+        drs_obj = -np.log(np.linalg.det(drs_S)) + np.sum(np.diag(drs_S.dot(Y))) + alpha.value*np.sum(np.abs(drs_S))
+        print("DRS Objective:", drs_obj)
+        # print("DRS Solution:", drs_S)
+        self.assertAlmostEqual(cvxpy_obj, drs_obj)
+        self.assertItemsAlmostEqual(cvxpy_S, drs_S, places=3)
+        self.plot_residuals(drs_result["primal"], drs_result["dual"], \
+                            normalize=True, title="DRS Residuals", semilogy=True)
+
+        # Solve with A2DR.
+        a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
+                           eps_stop=self.eps_stop, anderson=True)
+        a2dr_S = a2dr_result["x_vals"][-1]
+        a2dr_obj = -np.log(np.linalg.det(drs_S)) + np.sum(np.diag(drs_S.dot(Y))) + alpha.value*np.sum(np.abs(drs_S))
+        print("A2DR Objective:", a2dr_obj)
+        # print("A2DR Solution:", a2dr_S)
+        self.assertAlmostEqual(cvxpy_obj, a2dr_obj)
+        self.assertItemsAlmostEqual(cvxpy_S, a2dr_S, places=3)
+        self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], \
+                            normalize=True, title="A2DR Residuals", semilogy=True)
+
+        # Compare residuals
+        plt.semilogy(range(drs_result["num_iters"]), drs_result["primal"], color="blue", linestyle="--",
+                     label="Primal (DRS)")
+        plt.semilogy(range(a2dr_result["num_iters"]), a2dr_result["primal"], color="blue", label="Primal (A2DR)")
+        plt.semilogy(range(drs_result["num_iters"]), drs_result["dual"], color="darkorange", linestyle="--",
+                     label="Dual (DRS)")
         plt.semilogy(range(a2dr_result["num_iters"]), a2dr_result["dual"], color="darkorange", label="Dual (A2DR) ")
         plt.title("Residuals")
         plt.legend()
