@@ -282,8 +282,34 @@ class TestSolver(BaseTest):
         U, d, Vt = np.linalg.svd(R)
         d = np.maximum(d, d_eps)
         R = U.dot(np.diag(d)).dot(Vt)   # R is positive definite.
+        QR_mats = (T+1)*[Q, R]
+        QR_diag = sp.linalg.block_diag(*QR_mats)   # Quadratic form cost = z^T*QR_diag*z
 
-        # TODO: Solve with CVXPY for comparison.
+        # Helper function for extracting (x_0,...,x_T) and (u_0,...,u_T) from z = (x_0, u_0, ..., x_T, u_T).
+        def extract_xu(z):
+            z_mat = np.reshape(z, (m + n, T + 1), order='F')
+            x = z_mat[:n, :].ravel(order='F')
+            u = z_mat[n:, :].ravel(order='F')
+            return x, u
+
+        # Calculate objective directly from z = (x_0, u_0, ..., x_T, u_T).
+        def calc_obj(z):
+            x, u = extract_xu(z)
+            u_inf = np.max(np.abs(u))
+            return z.T.dot(QR_diag).dot(z) if u_inf <= u_bnd else np.inf
+
+        # Solve with CVXPY for comparison.
+        x = Variable((T+1,n))
+        u = Variable((T+1,m))
+        obj = sum([quad_form(x[t,:], Q) + quad_form(u[t,:], R) for t in range(T+1)])
+        constr = [x[0,:] == x_init, norm_inf(u) <= u_bnd]
+        constr += [x[t+1] == A*x[t] + B*u[t] + c for t in range(T)]
+        prob = Problem(Minimize(obj), constr)
+        prob.solve()
+        cvxpy_obj = prob.value
+        cvxpy_x = x.value.ravel(order='C')
+        cvxpy_u = u.value.ravel(order='C')
+        print("CVXPY Objective:", cvxpy_obj)
 
         # Form problem matrices.
         D_row = np.hstack([-A, -B, np.eye(n), np.zeros((n,K-(2*n+m)))])
@@ -300,8 +326,6 @@ class TestSolver(BaseTest):
             u_mat = np.reshape(u_prox, (m,T+1), order='F')
             z_mat[n:,:] = u_mat
             return z_mat.ravel(order='F')
-        QR_mats = (T+1)*[Q, R]
-        QR_diag = sp.linalg.block_diag(*QR_mats)
         p_list = [prox_quad_form(QR_diag), prox_norm_inf_wrapper]
 
         # Initialize problem.
@@ -313,12 +337,12 @@ class TestSolver(BaseTest):
         drs_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
                           eps_stop=self.eps_stop, anderson=False)
         drs_z = drs_result["x_vals"][-1]
-        drs_u_mat = np.reshape(drs_z, (m+n, T+1), order='F')[n:,:]
-        if(np.max(np.abs(drs_u_mat)) > u_bnd):
-            drs_obj = np.inf
-        else:
-            drs_obj = drs_z.T.dot(QR_diag).dot(drs_z)
+        drs_x, drs_u = extract_xu(drs_z)
+        drs_obj = calc_obj(drs_z)
         print("DRS Objective:", drs_obj)
+        self.assertAlmostEqual(cvxpy_obj, drs_obj)
+        self.assertItemsAlmostEqual(cvxpy_x, drs_x)
+        self.assertItemsAlmostEqual(cvxpy_u, drs_u)
         self.plot_residuals(drs_result["primal"], drs_result["dual"], \
                             normalize=True, title="DRS Residuals", semilogy=True)
 
@@ -326,12 +350,12 @@ class TestSolver(BaseTest):
         a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
                            eps_stop=self.eps_stop, anderson=True)
         a2dr_z = a2dr_result["x_vals"][-1]
-        a2dr_u_mat = np.reshape(a2dr_z, (m+n, T+1), order='F')[n:,:]
-        if (np.max(np.abs(a2dr_u_mat)) > u_bnd):
-            a2dr_obj = np.inf
-        else:
-            a2dr_obj = a2dr_z.T.dot(QR_diag).dot(a2dr_z)
+        a2dr_x, a2dr_u = extract_xu(a2dr_z)
+        a2dr_obj = calc_obj(a2dr_z)
         print("A2DR Objective:", a2dr_obj)
+        self.assertAlmostEqual(cvxpy_obj, a2dr_obj)
+        self.assertItemsAlmostEqual(cvxpy_x, a2dr_x)
+        self.assertItemsAlmostEqual(cvxpy_u, a2dr_u)
         self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], \
                             normalize=True, title="A2DR Residuals", semilogy=True)
 
