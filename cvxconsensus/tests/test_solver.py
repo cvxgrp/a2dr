@@ -19,6 +19,7 @@ along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 
 import numpy as np
 import scipy as sp
+import numpy.linalg as LA
 import matplotlib.pyplot as plt
 from cvxpy import *
 from scipy.optimize import nnls
@@ -30,17 +31,16 @@ def prox_sum_squares(X, y, rcond = None):
     def prox(v, rho):
         A = np.vstack((X, np.sqrt(rho/2)*np.eye(n)))
         b = np.concatenate((y, np.sqrt(rho/2)*v))
-        return np.linalg.lstsq(A, b, rcond=rcond)[0]
+        return LA.lstsq(A, b, rcond=rcond)[0]
     return prox
 
 def prox_neg_log_det(v, rho):
     n = int(np.sqrt(v.shape[0]))
     A = np.reshape(v, (n,n), order='C')
     A_symm = (A + A.T) / 2.0
-    if not (np.allclose(A, A_symm) and np.all(np.linalg.eigvals(A_symm) > 0)):
-        raise Exception(
-            "Proximal operator for negative log-determinant only operates on symmetric positive definite matrices.")
-    U, s, Vt = np.linalg.svd(A_symm, full_matrices=False)
+    if not (np.allclose(A, A_symm) and np.all(LA.eigvals(A_symm) > 0)):
+        raise Exception("Proximal operator for negative log-determinant only operates on symmetric positive definite matrices.")
+    U, s, Vt = LA.svd(A_symm, full_matrices=False)
     s_new = (s + np.sqrt(s ** 2 + 4.0/rho)) / 2
     A_new = U.dot(np.diag(s_new)).dot(Vt)
     return A_new.ravel(order='C')
@@ -51,10 +51,20 @@ def prox_pos_semidef(v, rho):
     A_symm = (A + A.T) / 2.0
     if not np.allclose(A, A_symm):
         raise Exception("Proximal operator for positive semidefinite cone only operates on symmetric matrices.")
-    w, v = np.linalg.eig(A_symm)
+    w, v = LA.eig(A_symm)
     w_new = np.maximum(w, 0)
     A_new = v.dot(np.diag(w_new)).dot(v.T)
     return A_new.ravel(order='C')
+
+def prox_quad_form(Q):
+    if not np.all(LA.eigvals(Q) >= 0):
+        raise Exception("Q must be a positive semidefinite matrix.")
+    return lambda v, rho: LA.lstsq(Q + rho*np.eye(v.shape[0]), rho*v, rcond=None)[0]
+
+def prox_norm_inf(bound):
+    if bound < 0:
+        raise ValueError("bound must be a non-negative scalar.")
+    return lambda v, rho: np.maximum(np.minimum(v, bound), -bound)
 
 class TestSolver(BaseTest):
     """Unit tests for internal A2DR solver."""
@@ -175,7 +185,7 @@ class TestSolver(BaseTest):
         plt.show()
 
     def test_sparse_covariance(self):
-        # minimize -log(det(S)) + trace(S*Y) + \alpha*norm(S,1)
+        # minimize -log(det(S)) + trace(S*Y) + \alpha*||S||_1
         #   subject to S is PSD, where Y and \alpha >= are parameters.
 
         # Problem data.
@@ -203,14 +213,14 @@ class TestSolver(BaseTest):
         # print("CVXPY Solution:", cvxpy_S)
 
         # Split problem as f_1(S) = -log(det(S)), f_2(S) = trace(S*Y),
-        #   f_3(S) = \alpha*norm(S,1), f_4(S) = I(S is PSD).
+        #   f_3(S) = \alpha*||S||_1, f_4(S) = I(S is symmetric PSD).
         N = 3
         p_list = [prox_neg_log_det,
                   lambda v, rho: v - Y.ravel(order='C')/rho,
                   lambda v, rho: np.maximum(np.abs(v) - alpha.value/rho, 0) * np.sign(v),
                   prox_pos_semidef]
         S_init = np.random.randn(m,m)
-        S_init = S_init.dot(S_init.T)   # Ensure starting point is PSD.
+        S_init = S_init.dot(S_init.T)   # Ensure starting point is symmetric PSD.
         v_init = (N + 1)*[S_init.ravel(order='C')]
         A_list = np.hsplit(np.eye(N*n),N) + [-np.vstack(N*(np.eye(n),))]
         b = np.zeros(N*n)
@@ -237,6 +247,91 @@ class TestSolver(BaseTest):
         # print("A2DR Solution:", a2dr_S)
         self.assertAlmostEqual(cvxpy_obj, a2dr_obj)
         self.assertItemsAlmostEqual(cvxpy_S, a2dr_S, places=3)
+        self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], \
+                            normalize=True, title="A2DR Residuals", semilogy=True)
+
+        # Compare residuals
+        plt.semilogy(range(drs_result["num_iters"]), drs_result["primal"], color="blue", linestyle="--", label="Primal (DRS)")
+        plt.semilogy(range(a2dr_result["num_iters"]), a2dr_result["primal"], color="blue", label="Primal (A2DR)")
+        plt.semilogy(range(drs_result["num_iters"]), drs_result["dual"], color="darkorange", linestyle="--", label="Dual (DRS)")
+        plt.semilogy(range(a2dr_result["num_iters"]), a2dr_result["dual"], color="darkorange", label="Dual (A2DR) ")
+        plt.title("Residuals")
+        plt.legend()
+        plt.show()
+
+    def test_optimal_control(self):
+        m = 2
+        n = 5
+        T = 20
+        K = (T + 1)*(m + n)
+        u_bnd = 1   # Upper bound on all |u_t|.
+        d_eps = 0.01   # Lower bound on eigenvalues of R.
+
+        # Dynamic matrices.
+        A = np.random.randn(n,n)
+        A = A/np.max(np.abs(np.linalg.eigvals(A)))   # Scale A so largest eigenvalue has magnitude of one.
+        B = np.random.randn(n,m)
+        c = np.zeros(n)
+        x_init = np.random.randn(n)
+
+        # Cost matrices.
+        Q = np.random.randn(n,n)
+        Q = Q.T.dot(Q)   # Q is positive semidefinite.
+        R = np.random.randn(m,m)
+        R = R.T.dot(R)
+        U, d, Vt = np.linalg.svd(R)
+        d = np.maximum(d, d_eps)
+        R = U.dot(np.diag(d)).dot(Vt)   # R is positive definite.
+
+        # TODO: Solve with CVXPY for comparison.
+
+        # Form problem matrices.
+        D_row = np.hstack([-A, -B, np.eye(n), np.zeros((n,K-(2*n+m)))])
+        D_rows = [np.hstack([np.eye(n), np.zeros((n,K-n))])]
+        D_rows += [np.roll(D_row, t*(n+m), axis=1) for t in range(T)]
+        D = np.vstack(D_rows)
+        e_vec = np.concatenate([x_init] + T*[c])
+
+        # Define proximal operators.
+        def prox_norm_inf_wrapper(z, rho):
+            z_mat = np.reshape(z, (m+n, T+1), order='F')
+            u = z_mat[n:,:].ravel(order='F')
+            u_prox = prox_norm_inf(u_bnd)(u, rho)
+            u_mat = np.reshape(u_prox, (m,T+1), order='F')
+            z_mat[n:,:] = u_mat
+            return z_mat.ravel(order='F')
+        QR_mats = (T+1)*[Q, R]
+        QR_diag = sp.linalg.block_diag(*QR_mats)
+        p_list = [prox_quad_form(QR_diag), prox_norm_inf_wrapper]
+
+        # Initialize problem.
+        v_init = 2*[np.random.randn(K)]
+        A_list = [np.vstack([D, np.eye(K)]), np.vstack([np.zeros((D.shape[0],K)), -np.eye(K)])]
+        b = np.concatenate([e_vec, np.zeros(K)])
+
+        # Solve with DRS.
+        drs_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
+                          eps_stop=self.eps_stop, anderson=False)
+        drs_z = drs_result["x_vals"][-1]
+        drs_u_mat = np.reshape(drs_z, (m+n, T+1), order='F')[n:,:]
+        if(np.max(np.abs(drs_u_mat)) > u_bnd):
+            drs_obj = np.inf
+        else:
+            drs_obj = drs_z.T.dot(QR_diag).dot(drs_z)
+        print("DRS Objective:", drs_obj)
+        self.plot_residuals(drs_result["primal"], drs_result["dual"], \
+                            normalize=True, title="DRS Residuals", semilogy=True)
+
+        # Solve with A2DR.
+        a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
+                           eps_stop=self.eps_stop, anderson=True)
+        a2dr_z = a2dr_result["x_vals"][-1]
+        a2dr_u_mat = np.reshape(a2dr_z, (m+n, T+1), order='F')[n:,:]
+        if (np.max(np.abs(a2dr_u_mat)) > u_bnd):
+            a2dr_obj = np.inf
+        else:
+            a2dr_obj = a2dr_z.T.dot(QR_diag).dot(a2dr_z)
+        print("A2DR Objective:", a2dr_obj)
         self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], \
                             normalize=True, title="A2DR Residuals", semilogy=True)
 

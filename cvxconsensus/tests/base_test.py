@@ -48,17 +48,17 @@ class BaseTest(TestCase):
         else:
             return mat
 
-    def plot_residuals(self, r_primal, r_dual, normalize = False, show = True, title = None, semilogy = False):
+    def plot_residuals(self, r_primal, r_dual, normalize = False, show = True, title = None, semilogy = False, *args, **kwargs):
         if normalize:
             r_primal = r_primal / r_primal[0] if r_primal[0] != 0 else r_primal
             r_dual = r_dual / r_dual[0] if r_dual[0] != 0 else r_dual
 
         if semilogy:
-            plt.semilogy(range(len(r_primal)), r_primal, label = "Primal")
-            plt.semilogy(range(len(r_dual)), r_dual, label = "Dual")
+            plt.semilogy(range(len(r_primal)), r_primal, label = "Primal", *args, **kwargs)
+            plt.semilogy(range(len(r_dual)), r_dual, label = "Dual", *args, **kwargs)
         else:
-            plt.plot(range(len(r_primal)), r_primal, label = "Primal")
-            plt.plot(range(len(r_dual)), r_dual, label = "Dual")
+            plt.plot(range(len(r_primal)), r_primal, label = "Primal", *args, **kwargs)
+            plt.plot(range(len(r_dual)), r_dual, label = "Dual", *args, **kwargs)
         plt.legend()
         plt.xlabel("Iteration")
         plt.ylabel("Residual")
