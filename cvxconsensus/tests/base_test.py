@@ -21,6 +21,7 @@ along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 from unittest import TestCase
 import numpy as np
 import matplotlib.pyplot as plt
+from cvxconsensus import a2dr
 
 class BaseTest(TestCase):
     # AssertAlmostEqual for lists.
