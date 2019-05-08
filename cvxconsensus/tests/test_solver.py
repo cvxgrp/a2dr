@@ -23,7 +23,6 @@ import numpy.linalg as LA
 import matplotlib.pyplot as plt
 from cvxpy import *
 from scipy.optimize import nnls
-from networkx import binomial_graph
 from cvxconsensus import a2dr
 from cvxconsensus.tests.base_test import BaseTest
 
@@ -265,8 +264,8 @@ class TestSolver(BaseTest):
     def test_single_commodity_flow(self):
         # Problem data.
         m = 25  # Number of sources.
-        n = 300   # Number of flows.
-        A = np.random.randn(m,n)   # TODO: Make a proper incidence matrix.
+        n = 100   # Number of flows.
+        A = np.random.randint(-1,2,(m,n))
 
         # Flow cost = \sum_j \psi*(x_j - x0)^2 for 0 <= x_j <= x_max.
         psi = 0.5
