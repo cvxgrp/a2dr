@@ -232,7 +232,9 @@ class TestSolver(BaseTest):
         drs_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
                           eps_stop=self.eps_stop, anderson=False)
         drs_S = drs_result["x_vals"][-1].reshape((m,m), order='C')
-        drs_obj = -np.log(np.linalg.det(drs_S)) + np.sum(np.diag(drs_S.dot(Y))) + alpha.value*np.sum(np.abs(drs_S))
+        # drs_S = prox_pos_semidef(drs_S.ravel(order='C'), 1.0).reshape((m,m), order='C')
+        drs_obj = -LA.slogdet(drs_S)[1] + np.sum(np.diag(drs_S.dot(Y))) + alpha.value*np.sum(np.abs(drs_S))
+        # drs_obj = np.real(drs_obj) if np.abs(np.imag(drs_obj)) < self.eps_abs else drs_obj
         print("DRS Objective:", drs_obj)
         # print("DRS Solution:", drs_S)
         self.assertAlmostEqual(cvxpy_obj, drs_obj)
@@ -244,7 +246,9 @@ class TestSolver(BaseTest):
         a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
                            eps_stop=self.eps_stop, anderson=True)
         a2dr_S = a2dr_result["x_vals"][-1]
-        a2dr_obj = -np.log(np.linalg.det(drs_S)) + np.sum(np.diag(drs_S.dot(Y))) + alpha.value*np.sum(np.abs(drs_S))
+        # a2dr_S = prox_pos_semidef(a2dr_S.ravel(order='C'), 1.0).reshape((m,m), order='C')
+        a2dr_obj = -LA.slogdet(a2dr_S)[1] + np.sum(np.diag(a2dr_S.dot(Y))) + alpha.value*np.sum(np.abs(a2dr_S))
+        # a2dr_obj = np.real(a2dr_obj) if np.abs(np.imag(a2dr_obj)) < self.eps_abs else a2dr_obj
         print("A2DR Objective:", a2dr_obj)
         # print("A2DR Solution:", a2dr_S)
         self.assertAlmostEqual(cvxpy_obj, a2dr_obj)
@@ -263,7 +267,7 @@ class TestSolver(BaseTest):
 
     def test_single_commodity_flow(self):
         # Problem data.
-        m = 25  # Number of sources.
+        m = 25    # Number of sources.
         n = 100   # Number of flows.
         A = np.random.randint(-1,2,(m,n))
 
