@@ -38,13 +38,8 @@ def prox_neg_log_det(v, rho):
     n = int(np.sqrt(v.shape[0]))
     A = np.reshape(v, (n,n), order='C')
     A_symm = (A + A.T) / 2.0
-    # if not (np.allclose(A, A_symm) and np.all(LA.eigvals(A_symm) > 0)):
-    #    raise Exception("Proximal operator for negative log-determinant only operates on symmetric positive definite matrices.")
     if not np.allclose(A, A_symm):
         raise Exception("Proximal operator for negative log-determinant only operates on symmetric matrices.")
-    # U, s, Vt = LA.svd(A_symm, full_matrices=False)   # TODO: Use eigendecomposition.
-    # s_new = (s + np.sqrt(s ** 2 + 4.0/rho)) / 2
-    # A_new = U.dot(np.diag(s_new)).dot(Vt)
     w, v = LA.eig(A_symm)
     w_new = (w + np.sqrt(w**2 + 4.0/rho))/2
     A_new = v.dot(np.diag(w_new)).dot(v.T)
@@ -102,7 +97,7 @@ class TestSolver(BaseTest):
         np_beta = []
         np_obj = 0
         for i in range(N):
-            np_result = np.linalg.lstsq(X_split[i], y_split[i], rcond=None)
+            np_result = LA.lstsq(X_split[i], y_split[i], rcond=None)
             np_beta += [np_result[0]]
             np_obj += np.sum(np_result[1])
         print("NumPy Objective:", np_obj)
@@ -258,7 +253,25 @@ class TestSolver(BaseTest):
         plt.legend()
         plt.show()
 
-    # TODO: L(Z,Y) + r(\theta) s.t. Z = X\theta with L(.) = logistic, r(.) = nuclear norm.
+    def test_multi_model_regression(self):
+        # TODO: L(Z,Y) + r(\theta) s.t. Z = X\theta with L(.) = logistic, r(.) = nuclear norm.
+        p = 10
+        n = 10
+        m = 1000
+        X = np.random.randn(m,n)
+        y = np.random.randint(2, size=(m,p))
+
+        theta = Variable((n,p))
+        lam = Parameter(nonneg=True)
+        obj = sum(multiply(y, X*theta) - logistic(X*theta))/(m*p) - lam*normNuc(theta)
+        prob = Problem(Maximize(obj))
+
+        lam.value = 1.0
+        prob.solve()
+        cvxpy_obj = prob.value
+        cvxpy_theta = theta.value
+        cvxpy_Z = X.dot(theta.value)
+        print("CVXPY Objective:", cvxpy_obj)
 
     def test_sparse_covariance(self):
         # minimize -log(det(S)) + trace(S*Y) + \alpha*||S||_1
@@ -270,8 +283,8 @@ class TestSolver(BaseTest):
         K = 1000  # Number of samples.
         A = np.random.randn(m,m)
         A[sp.sparse.rand(m,m,0.85).todense().nonzero()] = 0
-        S_true = A.dot(A.T) + 0.05 * np.eye(m)
-        R = np.linalg.inv(S_true)
+        S_true = A.dot(A.T) + 0.05*np.eye(m)
+        R = LA.inv(S_true)
         y_sample = sp.linalg.sqrtm(R).dot(np.random.randn(m,K))
         Y = np.cov(y_sample)
 
@@ -282,11 +295,10 @@ class TestSolver(BaseTest):
         prob = Problem(Minimize(obj))
 
         alpha.value = 1.0
-        prob.solve()
+        prob.solve(eps = self.eps_abs)
         cvxpy_obj = prob.value
         cvxpy_S = S.value
         print("CVXPY Objective:", cvxpy_obj)
-        # print("CVXPY Solution:", cvxpy_S)
 
         # Split problem as f_1(S) = -log(det(S)), f_2(S) = trace(S*Y),
         #   f_3(S) = \alpha*||S||_1, f_4(S) = I(S is symmetric PSD).
@@ -296,7 +308,7 @@ class TestSolver(BaseTest):
                   lambda v, rho: np.maximum(np.abs(v) - alpha.value/rho, 0) * np.sign(v),
                   prox_pos_semidef]
         S_init = np.random.randn(m,m)
-        S_init = S_init.dot(S_init.T)   # Ensure starting point is symmetric PSD.
+        S_init = S_init.T.dot(S_init)   # Ensure starting point is symmetric PSD.
         v_init = (N + 1)*[S_init.ravel(order='C')]
         A_list = np.hsplit(np.eye(N*n),N) + [-np.vstack(N*(np.eye(n),))]
         b = np.zeros(N*n)
@@ -307,21 +319,19 @@ class TestSolver(BaseTest):
         drs_S = drs_result["x_vals"][-1].reshape((m,m), order='C')
         drs_obj = -LA.slogdet(drs_S)[1] + np.sum(np.diag(drs_S.dot(Y))) + alpha.value*np.sum(np.abs(drs_S))
         print("DRS Objective:", drs_obj)
-        # print("DRS Solution:", drs_S)
-        # self.assertAlmostEqual(cvxpy_obj, drs_obj)
-        # self.assertItemsAlmostEqual(cvxpy_S, drs_S, places=3)
+        self.assertAlmostEqual(cvxpy_obj, drs_obj, places=3)
+        self.assertItemsAlmostEqual(cvxpy_S, drs_S, places=3)
         self.plot_residuals(drs_result["primal"], drs_result["dual"], \
                             normalize=True, title="DRS Residuals", semilogy=True)
 
         # Solve with A2DR.
         a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
                            eps_stop=self.eps_stop, anderson=True)
-        a2dr_S = a2dr_result["x_vals"][-1]
+        a2dr_S = a2dr_result["x_vals"][-1].reshape((m,m), order='C')
         a2dr_obj = -LA.slogdet(a2dr_S)[1] + np.sum(np.diag(a2dr_S.dot(Y))) + alpha.value*np.sum(np.abs(a2dr_S))
         print("A2DR Objective:", a2dr_obj)
-        # print("A2DR Solution:", a2dr_S)
-        # self.assertAlmostEqual(cvxpy_obj, a2dr_obj)
-        # self.assertItemsAlmostEqual(cvxpy_S, a2dr_S, places=3)
+        self.assertAlmostEqual(cvxpy_obj, a2dr_obj)
+        self.assertItemsAlmostEqual(cvxpy_S, a2dr_S)
         self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], \
                             normalize=True, title="A2DR Residuals", semilogy=True)
 
@@ -436,14 +446,13 @@ class TestSolver(BaseTest):
         T = 20
         K = (T + 1)*(m + n)
         u_bnd = 1      # Upper bound on all |u_t|.
-        d_eps = 0.01   # Lower bound on eigenvalues of R.
-        A_eps = 0.01
+        w_eps = 0.01   # Lower bound on eigenvalues of R.
+        A_eps = 0.05
 
-        # TODO: Generate problem so max(|u_t|) hits the upper bound!
         # Dynamic matrices.
-        # A = np.random.randn(n,n)
+        # TODO: Generate problem so max(|u_t|) hits the upper bound!
         A = np.eye(n) + A_eps*np.random.randn(n,n)
-        A = A/np.max(np.abs(np.linalg.eigvals(A)))   # Scale A so largest eigenvalue has magnitude of one.
+        A = A/np.max(np.abs(LA.eigvals(A)))   # Scale A so largest eigenvalue has magnitude of one.
         B = np.random.randn(n,m)
         c = np.zeros(n)
         x_init = np.random.randn(n)
@@ -453,17 +462,17 @@ class TestSolver(BaseTest):
         Q = Q.T.dot(Q)   # Q is positive semidefinite.
         R = np.random.randn(m,m)
         R = R.T.dot(R)
-        U, d, Vt = np.linalg.svd(R)
-        d = np.maximum(d, d_eps)
-        R = U.dot(np.diag(d)).dot(Vt)   # R is positive definite.
+        w, v = LA.eig(R)
+        w = np.maximum(w, w_eps)
+        R = v.dot(np.diag(w)).dot(v.T)   # R is positive definite.
         QR_mats = (T+1)*[Q, R]
         QR_diag = sp.linalg.block_diag(*QR_mats)   # Quadratic form cost = z^T*QR_diag*z
 
         # Helper function for extracting (x_0,...,x_T) and (u_0,...,u_T) from z = (x_0, u_0, ..., x_T, u_T).
         def extract_xu(z):
-            z_mat = np.reshape(z, (m+n, T+1), order='F')
-            x = z_mat[:n,:].ravel(order='F')
-            u = z_mat[n:,:].ravel(order='F')
+            z_mat = np.reshape(z, (T+1, m+n), order='C')
+            x = z_mat[:,:n].ravel(order='C')
+            u = z_mat[:,n:].ravel(order='C')
             return x, u
 
         # Calculate objective directly from z = (x_0, u_0, ..., x_T, u_T).
@@ -474,12 +483,12 @@ class TestSolver(BaseTest):
 
         # Define proximal operators.
         def prox_norm_inf_wrapper(z, rho):
-            z_mat = np.reshape(z, (m + n, T + 1), order='F')
-            u = z_mat[n:, :].ravel(order='F')
+            z_mat = np.reshape(z, (T+1, m+n), order='C')
+            u = z_mat[:,n:].ravel(order='C')
             u_prox = prox_norm_inf(u_bnd)(u, rho)
-            u_mat = np.reshape(u_prox, (m, T + 1), order='F')
-            z_mat[n:, :] = u_mat
-            return z_mat.ravel(order='F')
+            u_mat = np.reshape(u_prox, (T+1, m), order='C')
+            z_mat[:,n:] = u_mat
+            return z_mat.ravel(order='C')
 
         # Solve with CVXPY.
         x = Variable((T+1,n))
@@ -544,4 +553,131 @@ class TestSolver(BaseTest):
         plt.legend()
         plt.show()
 
-        # TODO: Multi-scenario optimal control with OSQP. Example using CVXPY?
+    def test_multi_optimal_control(self):
+        N = 4
+        m = 2
+        n = 5
+        T = 10
+        K = (T + 1)*(m + n)
+        u_bnd = 1      # Upper bound on all |u_t|.
+        w_eps = 0.01   # Lower bound on eigenvalues of R.
+        A_eps = 0.05
+
+        # Dynamic matrices.
+        A = np.eye(n) + A_eps * np.random.randn(n, n)
+        A = A / np.max(np.abs(LA.eigvals(A)))  # Scale A so largest eigenvalue has magnitude of one.
+        B = np.random.randn(n, m)
+        c = np.zeros(n)
+        x_init = np.random.randn(n)
+
+        # Cost matrices.
+        Q_list = []
+        R_list = []
+        for i in range(N):
+            Q = np.random.randn(n,n)
+            Q = Q.T.dot(Q)  # Q is positive semidefinite.
+            Q_list.append(Q)
+
+            R = np.random.randn(m,m)
+            R = R.T.dot(R)
+            w, v = LA.eig(R)
+            w = np.maximum(w, w_eps)
+            R = v.dot(np.diag(w)).dot(v.T)  # R is positive definite.
+            R_list.append(R)
+
+        # Helper function for extracting (x_0,...,x_T) and (u_0,...,u_T) from z = (x_0, u_0, ..., x_T, u_T).
+        def extract_xu(z):
+            z_mat = np.reshape(z, (T+1, m+n), order='C')
+            x = z_mat[:,:n].ravel(order='C')
+            u = z_mat[:,n:].ravel(order='C')
+            return x, u
+
+        # Calculate objective directly from z = (x_0, u_0, ..., x_T, u_T).
+        def calc_obj(z):
+            x, u = extract_xu(z)
+            u_inf = np.max(np.abs(u))
+            Q_diag = sp.linalg.block_diag(*Q_list)
+            R_diag = sp.linalg.block_diag(*R_list)
+            return x.T.dot(Q_diag).dot(x) + u.T.dot(R_diag).dot(u) if u_inf <= u_bnd else np.inf
+
+        # Proximal operator using OSQP.
+        def prox_control_osqp(Q, R, A, B, c):
+            x = Variable((T+1,n))
+            u = Variable((T+1,m))
+            rho_parm = Parameter(nonneg = True)
+            v_parm = Parameter((T+1,m+n))
+
+            obj = sum([quad_form(x[t,:], Q) + quad_form(u[t,:], R) for t in range(T + 1)])
+            reg = (rho_parm/2)*(sum_squares(x - v_parm[:,:n]) + sum_squares(u - v_parm[:,n:]))
+            constr = [x[0,:] == x_init, norm_inf(u) <= u_bnd]
+            constr += [x[t+1] == A*x[t] + B*u[t] + c for t in range(T)]
+            prob = Problem(Minimize(obj + reg), constr)
+
+            def prox(v, rho):
+                v_parm.value = np.reshape(v, (T+1,m+n), order='C')
+                rho_parm.value = rho
+                prob.solve(solver = "OSQP")
+                x_val = x.value.ravel(order='C')
+                u_val = u.value.ravel(order='C')
+                return np.concatenate([x_val, u_val])
+            return prox
+
+        # Solve with CVXPY.
+        x = Variable((T+1,n))
+        u = Variable((T+1,m))
+        obj = sum([quad_form(x[t,:], Q) + quad_form(u[t,:], R) for t in range(T+1) for Q,R in zip(Q_list,R_list)])
+        constr = [x[0,:] == x_init, norm_inf(u) <= u_bnd]
+        constr += [x[t+1] == A*x[t] + B*u[t] + c for t in range(T)]
+        prob = Problem(Minimize(obj), constr)
+        prob.solve()
+        cvxpy_obj = prob.value
+        cvxpy_x = x.value.ravel(order='C')
+        cvxpy_u = u.value.ravel(order='C')
+        print("CVXPY Objective:", cvxpy_obj)
+
+        # Initialize problem.
+        p_list = [prox_control_osqp(Q,R,A,B,c) for Q,R in zip(Q_list,R_list)]
+        p_list += [lambda v, rho: v]
+        v_init = (N + 1)*[np.zeros(K)]
+        E_mat = np.vstack([np.eye(K), np.zeros(((N-1)*K,K))])
+        A_list = [np.roll(E_mat, i*K, axis=0) for i in range(N)]
+        A_list += [np.vstack(N*[-np.eye(K)])]
+        b = np.zeros(N*K)
+
+        # Solve with DRS.
+        # TODO: This is failing for some reason.
+        drs_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
+                          eps_stop=self.eps_stop, anderson=False)
+        drs_z = drs_result["x_vals"][-1]
+        drs_x, drs_u = extract_xu(drs_z)
+        drs_obj = calc_obj(drs_z)
+        print("DRS Objective:", drs_obj)
+        self.assertAlmostEqual(cvxpy_obj, drs_obj)
+        self.assertItemsAlmostEqual(cvxpy_x, drs_x)
+        self.assertItemsAlmostEqual(cvxpy_u, drs_u)
+        self.plot_residuals(drs_result["primal"], drs_result["dual"], \
+                            normalize=True, title="DRS Residuals", semilogy=True)
+
+        # Solve with A2DR.
+        a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
+                           eps_stop=self.eps_stop, anderson=True)
+        a2dr_z = a2dr_result["x_vals"][-1]
+        a2dr_x, a2dr_u = extract_xu(a2dr_z)
+        a2dr_obj = calc_obj(a2dr_z)
+        print("A2DR Objective:", a2dr_obj)
+        self.assertAlmostEqual(cvxpy_obj, a2dr_obj)
+        self.assertItemsAlmostEqual(cvxpy_x, a2dr_x)
+        self.assertItemsAlmostEqual(cvxpy_u, a2dr_u)
+        self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], \
+                            normalize=True, title="A2DR Residuals", semilogy=True)
+
+        # Compare residuals
+        plt.semilogy(range(drs_result["num_iters"]), drs_result["primal"], color="blue", linestyle="--",
+                     label="Primal (DRS)")
+        plt.semilogy(range(a2dr_result["num_iters"]), a2dr_result["primal"], color="blue", label="Primal (A2DR)")
+        plt.semilogy(range(drs_result["num_iters"]), drs_result["dual"], color="darkorange", linestyle="--",
+                     label="Dual (DRS)")
+        plt.semilogy(range(a2dr_result["num_iters"]), a2dr_result["dual"], color="darkorange", label="Dual (A2DR) ")
+        plt.title("Residuals")
+        plt.legend()
+        plt.show()
