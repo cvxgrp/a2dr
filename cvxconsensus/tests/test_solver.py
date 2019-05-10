@@ -34,9 +34,7 @@ def prox_sum_squares(X, y, rcond = None):
         return LA.lstsq(A, b, rcond=rcond)[0]
     return prox
 
-def prox_neg_log_det(v, rho):
-    n = int(np.sqrt(v.shape[0]))
-    A = np.reshape(v, (n,n), order='C')
+def prox_neg_log_det(A, rho):
     A_symm = (A + A.T) / 2.0
     if not np.allclose(A, A_symm):
         raise Exception("Proximal operator for negative log-determinant only operates on symmetric matrices.")
@@ -45,9 +43,7 @@ def prox_neg_log_det(v, rho):
     A_new = v.dot(np.diag(w_new)).dot(v.T)
     return A_new.ravel(order='C')
 
-def prox_pos_semidef(v, rho):
-    n = int(np.sqrt(v.shape[0]))
-    A = np.reshape(v, (n,n), order='C')
+def prox_pos_semidef(A, rho):
     A_symm = (A + A.T) / 2.0
     if not np.allclose(A, A_symm):
         raise Exception("Proximal operator for positive semidefinite cone only operates on symmetric matrices.")
@@ -61,13 +57,39 @@ def prox_quad_form(Q):
         raise Exception("Q must be a positive semidefinite matrix.")
     return lambda v, rho: LA.lstsq(Q + rho*np.eye(v.shape[0]), rho*v, rcond=None)[0]
 
+def prox_logistic(y, x0 = None):
+    if not x0:
+        x0 = np.random.randn(y.shape[0])
+
+    def prox(v, rho):
+        fun = lambda x: np.sum(-np.log(sp.special.expit(np.multiply(y,x)))) + (rho/2.0)*np.sum((x-v)**2)
+        jac = lambda x: -y*sp.special.expit(np.multiply(y,x)) + rho*(x-v)
+        res = sp.optimize.minimize(fun, x0, method='L-BFGS-B', jac=jac)
+        return res.x
+    return prox
+
 def prox_norm1(lam = 1.0):
     return lambda v, rho: np.maximum(v-lam/rho,0) - np.maximum(-v-lam/rho,0)
+
+def prox_norm2(lam = 1.0):
+    return lambda u, rho: np.maximum(1 - 1.0/(lam/rho * LA.norm(u, 2)), 0) * u
 
 def prox_norm_inf(bound):
     if bound < 0:
         raise ValueError("bound must be a non-negative scalar.")
     return lambda v, rho: np.maximum(np.minimum(v, bound), -bound)
+
+def prox_nuc_norm(lam = 1.0):
+    def prox(A, rho):
+        U, s, Vt = np.linalg.svd(A, full_matrices=False)
+        s_new = np.maximum(s - lam/rho, 0)
+        A_new = U.dot(np.diag(s_new)).dot(Vt)
+        return A_new.ravel(order='C')
+    return prox
+
+def prox_group_lasso(lam = 1.0):
+    prox_inner = prox_norm2(lam)
+    return lambda A, rho: np.concatenate([prox_inner(A[:,j], rho) for j in range(A.shape[1])])
 
 class TestSolver(BaseTest):
     """Unit tests for internal A2DR solver."""
@@ -177,15 +199,7 @@ class TestSolver(BaseTest):
         self.assertItemsAlmostEqual(sp_beta, a2dr_beta, places=3)
         self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], \
                             normalize=True, title="A2DR Residuals", semilogy=True)
-
-        # Compare residuals
-        plt.semilogy(range(drs_result["num_iters"]), drs_result["primal"], color="blue", linestyle="--", label="Primal (DRS)")
-        plt.semilogy(range(a2dr_result["num_iters"]), a2dr_result["primal"], color="blue", label="Primal (A2DR)")
-        plt.semilogy(range(drs_result["num_iters"]), drs_result["dual"], color="darkorange", linestyle="--", label="Dual (DRS)")
-        plt.semilogy(range(a2dr_result["num_iters"]), a2dr_result["dual"], color="darkorange", label="Dual (A2DR) ")
-        plt.title("Residuals")
-        plt.legend()
-        plt.show()
+        self.compare_primal_dual(drs_result, a2dr_result)
 
     def test_l1_trend_filtering(self):
         # minimize (1/2)||y - x||_2^2 + lam*||Dx||_1,
@@ -241,44 +255,80 @@ class TestSolver(BaseTest):
         self.assertItemsAlmostEqual(cvxpy_x, a2dr_x)
         self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], \
                             normalize=True, title="A2DR Residuals", semilogy=True)
+        self.compare_primal_dual(drs_result, a2dr_result)
 
-        # Compare residuals
-        plt.semilogy(range(drs_result["num_iters"]), drs_result["primal"], color="blue", linestyle="--",
-                     label="Primal (DRS)")
-        plt.semilogy(range(a2dr_result["num_iters"]), a2dr_result["primal"], color="blue", label="Primal (A2DR)")
-        plt.semilogy(range(drs_result["num_iters"]), drs_result["dual"], color="darkorange", linestyle="--",
-                     label="Dual (DRS)")
-        plt.semilogy(range(a2dr_result["num_iters"]), a2dr_result["dual"], color="darkorange", label="Dual (A2DR) ")
-        plt.title("Residuals")
-        plt.legend()
-        plt.show()
+    def test_multi_task_logistic(self):
+        # minimize \sum_i log(1 + exp(-y_i*z_i)) + lam_1*||\theta||_{2,1} + \lam_2*||\theta||_*
+        #    subject to Z = X\theta, ||.||_{2,1} = group lasso, ||.||_* = nuclear norm.
 
-    def test_multi_model_regression(self):
-        # TODO: L(Z,Y) + r(\theta) s.t. Z = X\theta with L(.) = logistic, r(.) = nuclear norm.
-        p = 10
-        n = 10
-        m = 1000
+        # Problem data.
+        K = 5    # Number of tasks.
+        n = 10    # Number of features.
+        m = 100   # Number of samples.
         X = np.random.randn(m,n)
-        y = np.random.randint(2, size=(m,p))
+        Y = 2*np.random.randint(2, size=(m,K))-1   # y = 1 or -1.
 
-        theta = Variable((n,p))
-        lam = Parameter(nonneg=True)
-        obj = sum(multiply(y, X*theta) - logistic(X*theta))/(m*p) - lam*normNuc(theta)
-        prob = Problem(Maximize(obj))
+        def calc_obj(theta, lam):
+            obj = np.sum(np.log(1 + np.exp(-np.multiply(Y, X.dot(theta)))))
+            reg = lam[0]*np.sum([LA.norm(theta[:,k], 2) for k in range(K)])
+            reg += lam[1]*LA.norm(theta, ord='nuc')
+            return obj + reg
 
-        lam.value = 1.0
+        # Solve with CVXPY.
+        theta = Variable((n,K))
+        lam = Parameter(2, nonneg=True)
+        loss = sum(logistic(-multiply(Y, X*theta)))
+        reg = lam[0]*sum(norm(theta, 2, axis=0)) + lam[1]*normNuc(theta)
+        obj = loss + reg
+        prob = Problem(Minimize(obj))
+
+        lam.value = [1.0, 1.0]
         prob.solve()
         cvxpy_obj = prob.value
         cvxpy_theta = theta.value
-        cvxpy_Z = X.dot(theta.value)
         print("CVXPY Objective:", cvxpy_obj)
+
+        # Split problem as f_k(z_k) = \sum_i log(1 + exp(-Y_{ik}*Z_{ik})) for k = 1,...,K
+        # f_{K+1}(\theta) = lam1*||\theta||_{2,1}, f_{K+2}(\theta) = lam2*||\theta||_*.
+        p_list = [prox_logistic(Y[:,k]) for k in range(K)]
+        p_list += [lambda v, rho: prox_group_lasso(lam[0].value)(np.reshape(v, (n,K), order='C'), rho),
+                   lambda v, rho: prox_nuc_norm(lam[1].value)(np.reshape(v, (n,K), order='C'), rho)]
+        v_init = K*[np.random.randn(m)] + 2*[np.random.randn(n*K)]
+        A_list = np.split(np.vstack([-np.eye(m*K), np.zeros((n*K, m*K))]), K, axis=1)
+        A_list += [np.vstack([sp.linalg.block_diag(*(K*[X])), np.eye(n*K)])]
+        A_list += [np.vstack([np.zeros((m*K,n*K)), -np.eye(n*K)])]
+        b = np.zeros(m*K + n*K)
+
+        # Solve with DRS.
+        # TODO: Proximal operator for logistic function is failing.
+        drs_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
+                          eps_stop=self.eps_stop, anderson=False)
+        drs_theta = drs_result["x_vals"][-1].reshape((n, K), order='C')
+        drs_obj = calc_obj(drs_theta, lam.value)
+        print("DRS Objective:", drs_obj)
+        self.assertAlmostEqual(cvxpy_obj, drs_obj)
+        self.assertItemsAlmostEqual(cvxpy_theta, drs_theta)
+        self.plot_residuals(drs_result["primal"], drs_result["dual"], \
+                            normalize=True, title="DRS Residuals", semilogy=True)
+
+        # Solve with A2DR.
+        a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
+                          eps_stop=self.eps_stop, anderson=True)
+        a2dr_theta = a2dr_result["x_vals"][-1].reshape((n, K), order='C')
+        a2dr_obj = calc_obj(a2dr_theta, lam.value)
+        print("DRS Objective:", a2dr_obj)
+        self.assertAlmostEqual(cvxpy_obj, a2dr_obj)
+        self.assertItemsAlmostEqual(cvxpy_theta, a2dr_theta)
+        self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], \
+                            normalize=True, title="A2DR Residuals", semilogy=True)
+        self.compare_primal_dual(drs_result, a2dr_result)
 
     def test_sparse_covariance(self):
         # minimize -log(det(S)) + trace(S*Y) + \alpha*||S||_1
         #   subject to S is PSD, where Y and \alpha >= are parameters.
 
         # Problem data.
-        m = 10  # Dimension of matrix.
+        m = 10    # Dimension of matrix.
         n = m*m   # Length of vectorized matrix.
         K = 1000  # Number of samples.
         A = np.random.randn(m,m)
@@ -303,10 +353,10 @@ class TestSolver(BaseTest):
         # Split problem as f_1(S) = -log(det(S)), f_2(S) = trace(S*Y),
         #   f_3(S) = \alpha*||S||_1, f_4(S) = I(S is symmetric PSD).
         N = 3
-        p_list = [prox_neg_log_det,
+        p_list = [lambda v, rho: prox_neg_log_det(np.reshape(v, (m,m), order='C'), rho),
                   lambda v, rho: v - Y.ravel(order='C')/rho,
                   lambda v, rho: np.maximum(np.abs(v) - alpha.value/rho, 0) * np.sign(v),
-                  prox_pos_semidef]
+                  lambda v, rho: prox_pos_semidef(np.reshape(v, (m,m), order='C'), rho)]
         S_init = np.random.randn(m,m)
         S_init = S_init.T.dot(S_init)   # Ensure starting point is symmetric PSD.
         v_init = (N + 1)*[S_init.ravel(order='C')]
@@ -334,15 +384,7 @@ class TestSolver(BaseTest):
         self.assertItemsAlmostEqual(cvxpy_S, a2dr_S)
         self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], \
                             normalize=True, title="A2DR Residuals", semilogy=True)
-
-        # Compare residuals
-        plt.semilogy(range(drs_result["num_iters"]), drs_result["primal"], color="blue", linestyle="--", label="Primal (DRS)")
-        plt.semilogy(range(a2dr_result["num_iters"]), a2dr_result["primal"], color="blue", label="Primal (A2DR)")
-        plt.semilogy(range(drs_result["num_iters"]), drs_result["dual"], color="darkorange", linestyle="--", label="Dual (DRS)")
-        plt.semilogy(range(a2dr_result["num_iters"]), a2dr_result["dual"], color="darkorange", label="Dual (A2DR) ")
-        plt.title("Residuals")
-        plt.legend()
-        plt.show()
+        self.compare_primal_dual(drs_result, a2dr_result)
 
     def test_single_commodity_flow(self):
         # Problem data.
@@ -428,17 +470,7 @@ class TestSolver(BaseTest):
         self.assertItemsAlmostEqual(cvxpy_s, a2dr_s)
         self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], \
                             normalize=True, title="A2DR Residuals", semilogy=True)
-
-        # Compare residuals
-        plt.semilogy(range(drs_result["num_iters"]), drs_result["primal"], color="blue", linestyle="--",
-                     label="Primal (DRS)")
-        plt.semilogy(range(a2dr_result["num_iters"]), a2dr_result["primal"], color="blue", label="Primal (A2DR)")
-        plt.semilogy(range(drs_result["num_iters"]), drs_result["dual"], color="darkorange", linestyle="--",
-                     label="Dual (DRS)")
-        plt.semilogy(range(a2dr_result["num_iters"]), a2dr_result["dual"], color="darkorange", label="Dual (A2DR) ")
-        plt.title("Residuals")
-        plt.legend()
-        plt.show()
+        self.compare_primal_dual(drs_result, a2dr_result)
 
     def test_optimal_control(self):
         m = 2
@@ -541,17 +573,7 @@ class TestSolver(BaseTest):
         self.assertItemsAlmostEqual(cvxpy_u, a2dr_u)
         self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], \
                             normalize=True, title="A2DR Residuals", semilogy=True)
-
-        # Compare residuals
-        plt.semilogy(range(drs_result["num_iters"]), drs_result["primal"], color="blue", linestyle="--",
-                     label="Primal (DRS)")
-        plt.semilogy(range(a2dr_result["num_iters"]), a2dr_result["primal"], color="blue", label="Primal (A2DR)")
-        plt.semilogy(range(drs_result["num_iters"]), drs_result["dual"], color="darkorange", linestyle="--",
-                     label="Dual (DRS)")
-        plt.semilogy(range(a2dr_result["num_iters"]), a2dr_result["dual"], color="darkorange", label="Dual (A2DR) ")
-        plt.title("Residuals")
-        plt.legend()
-        plt.show()
+        self.compare_primal_dual(drs_result, a2dr_result)
 
     def test_multi_optimal_control(self):
         N = 4
@@ -670,14 +692,4 @@ class TestSolver(BaseTest):
         self.assertItemsAlmostEqual(cvxpy_u, a2dr_u)
         self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], \
                             normalize=True, title="A2DR Residuals", semilogy=True)
-
-        # Compare residuals
-        plt.semilogy(range(drs_result["num_iters"]), drs_result["primal"], color="blue", linestyle="--",
-                     label="Primal (DRS)")
-        plt.semilogy(range(a2dr_result["num_iters"]), a2dr_result["primal"], color="blue", label="Primal (A2DR)")
-        plt.semilogy(range(drs_result["num_iters"]), drs_result["dual"], color="darkorange", linestyle="--",
-                     label="Dual (DRS)")
-        plt.semilogy(range(a2dr_result["num_iters"]), a2dr_result["dual"], color="darkorange", label="Dual (A2DR) ")
-        plt.title("Residuals")
-        plt.legend()
-        plt.show()
+        self.compare_primal_dual(drs_result, a2dr_result)

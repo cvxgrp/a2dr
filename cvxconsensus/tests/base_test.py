@@ -95,3 +95,15 @@ class BaseTest(TestCase):
         plt.xlabel("Iteration")
         plt.ylabel("Residual")
         plt.show()
+
+    def compare_primal_dual(self, drs_result, a2dr_result):
+        # Compare residuals
+        plt.semilogy(range(drs_result["num_iters"]), drs_result["primal"], color="blue", linestyle="--",
+                     label="Primal (DRS)")
+        plt.semilogy(range(a2dr_result["num_iters"]), a2dr_result["primal"], color="blue", label="Primal (A2DR)")
+        plt.semilogy(range(drs_result["num_iters"]), drs_result["dual"], color="darkorange", linestyle="--",
+                     label="Dual (DRS)")
+        plt.semilogy(range(a2dr_result["num_iters"]), a2dr_result["dual"], color="darkorange", label="Dual (A2DR) ")
+        plt.title("Residuals")
+        plt.legend()
+        plt.show()

@@ -242,9 +242,11 @@ def prox_func_matrix(f, constr = []):
             if isinstance(f, NegExpression) and isinstance(f.args[0], cvxpy.log_det):
                 def prox(A, rho):
                     A_symm = (A + A.T) / 2.0
-                    if not (np.allclose(A, A_symm) and np.all(np.linalg.eigvals(A_symm) > 0)):
-                        raise Exception("Proximal operator for negative log-determinant only operates on symmetric positive definite matrices.")
-                    return prox_inner(A_symm, rho)
+                    if not (np.allclose(A, A_symm)):
+                        raise Exception("Proximal operator for negative log-determinant only operates on symmetric matrices.")
+                    w, v = np.linalg.eig(A_symm)
+                    w_new = np.maximum(w, 0)
+                    return v.dot(np.diag(w_new)).dot(v.T)
             else:
                 prox = prox_inner
             return prox
