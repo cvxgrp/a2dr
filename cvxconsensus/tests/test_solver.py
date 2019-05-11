@@ -99,6 +99,7 @@ class TestSolver(BaseTest):
         self.eps_stop = 1e-8
         self.eps_abs = 1e-16
         self.MAX_ITER = 2000
+        self.TOLERANCE = 1e-6
 
     def test_ols(self):
         # minimize ||y - X\beta||_2^2 with respect to \beta >= 0.
@@ -576,9 +577,9 @@ class TestSolver(BaseTest):
         self.compare_primal_dual(drs_result, a2dr_result)
 
     def test_multi_optimal_control(self):
-        S = 4   # Number of scenarios.
+        S = 2   # Number of scenarios.
         m = 2
-        n = 5
+        n = 4
         T = 10
         K = (T + 1)*(m + n)
         w_eps = 0.01   # Lower bound on eigenvalues of R.
@@ -599,7 +600,7 @@ class TestSolver(BaseTest):
         # Cost matrices.
         Q_list = []
         R_list = []
-        for i in range(S):
+        for s in range(S):
             Q = np.random.randn(n,n)
             Q = Q.T.dot(Q)   # Q is positive semidefinite.
             Q_list.append(Q)
@@ -611,23 +612,30 @@ class TestSolver(BaseTest):
             R = v.dot(np.diag(w)).dot(v.T)   # R is positive definite.
             R_list.append(R)
 
-        # Helper function for extracting (x_0,...,x_T) and (u_0,...,u_T) from z = (x_0, u_0, ..., x_T, u_T).
+        # Helper function for extracting (x_0^(s),...,x_T^(s)) and (u_0^(s),...,u_T^(s)).
         def extract_xu(z):
-            z_mat = np.reshape(z, (T+1,m+n), order='C')
-            x = z_mat[:,:n].ravel(order='C')
-            u = z_mat[:,n:].ravel(order='C')
+            x = np.reshape(z[:(T+1)*n], (T+1,n), order='C')
+            u = np.reshape(z[(T+1)*n:], (T+1,m), order='C')
             return x, u
 
-        # Calculate objective directly from z = (x_0, u_0, ..., x_T, u_T).
+        # Calculate objective function and check constraints are satisfied.
         def calc_obj(x_list, u_list):
             obj = 0
             for s in range(S):
-                x = x_list[s]
-                u = u_list[s]
-                u_inf = np.max(np.abs(u))
-                if u_inf > u_bnds[s]:
+                xQx = [x_list[s][t].dot(Q_list[s]).dot(x_list[s][t].T) for t in range(T+1)]
+                uRu = [u_list[s][t].dot(R_list[s]).dot(u_list[s][t].T) for t in range(T+1)]
+                u_inf = np.max(np.abs(u_list[s]))
+
+                # Check x_0 initialized properly and u_t within bound.
+                if LA.norm(x_list[s][0] - x_init) > self.TOLERANCE or u_inf > u_bnds[s]:
                     return np.inf
-                obj += probs[s]*(x.T.dot(Q_list[s]).dot(x) + u.T.dot(R_list[s]).dot(u))
+                obj += probs[s]*np.sum(xQx + uRu)
+
+            # Check u_0^(s) equal across scenarios.
+            u0_mat = np.column_stack([u_list[s][0] for s in range(S)])
+            u0_errs = LA.norm(np.diff(u0_mat, 1, axis=1), 2, axis=0)
+            if not np.all(u0_errs < self.TOLERANCE):
+                return np.inf
             return obj
 
         # Proximal operator using OSQP.
@@ -637,7 +645,7 @@ class TestSolver(BaseTest):
             rho_parm = Parameter(nonneg=True)
             v_parm = Parameter((T+1,m+n))
 
-            obj = prob*sum([quad_form(x[t],Q) + quad_form(u[t],R) for t in range(T+1)])
+            obj = sum([prob*(quad_form(x[t],Q) + quad_form(u[t],R)) for t in range(T+1)])
             reg = (rho_parm/2)*(sum_squares(x - v_parm[:,:n]) + sum_squares(u - v_parm[:,n:]))
             constr = [x[0] == x_init]
             constr += [x[t+1] == A*x[t] + B*u[t] + c for t in range(T)]
@@ -646,7 +654,7 @@ class TestSolver(BaseTest):
             def prox(v, rho):
                 v_parm.value = np.reshape(v, (T+1,m+n), order='C')
                 rho_parm.value = rho
-                prob.solve(solver='OSQP')
+                prob.solve(solver='OSQP', eps_abs=self.eps_abs)
                 x_val = x.value.ravel(order='C')
                 u_val = u.value.ravel(order='C')
                 return np.concatenate([x_val, u_val])
@@ -665,33 +673,42 @@ class TestSolver(BaseTest):
         x_all = [Variable((T+1,n)) for s in range(S)]
         u_all = [Variable((T+1,m)) for s in range(S)]
         obj = 0
+        constr = []
         for s in range(S):
-            obj += sum([pi*(quad_form(x_all[s][t,:],Q) + quad_form(u_all[s][t,:],R)) \
-                        for t in range(T+1) for Q,R,pi in zip(Q_list,R_list,probs)])
-            constr = [x_all[s][0,:] == x_init, norm_inf(u_all[s]) <= u_bnds[s]]
-            constr += [x_all[s][t+1,:] == A*x_all[s][t,:] + B*u_all[s][t,:] + c for t in range(T)]
+            obj += sum([probs[s]*(quad_form(x_all[s][t],Q_list[s]) + quad_form(u_all[s][t],R_list[s])) for t in range(T+1)])
+            constr += [x_all[s][0] == x_init, norm_inf(u_all[s]) <= u_bnds[s]]
+            constr += [x_all[s][t+1] == A*x_all[s][t] + B*u_all[s][t] + c for t in range(T)]
+        constr += [u_all[s+1][0] == u_all[s][0] for s in range(S-1)]
         prob = Problem(Minimize(obj), constr)
         prob.solve()
         cvxpy_obj = prob.value
-        cvxpy_x_list = [x.value.ravel(order='C') for x in x_all]
-        cvxpy_u_list = [u.value.ravel(order='C') for u in u_all]
+        cvxpy_x_list = [x.value for x in x_all]
+        cvxpy_u_list = [u.value for u in u_all]
         print("CVXPY Objective:", cvxpy_obj)
 
         # Initialize problem.
-        p_list = [prox_control_osqp(Q,R,A,B,c,pi) for Q,R,pi in zip(Q_list,R_list,probs)]
+        p_list = [prox_control_osqp(Q,R,A,B,c,prob) for Q,R,prob in zip(Q_list,R_list,probs)]
         p_list += [prox_norm_inf_wrapper(u_bnds)]
-        v_init = S*[np.zeros(K)] + [np.zeros(S*(T+1)*n)]
-        E_mat = np.hstack([np.zeros((n,(T+1)*m)), np.eye(n), np.zeros((n,T*n))])
-        E_mat = np.vstack([E_mat, np.zeros(((S-1)*n,K))])
-        E_list = [np.roll(E_mat, s*K, axis=0) for s in range(S)]
-        I_mat = np.zeros((n,S*(T+1)*n))
-        I_mat[:,:n] = -np.eye(n)
-        I_mat = np.vstack([np.roll(I_mat, s*(T+1)*n, axis=1) for s in range(S)])
-        E_list += [I_mat]
-        b = np.zeros(S*n)
+        v_init = S*[np.zeros(K)] + [np.zeros(S*(T+1)*m)]
+
+        # Consensus constraint on u^(1),...,u^(S) for I(max(|u^(s)| <= u_bnd[s]).
+        M = S*(T+1)*m + (S-1)*m
+        E_mat = np.hstack([np.zeros(((T+1)*m,(T+1)*n)), np.eye((T+1)*m)])
+        E_mat = np.vstack([E_mat, np.zeros((M-(T+1)*m,K))])
+        E_mats = [np.roll(E_mat, s*(T+1)*m, axis=0) for s in range(S)]
+        I_mat = -np.eye(S*(T+1)*m)
+
+        # Equality constraint on u_0^(1) = ... = u_0^(S).
+        C_mat = np.zeros((m,S*(T+1)*m))
+        C_mat[:,:m] = np.eye(m)
+        C_mat[:,(T+1)*m:(T+2)*m] = -np.eye(m)
+        if S > 2:
+            C_mat = np.vstack([np.roll(C_mat, s*(T+1)*m, axis=1) for s in range(S-1)])
+        A_list = E_mats + [np.vstack([I_mat, C_mat])]
+        b = np.zeros(M)
 
         # Solve with DRS.
-        drs_result = a2dr(p_list, v_init, E_list, b, max_iter=self.max_iter, eps_abs=self.eps_abs,
+        drs_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
                           eps_stop=self.eps_stop, anderson=False)
         drs_z_list = [extract_xu(z) for z in drs_result["x_vals"][:S]]
         drs_x_list, drs_u_list = map(list, zip(*drs_z_list))
@@ -705,7 +722,7 @@ class TestSolver(BaseTest):
                             normalize=True, title="DRS Residuals", semilogy=True)
 
         # Solve with A2DR.
-        a2dr_result = a2dr(p_list, v_init, E_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
+        a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
                            eps_stop=self.eps_stop, anderson=True)
         a2dr_z_list = [extract_xu(z) for z in a2dr_result["x_vals"][:S]]
         a2dr_x_list, a2dr_u_list = map(list, zip(*a2dr_z_list))
