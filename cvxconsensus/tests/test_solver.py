@@ -348,6 +348,7 @@ class TestSolver(BaseTest):
         # reg2 = lam[1] * normNuc(reshape(theta2, (n,K)))
         # prob = Problem(Minimize(loss + reg1 + reg2), [Ax == b])
         # prob.solve()
+        # print("CVXPY Transformed Objective:", prob.value)
         # self.assertAlmostEqual(prob.value, cvxpy_obj, places=3)
 
         # Solve with DRS.
@@ -630,14 +631,14 @@ class TestSolver(BaseTest):
         S = 2    # Number of scenarios.
         m = 2    # Dimension of x_t^(s).
         n = 4    # Dimension of u_t^(s).
-        T = 10   # Time periods (t = 0,...,T)
+        T = 100   # Time periods (t = 0,...,T)
         K = (T + 1)*(m + n)
         w_eps = 0.01   # Lower bound on eigenvalues of R.
         A_eps = 0.05
 
         # Scenario matrices.
-        probs = np.random.uniform(size=S)
-        probs = probs/np.sum(probs)
+        weights = np.random.uniform(size=S)
+        weights = weights / np.sum(weights)
         u_bnds = 1 + 0.01*np.random.randn(S)   # Upper bound on all |u_t|.
 
         # Dynamic matrices.
@@ -679,7 +680,7 @@ class TestSolver(BaseTest):
                 # Check x_0 initialized properly and u_t within bound.
                 if LA.norm(x_list[s][0] - x_init) > self.TOLERANCE or u_inf > u_bnds[s]:
                     return np.inf
-                obj += probs[s]*np.sum(xQx + uRu)
+                obj += weights[s]*np.sum(xQx + uRu)
 
             # Check u_0^(s) equal across scenarios.
             u0_mat = np.column_stack([u_list[s][0] for s in range(S)])
@@ -689,15 +690,15 @@ class TestSolver(BaseTest):
             return obj
 
         # Proximal operator using OSQP.
-        def prox_control_osqp(Q, R, A, B, c, prob):
+        def prox_control_osqp(Q, R, A, B, c, u_bnd, weight):
             x = Variable((T+1,n))
             u = Variable((T+1,m))
             rho_parm = Parameter(nonneg=True)
             v_parm = Parameter((T+1,m+n))
 
-            obj = sum([prob*(quad_form(x[t],Q) + quad_form(u[t],R)) for t in range(T+1)])
+            obj = sum([weight*(quad_form(x[t], Q) + quad_form(u[t], R)) for t in range(T+1)])
             reg = (rho_parm/2)*(sum_squares(x - v_parm[:,:n]) + sum_squares(u - v_parm[:,n:]))
-            constr = [x[0] == x_init]
+            constr = [x[0] == x_init, norm_inf(u) <= u_bnd]
             constr += [x[t+1] == A*x[t] + B*u[t] + c for t in range(T)]
             prob = Problem(Minimize(obj + reg), constr)
 
@@ -710,53 +711,54 @@ class TestSolver(BaseTest):
                 return np.concatenate([x_val, u_val])
             return prox
 
-        # Wrapper for inf-norm with variable bounds.
-        def prox_norm_inf_wrapper(u_bnds):
-            prox_list = [prox_norm_inf(u_bnd) for u_bnd in u_bnds]
-            def prox(v, rho):
-                u_split = np.split(v, S)
-                u_proxs = [prox_list[s](u_split[s], rho) for s in range(S)]
-                return np.concatenate(u_proxs)
-            return prox
-
         # Solve with CVXPY.
-        x_all = [Variable((T+1,n)) for s in range(S)]
-        u_all = [Variable((T+1,m)) for s in range(S)]
+        x_list = [Variable((T+1,n)) for s in range(S)]
+        u_list = [Variable((T+1,m)) for s in range(S)]
         obj = 0
         constr = []
         for s in range(S):
-            obj += sum([probs[s]*(quad_form(x_all[s][t],Q_list[s]) + quad_form(u_all[s][t],R_list[s])) for t in range(T+1)])
-            constr += [x_all[s][0] == x_init, norm_inf(u_all[s]) <= u_bnds[s]]
-            constr += [x_all[s][t+1] == A*x_all[s][t] + B*u_all[s][t] + c for t in range(T)]
-        constr += [u_all[s+1][0] == u_all[s][0] for s in range(S-1)]
+            obj += sum([weights[s]*(quad_form(x_list[s][t],Q_list[s]) + quad_form(u_list[s][t],R_list[s])) for t in range(T+1)])
+            constr += [x_list[s][0] == x_init, norm_inf(u_list[s]) <= u_bnds[s]]
+            constr += [x_list[s][t+1] == A*x_list[s][t] + B*u_list[s][t] + c for t in range(T)]
+        constr += [u_list[s+1][0] == u_list[s][0] for s in range(S-1)]
         prob = Problem(Minimize(obj), constr)
         prob.solve()
         cvxpy_obj = prob.value
-        cvxpy_x_list = [x.value for x in x_all]
-        cvxpy_u_list = [u.value for u in u_all]
+        cvxpy_x_list = [x.value for x in x_list]
+        cvxpy_u_list = [u.value for u in u_list]
         print("CVXPY Objective:", cvxpy_obj)
 
         # Initialize problem.
-        p_list = [prox_control_osqp(Q,R,A,B,c,prob) for Q,R,prob in zip(Q_list,R_list,probs)]
-        p_list += [prox_norm_inf_wrapper(u_bnds)]
-        v_init = S*[np.zeros(K)] + [np.zeros(S*(T+1)*m)]
+        p_list = [prox_control_osqp(Q,R,A,B,c,u_bnd,weight) for Q,R,u_bnd,weight in zip(Q_list,R_list,u_bnds,weights)]
+        p_list += [lambda v, rho: v]
+        v_init = S*[np.zeros(K)] + [np.zeros(m)]
 
-        # Consensus constraint on u^(1),...,u^(S) for I(max(|u^(s)| <= u_bnd[s]).
-        M = S*(T+1)*m + (S-1)*m
-        E_mat = np.hstack([np.zeros(((T+1)*m,(T+1)*n)), np.eye((T+1)*m)])
-        E_mat = np.vstack([E_mat, np.zeros((M-(T+1)*m,K))])
-        E_mats = [np.roll(E_mat, s*(T+1)*m, axis=0) for s in range(S)]
-        I_mat = -np.eye(S*(T+1)*m)
+        # Consensus constraint on u_0^(1),...,u_0^(S).
+        E_mat = np.hstack([np.zeros((m,(T+1)*n)), np.eye(m), np.zeros((m,T*m))])
+        E_mat = np.vstack([E_mat, np.zeros(((S-1)*m,K))])
+        E_mats = [np.roll(E_mat, s*m, axis=0) for s in range(S)]
+        I_mat = -np.vstack(S*[np.eye(m)])
+        A_list = E_mats + [I_mat]
+        b = np.zeros(S*m)
 
-        # Equality constraint on u_0^(1) = ... = u_0^(S).
-        # TODO: Not working with equality constraint.
-        C_mat = np.zeros((m,S*(T+1)*m))
-        C_mat[:,:m] = np.eye(m)
-        C_mat[:,(T+1)*m:(T+2)*m] = -np.eye(m)
-        if S > 2:
-            C_mat = np.vstack([np.roll(C_mat, s*(T+1)*m, axis=1) for s in range(S-1)])
-        A_list = E_mats + [np.vstack([I_mat, C_mat])]
-        b = np.zeros(M)
+        # Solve transformed problem with CVXPY.
+        # x_vecs = [Variable((T+1)*n) for s in range(S)]
+        # u_vecs = [Variable((T+1)*m) for s in range(S)]
+        # u0_all = Variable(m)
+        # obj = Ax = 0
+        # constr = []
+        # for s in range(S):
+        #     x_mat = reshape(x_vecs[s], (n,T+1)).T
+        #     u_mat = reshape(u_vecs[s], (m,T+1)).T
+        #     obj += weights[s]*sum([(quad_form(x_mat[t], Q_list[s]) + quad_form(u_mat[t], R_list[s])) for t in range(T+1)])
+        #     constr += [x_mat[0] == x_init, norm_inf(u_vecs[s]) <= u_bnds[s]]
+        #     constr += [x_mat[t+1] == A*x_mat[t] + B*u_mat[t] + c for t in range(T)]
+        #     Ax += A_list[s]*hstack([x_vecs[s], u_vecs[s]])
+        # Ax += A_list[S]*u0_all
+        # prob = Problem(Minimize(obj), constr + [Ax == b])
+        # prob.solve()
+        # print("CVXPY Transformed Objective:", prob.value)
+        # self.assertAlmostEqual(prob.value, cvxpy_obj)
 
         # Solve with DRS.
         drs_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
