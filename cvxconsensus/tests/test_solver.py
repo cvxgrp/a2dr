@@ -109,10 +109,9 @@ class TestSolver(BaseTest):
 
     def setUp(self):
         np.random.seed(1)
-        self.eps_stop = 1e-8
-        self.eps_abs = 1e-16
+        self.eps_rel = 1e-8
+        self.eps_abs = 1e-6
         self.MAX_ITER = 2000
-        self.TOLERANCE = 1e-6
 
     def test_ols(self):
         # minimize ||y - X\beta||_2^2 with respect to \beta >= 0.
@@ -140,14 +139,14 @@ class TestSolver(BaseTest):
         print("NumPy Solution:", np_beta)
 
         # Solve with DRS (proximal point method).
-        drs_result = a2dr(p_list, v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, eps_stop=self.eps_stop, anderson=False)
+        drs_result = a2dr(p_list, v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, eps_rel=self.eps_rel, anderson=False)
         drs_beta = drs_result["x_vals"]
         drs_obj = np.sum([(yi - Xi.dot(beta))**2 for yi,Xi,beta in zip(y_split,X_split,drs_beta)])
         print("DRS Objective:", drs_obj)
         print("DRS Solution:", drs_beta)
 
         # Solve with A2DR (proximal point method with Anderson acceleration).
-        a2dr_result = a2dr(p_list, v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, eps_stop=self.eps_stop, anderson=True)
+        a2dr_result = a2dr(p_list, v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, eps_rel=self.eps_rel, anderson=True)
         a2dr_beta = a2dr_result["x_vals"]
         a2dr_obj = np.sum([(yi - Xi.dot(beta))**2 for yi, Xi, beta in zip(y_split, X_split, drs_beta)])
         print("A2DR Objective:", a2dr_obj)
@@ -193,7 +192,7 @@ class TestSolver(BaseTest):
         b = np.zeros(N*n)
 
         # Solve with DRS.
-        drs_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, eps_stop=self.eps_stop, anderson=False)
+        drs_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, eps_rel=self.eps_rel, anderson=False)
         drs_beta = drs_result["x_vals"][-1]
         drs_obj = np.sum((y - X.dot(drs_beta))**2)
         print("DRS Objective:", drs_obj)
@@ -204,7 +203,7 @@ class TestSolver(BaseTest):
                             normalize=True, title="DRS Residuals", semilogy=True)
 
         # Solve with A2DR.
-        a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, eps_stop=self.eps_stop, anderson=True)
+        a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, eps_rel=self.eps_rel, anderson=True)
         a2dr_beta = a2dr_result["x_vals"][-1]
         a2dr_obj = np.sum((y - X.dot(a2dr_beta))**2)
         print("A2DR Objective:", a2dr_obj)
@@ -248,7 +247,7 @@ class TestSolver(BaseTest):
 
         # Solve with DRS.
         drs_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
-                          eps_stop=self.eps_stop, anderson=False)
+                          eps_rel=self.eps_rel, anderson=False)
         drs_x = drs_result["x_vals"][0]
         drs_obj = np.sum((y - drs_x)**2)/2 + lam*np.sum(np.abs(np.diff(drs_x,2)))
         print("DRS Objective:", drs_obj)
@@ -260,7 +259,7 @@ class TestSolver(BaseTest):
 
         # Solve with A2DR.
         a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
-                           eps_stop=self.eps_stop, anderson=True)
+                           eps_rel=self.eps_rel, anderson=True)
         a2dr_x = a2dr_result["x_vals"][0]
         a2dr_obj = np.sum((y - a2dr_x)**2)/2 + lam*np.sum(np.abs(np.diff(a2dr_x,2)))
         print("A2DR Objective:", a2dr_obj)
@@ -354,7 +353,7 @@ class TestSolver(BaseTest):
         # Solve with DRS.
         # TODO: Proximal operator for logistic function is failing.
         drs_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
-                          eps_stop=self.eps_stop, anderson=False)
+                          eps_rel=self.eps_rel, anderson=False)
         drs_theta = drs_result["x_vals"][-1].reshape((n, K), order='C')
         drs_obj = calc_obj(drs_theta, lam.value)
         print("DRS Objective:", drs_obj)
@@ -365,7 +364,7 @@ class TestSolver(BaseTest):
 
         # Solve with A2DR.
         a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
-                           eps_stop=self.eps_stop, anderson=True)
+                           eps_rel=self.eps_rel, anderson=True)
         a2dr_theta = a2dr_result["x_vals"][-1].reshape((n, K), order='C')
         a2dr_obj = calc_obj(a2dr_theta, lam.value)
         print("DRS Objective:", a2dr_obj)
@@ -417,7 +416,7 @@ class TestSolver(BaseTest):
 
         # Solve with DRS.
         drs_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
-                          eps_stop=self.eps_stop, anderson=False)
+                          eps_rel=self.eps_rel, anderson=False)
         drs_S = drs_result["x_vals"][-1].reshape((m,m), order='C')
         drs_obj = -LA.slogdet(drs_S)[1] + np.sum(np.diag(drs_S.dot(Y))) + alpha.value*np.sum(np.abs(drs_S))
         print("DRS Objective:", drs_obj)
@@ -428,7 +427,7 @@ class TestSolver(BaseTest):
 
         # Solve with A2DR.
         a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
-                           eps_stop=self.eps_stop, anderson=True)
+                           eps_rel=self.eps_rel, anderson=True)
         a2dr_S = a2dr_result["x_vals"][-1].reshape((m,m), order='C')
         a2dr_obj = -LA.slogdet(a2dr_S)[1] + np.sum(np.diag(a2dr_S.dot(Y))) + alpha.value*np.sum(np.abs(a2dr_S))
         print("A2DR Objective:", a2dr_obj)
@@ -499,7 +498,7 @@ class TestSolver(BaseTest):
 
         # Solve with DRS.
         drs_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
-                          eps_stop=self.eps_stop, anderson=False)
+                          eps_rel=self.eps_rel, anderson=False)
         drs_x = drs_result["x_vals"][0]
         drs_s = drs_result["x_vals"][1]
         drs_obj = phi*np.sum(drs_s[:m_free]**2) + psi*np.sum((drs_x - x0)**2)
@@ -512,7 +511,7 @@ class TestSolver(BaseTest):
 
         # Solve with A2DR.
         a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
-                           eps_stop=self.eps_stop, anderson=True)
+                           eps_rel=self.eps_rel, anderson=True)
         a2dr_x = a2dr_result["x_vals"][0]
         a2dr_s = a2dr_result["x_vals"][1]
         a2dr_obj = phi*np.sum(a2dr_s[:m_free] ** 2) + psi*np.sum((a2dr_x - x0) ** 2)
@@ -602,7 +601,7 @@ class TestSolver(BaseTest):
 
         # Solve with DRS.
         drs_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
-                          eps_stop=self.eps_stop, anderson=False)
+                          eps_rel=self.eps_rel, anderson=False)
         drs_z = drs_result["x_vals"][-1]
         drs_x, drs_u = extract_xu(drs_z)
         drs_obj = calc_obj(drs_z)
@@ -615,7 +614,7 @@ class TestSolver(BaseTest):
 
         # Solve with A2DR.
         a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
-                           eps_stop=self.eps_stop, anderson=True)
+                           eps_rel=self.eps_rel, anderson=True)
         a2dr_z = a2dr_result["x_vals"][-1]
         a2dr_x, a2dr_u = extract_xu(a2dr_z)
         a2dr_obj = calc_obj(a2dr_z)
@@ -631,7 +630,7 @@ class TestSolver(BaseTest):
         S = 2    # Number of scenarios.
         m = 2    # Dimension of x_t^(s).
         n = 4    # Dimension of u_t^(s).
-        T = 100   # Time periods (t = 0,...,T)
+        T = 10   # Time periods (t = 0,...,T)
         K = (T + 1)*(m + n)
         w_eps = 0.01   # Lower bound on eigenvalues of R.
         A_eps = 0.05
@@ -678,14 +677,16 @@ class TestSolver(BaseTest):
                 u_inf = np.max(np.abs(u_list[s]))
 
                 # Check x_0 initialized properly and u_t within bound.
-                if LA.norm(x_list[s][0] - x_init) > self.TOLERANCE or u_inf > u_bnds[s]:
+                if LA.norm(x_list[s][0] - x_init) > self.eps_abs + self.eps_rel*LA.norm(x_init) or \
+                        u_inf - u_bnds[s] > self.eps_abs + self.eps_rel*u_bnds[s]:
                     return np.inf
                 obj += weights[s]*np.sum(xQx + uRu)
 
             # Check u_0^(s) equal across scenarios.
             u0_mat = np.column_stack([u_list[s][0] for s in range(S)])
+            u0_norms = LA.norm(u0_mat, 2, axis=0)
             u0_errs = LA.norm(np.diff(u0_mat, 1, axis=1), 2, axis=0)
-            if not np.all(u0_errs < self.TOLERANCE):
+            if not np.all(u0_errs < self.eps_abs + self.eps_rel*u0_norms[:-1]):
                 return np.inf
             return obj
 
@@ -694,17 +695,18 @@ class TestSolver(BaseTest):
             x = Variable((T+1,n))
             u = Variable((T+1,m))
             rho_parm = Parameter(nonneg=True)
-            v_parm = Parameter((T+1,m+n))
+            x_parm = Parameter((T+1,n))
+            u_parm = Parameter((T+1,m))
 
             obj = sum([weight*(quad_form(x[t], Q) + quad_form(u[t], R)) for t in range(T+1)])
-            reg = (rho_parm/2)*(sum_squares(x - v_parm[:,:n]) + sum_squares(u - v_parm[:,n:]))
+            reg = (rho_parm/2)*(sum_squares(x - x_parm) + sum_squares(u - u_parm))
             constr = [x[0] == x_init, norm_inf(u) <= u_bnd]
             constr += [x[t+1] == A*x[t] + B*u[t] + c for t in range(T)]
             prob = Problem(Minimize(obj + reg), constr)
 
             def prox(v, rho):
-                v_parm.value = np.reshape(v, (T+1,m+n), order='C')
                 rho_parm.value = rho
+                x_parm.value, u_parm.value = extract_xu(v)
                 prob.solve(solver='OSQP', eps_abs=self.eps_abs)
                 x_val = x.value.ravel(order='C')
                 u_val = u.value.ravel(order='C')
@@ -762,7 +764,7 @@ class TestSolver(BaseTest):
 
         # Solve with DRS.
         drs_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
-                          eps_stop=self.eps_stop, anderson=False)
+                          eps_rel=self.eps_rel, anderson=False)
         drs_z_list = [extract_xu(z) for z in drs_result["x_vals"][:S]]
         drs_x_list, drs_u_list = map(list, zip(*drs_z_list))
         drs_obj = calc_obj(drs_x_list, drs_u_list)
@@ -776,7 +778,7 @@ class TestSolver(BaseTest):
 
         # Solve with A2DR.
         a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
-                           eps_stop=self.eps_stop, anderson=True)
+                           eps_rel=self.eps_rel, anderson=True)
         a2dr_z_list = [extract_xu(z) for z in a2dr_result["x_vals"][:S]]
         a2dr_x_list, a2dr_u_list = map(list, zip(*a2dr_z_list))
         a2dr_obj = calc_obj(a2dr_x_list, a2dr_u_list)
