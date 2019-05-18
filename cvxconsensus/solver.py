@@ -98,7 +98,6 @@ def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
     lam_accel = kwargs.pop("lam_accel", 0)   # AA-II regularization weight.
 
     # Safeguarding parameters.
-    safeguard = kwargs.pop("safeguard", False)   # Enable safeguarding?
     D_safe = kwargs.pop("D_safe", 1e6)
     eps_safe = kwargs.pop("eps_safe", 1e-6)
     M_safe = kwargs.pop("M_safe", max_iter/100)
@@ -164,6 +163,7 @@ def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
     # A2DR loop.
     k = 0
     finished = False
+    safeguard = True
     r_primal = np.zeros(max_iter)
     r_dual = np.zeros(max_iter)
 
