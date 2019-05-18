@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License
 along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 """
 import numpy as np
+import numpy.linalg as LA
 import scipy.sparse as sp
 from time import time
 from multiprocessing import Process, Pipe
@@ -55,11 +56,17 @@ def a2dr_worker(pipe, prox, v_init, A, rho, anderson, m_accel):
             # Send s^(k-1) = v^(k) - v^(k-1) and g^(k) = v^(k) - F(v^(k)) = x^(k+1/2) - x^(k+1).
             pipe.send((v_res, x_half - x_new))
 
-            # Receive AA-II weights for v^(k+1).
-            alpha = pipe.recv()
+            # Receive safeguarding decision.
+            AA_update = pipe.recv()
+            if AA_update:
+                # Receive AA-II weights for v^(k+1).
+                alpha = pipe.recv()
 
-            # Weighted update of v^(k+1).
-            v_new = np.column_stack(F_hist).dot(alpha[:(k+1)])
+                # Weighted update of v^(k+1).
+                v_new = np.column_stack(F_hist).dot(alpha[:(k + 1)])
+            else:
+                # Revert to DRS update of v^(k+1).
+                v_new = v_vec + x_new - x_half
 
             # Save v^(k+1) - v^(k) for next iteration.
             v_res = v_new - v_vec
@@ -90,6 +97,12 @@ def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
     m_accel = int(kwargs.pop("m_accel", 5))  # Maximum past iterations to keep (>= 0).
     lam_accel = kwargs.pop("lam_accel", 0)   # AA-II regularization weight.
 
+    # Safeguarding parameters.
+    safeguard = kwargs.pop("safeguard", False)   # Enable safeguarding?
+    D_safe = kwargs.pop("D_safe", 1e6)
+    eps_safe = kwargs.pop("eps_safe", 1e-6)
+    M_safe = kwargs.pop("M_safe", max_iter/100)
+
     # Validate parameters.
     if max_iter <= 0:
         raise ValueError("max_iter must be a positive integer.")
@@ -103,6 +116,12 @@ def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
         raise ValueError("m_accel must be a positive integer.")
     if lam_accel < 0:
         raise ValueError("lam_accel must be a non-negative scalar.")
+    if D_safe < 0:
+        raise ValueError("D_safe must be a non-negative scalar.")
+    if eps_safe < 0:
+        raise ValueError("eps_safe must be a non-negative scalar.")
+    if M_safe <= 0:
+        raise ValueError("M_safe must be a positive integer.")
 
     # DRS parameters.
     N = len(p_list)   # Number of subproblems.
@@ -120,7 +139,7 @@ def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
 
     # Precondition data.
     if precond:
-        p_list, A_list, b, e_pre = precondition(p_list, A_list, b, tol = eps_abs, max_iter = max_iter)
+        p_list, A_list, b, e_pre = precondition(p_list, A_list, b, tol=eps_abs, max_iter=max_iter)
     A = np.hstack(A_list)
     AAT = A.dot(A.T)   # Store for projection step.
 
@@ -140,6 +159,7 @@ def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
         g_vec = np.zeros(n_sum)   # g^(k) = v^(k) - F(v^(k)).
         s_hist = []  # History of s^(j) = v^(j+1) - v^(j), kept in S^(k) = [s^(k-m_k) ... s^(k-1)].
         y_hist = []  # History of y^(j) = g^(j+1) - g^(j), kept in Y^(k) = [y^(k-m_k) ... y^(k-1)].
+        n_AA = M_AA = 0   # Safeguarding counters.
 
     # A2DR loop.
     k = 0
@@ -154,7 +174,7 @@ def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
 
         # Projection step for x^(k+1).
         v_half = np.concatenate(v_halves, axis=0)
-        d_half = np.linalg.lstsq(AAT, A.dot(v_half) - b, rcond=None)[0]
+        d_half = LA.lstsq(AAT, A.dot(v_half) - b, rcond=None)[0]
 
         # Scatter d^(k+1/2) = (AA^T)^{-1}(Av^(k+1/2) - b).
         for pipe in pipes:
@@ -180,21 +200,42 @@ def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
             if len(s_hist) > m_k:
                 s_hist.pop(0)
 
-            # Compute and scatter AA-II weights.
-            Y_mat = np.column_stack(y_hist)
-            S_mat = np.column_stack(s_hist)
-            reg = lam_accel*(np.linalg.norm(Y_mat)**2 + np.linalg.norm(S_mat)**2)   # AA-II regularization.
-            alpha = aa_weights(Y_mat, g_new, reg, rcond=None)
+            # Safeguard update.
+            if k == 0:
+                AA_update = False   # Initial step is always DRS.
+                g0_norm = LA.norm(g_vec)
+            elif safeguard or M_AA >= M_safe:
+                if LA.norm(g_vec) <= D_safe*g0_norm*(n_AA/M_safe + 1)**(-(1 + eps_safe)):
+                    AA_update = True
+                    n_AA = n_AA + 1
+                    M_AA = 0
+                    safeguard = False
+                else:
+                    AA_update = False
+                    M_AA = 0
+            else:
+                AA_update = True
+                M_AA = M_AA + 1
+
+            # Scatter safeguarding decision.
             for pipe in pipes:
-                pipe.send(alpha)
+                pipe.send(AA_update)
+            if AA_update:
+                # Compute and scatter AA-II weights.
+                Y_mat = np.column_stack(y_hist)
+                S_mat = np.column_stack(s_hist)
+                reg = lam_accel * (LA.norm(Y_mat) ** 2 + LA.norm(S_mat) ** 2)  # AA-II regularization.
+                alpha = aa_weights(Y_mat, g_new, reg, rcond=None)
+                for pipe in pipes:
+                    pipe.send(alpha)
 
         # Compute l2-norm of primal and dual residuals.
         r_update = [pipe.recv() for pipe in pipes]
         Ax_halves, xv_diffs = map(list, zip(*r_update))
-        r_primal[k] = np.linalg.norm(sum(Ax_halves) - b, ord=2)
+        r_primal[k] = LA.norm(sum(Ax_halves) - b, ord=2)
         subgrad = rho_init*np.concatenate(xv_diffs)
-        sol = np.linalg.lstsq(A.T, subgrad, rcond=None)[0]
-        r_dual[k] = np.linalg.norm(A.T.dot(sol) - subgrad, ord=2)
+        sol = LA.lstsq(A.T, subgrad, rcond=None)[0]
+        r_dual[k] = LA.norm(A.T.dot(sol) - subgrad, ord=2)
 
         # Stop if residual norms fall below tolerance.
         k = k + 1

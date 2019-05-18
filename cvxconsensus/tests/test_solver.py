@@ -139,14 +139,16 @@ class TestSolver(BaseTest):
         print("NumPy Solution:", np_beta)
 
         # Solve with DRS (proximal point method).
-        drs_result = a2dr(p_list, v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, eps_rel=self.eps_rel, anderson=False)
+        drs_result = a2dr(p_list, v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, \
+                          eps_rel=self.eps_rel, anderson=False)
         drs_beta = drs_result["x_vals"]
         drs_obj = np.sum([(yi - Xi.dot(beta))**2 for yi,Xi,beta in zip(y_split,X_split,drs_beta)])
         print("DRS Objective:", drs_obj)
         print("DRS Solution:", drs_beta)
 
         # Solve with A2DR (proximal point method with Anderson acceleration).
-        a2dr_result = a2dr(p_list, v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, eps_rel=self.eps_rel, anderson=True)
+        a2dr_result = a2dr(p_list, v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, \
+                           eps_rel=self.eps_rel, anderson=True)
         a2dr_beta = a2dr_result["x_vals"]
         a2dr_obj = np.sum([(yi - Xi.dot(beta))**2 for yi, Xi, beta in zip(y_split, X_split, drs_beta)])
         print("A2DR Objective:", a2dr_obj)
@@ -192,26 +194,26 @@ class TestSolver(BaseTest):
         b = np.zeros(N*n)
 
         # Solve with DRS.
-        drs_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, eps_rel=self.eps_rel, anderson=False)
+        drs_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, \
+                          eps_rel=self.eps_rel, anderson=False)
         drs_beta = drs_result["x_vals"][-1]
         drs_obj = np.sum((y - X.dot(drs_beta))**2)
         print("DRS Objective:", drs_obj)
         print("DRS Solution:", drs_beta)
         self.assertAlmostEqual(sp_obj, drs_obj)
         self.assertItemsAlmostEqual(sp_beta, drs_beta, places=3)
-        self.plot_residuals(drs_result["primal"], drs_result["dual"], \
-                            normalize=True, title="DRS Residuals", semilogy=True)
+        self.plot_residuals(drs_result["primal"], drs_result["dual"], normalize=True, title="DRS Residuals", semilogy=True)
 
         # Solve with A2DR.
-        a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, eps_rel=self.eps_rel, anderson=True)
+        a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, \
+                           eps_rel=self.eps_rel, anderson=True)
         a2dr_beta = a2dr_result["x_vals"][-1]
         a2dr_obj = np.sum((y - X.dot(a2dr_beta))**2)
         print("A2DR Objective:", a2dr_obj)
         print("A2DR Solution:", a2dr_beta)
         self.assertAlmostEqual(sp_obj, a2dr_obj)
         self.assertItemsAlmostEqual(sp_beta, a2dr_beta, places=3)
-        self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], \
-                            normalize=True, title="A2DR Residuals", semilogy=True)
+        self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], normalize=True, title="A2DR Residuals", semilogy=True)
         self.compare_primal_dual(drs_result, a2dr_result)
 
     def test_l1_trend_filtering(self):
@@ -246,7 +248,7 @@ class TestSolver(BaseTest):
         b = np.zeros(n-2)
 
         # Solve with DRS.
-        drs_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
+        drs_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, \
                           eps_rel=self.eps_rel, anderson=False)
         drs_x = drs_result["x_vals"][0]
         drs_obj = np.sum((y - drs_x)**2)/2 + lam*np.sum(np.abs(np.diff(drs_x,2)))
@@ -254,8 +256,7 @@ class TestSolver(BaseTest):
         print("DRS Solution:", drs_x)
         self.assertAlmostEqual(cvxpy_obj, drs_obj)
         self.assertItemsAlmostEqual(cvxpy_x, drs_x)
-        self.plot_residuals(drs_result["primal"], drs_result["dual"], \
-                            normalize=True, title="DRS Residuals", semilogy=True)
+        self.plot_residuals(drs_result["primal"], drs_result["dual"], normalize=True, title="DRS Residuals", semilogy=True)
 
         # Solve with A2DR.
         a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
@@ -266,8 +267,7 @@ class TestSolver(BaseTest):
         print("A2DR Solution:", a2dr_x)
         self.assertAlmostEqual(cvxpy_obj, a2dr_obj)
         self.assertItemsAlmostEqual(cvxpy_x, a2dr_x)
-        self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], \
-                            normalize=True, title="A2DR Residuals", semilogy=True)
+        self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], normalize=True, title="A2DR Residuals", semilogy=True)
         self.compare_primal_dual(drs_result, a2dr_result)
 
     def test_multi_task_logistic(self):
@@ -359,8 +359,7 @@ class TestSolver(BaseTest):
         print("DRS Objective:", drs_obj)
         # self.assertAlmostEqual(cvxpy_obj, drs_obj)
         # self.assertItemsAlmostEqual(cvxpy_theta, drs_theta)
-        self.plot_residuals(drs_result["primal"], drs_result["dual"], \
-                             normalize=True, title="DRS Residuals", semilogy=True)
+        self.plot_residuals(drs_result["primal"], drs_result["dual"], normalize=True, title="DRS Residuals", semilogy=True)
 
         # Solve with A2DR.
         a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
@@ -370,8 +369,7 @@ class TestSolver(BaseTest):
         print("DRS Objective:", a2dr_obj)
         # self.assertAlmostEqual(cvxpy_obj, a2dr_obj)
         # self.assertItemsAlmostEqual(cvxpy_theta, a2dr_theta)
-        self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], \
-                            normalize=True, title="A2DR Residuals", semilogy=True)
+        self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], normalize=True, title="A2DR Residuals", semilogy=True)
         self.compare_primal_dual(drs_result, a2dr_result)
 
     def test_sparse_covariance(self):
@@ -403,6 +401,7 @@ class TestSolver(BaseTest):
 
         # Split problem as f_1(S) = -log(det(S)), f_2(S) = trace(S*Y),
         #   f_3(S) = \alpha*||S||_1, f_4(S) = I(S is symmetric PSD).
+        # TODO: Due to computational error, need to relax/disable symmetry check in prox for f_1 and f_4.
         N = 3
         p_list = [lambda v, rho: prox_neg_log_det(np.reshape(v, (m,m), order='C'), rho),
                   lambda v, rho: v - Y.ravel(order='C')/rho,
@@ -422,8 +421,7 @@ class TestSolver(BaseTest):
         print("DRS Objective:", drs_obj)
         self.assertAlmostEqual(cvxpy_obj, drs_obj, places=3)
         self.assertItemsAlmostEqual(cvxpy_S, drs_S, places=3)
-        self.plot_residuals(drs_result["primal"], drs_result["dual"], \
-                            normalize=True, title="DRS Residuals", semilogy=True)
+        self.plot_residuals(drs_result["primal"], drs_result["dual"], normalize=True, title="DRS Residuals", semilogy=True)
 
         # Solve with A2DR.
         a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
@@ -433,8 +431,7 @@ class TestSolver(BaseTest):
         print("A2DR Objective:", a2dr_obj)
         self.assertAlmostEqual(cvxpy_obj, a2dr_obj)
         self.assertItemsAlmostEqual(cvxpy_S, a2dr_S)
-        self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], \
-                            normalize=True, title="A2DR Residuals", semilogy=True)
+        self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], normalize=True, title="A2DR Residuals", semilogy=True)
         self.compare_primal_dual(drs_result, a2dr_result)
 
     def test_single_commodity_flow(self):
@@ -609,8 +606,7 @@ class TestSolver(BaseTest):
         self.assertAlmostEqual(cvxpy_obj, drs_obj)
         self.assertItemsAlmostEqual(cvxpy_x, drs_x)
         self.assertItemsAlmostEqual(cvxpy_u, drs_u)
-        self.plot_residuals(drs_result["primal"], drs_result["dual"], \
-                            normalize=True, title="DRS Residuals", semilogy=True)
+        self.plot_residuals(drs_result["primal"], drs_result["dual"], normalize=True, title="DRS Residuals", semilogy=True)
 
         # Solve with A2DR.
         a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
@@ -622,8 +618,7 @@ class TestSolver(BaseTest):
         self.assertAlmostEqual(cvxpy_obj, a2dr_obj)
         self.assertItemsAlmostEqual(cvxpy_x, a2dr_x)
         self.assertItemsAlmostEqual(cvxpy_u, a2dr_u)
-        self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], \
-                            normalize=True, title="A2DR Residuals", semilogy=True)
+        self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], normalize=True, title="A2DR Residuals", semilogy=True)
         self.compare_primal_dual(drs_result, a2dr_result)
 
     def test_multi_optimal_control(self):
