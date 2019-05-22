@@ -49,7 +49,7 @@ class BaseTest(TestCase):
         else:
             return mat
 
-    def plot_residuals(self, r_primal, r_dual, normalize = False, show = True, title = None, semilogy = False, *args, **kwargs):
+    def plot_residuals(self, r_primal, r_dual, normalize = False, show = True, title = None, semilogy = False, savefig = None, *args, **kwargs):
         if normalize:
             r_primal = r_primal / r_primal[0] if r_primal[0] != 0 else r_primal
             r_dual = r_dual / r_dual[0] if r_dual[0] != 0 else r_dual
@@ -67,6 +67,8 @@ class BaseTest(TestCase):
             plt.title(title)
         if show:
             plt.show()
+        if savefig:
+            plt.savefig(savefig, bbox_inches="tight")
 
     def compare_results(self, probs, obj_a2dr, obj_comb, x_a2dr, x_comb):
         N = len(probs.variables())
@@ -96,7 +98,7 @@ class BaseTest(TestCase):
         plt.ylabel("Residual")
         plt.show()
 
-    def compare_primal_dual(self, drs_result, a2dr_result):
+    def compare_primal_dual(self, drs_result, a2dr_result, savefig = None):
         # Compare residuals
         plt.semilogy(range(drs_result["num_iters"]), drs_result["primal"], color="blue", linestyle="--",
                      label="Primal (DRS)")
@@ -104,6 +106,8 @@ class BaseTest(TestCase):
         plt.semilogy(range(drs_result["num_iters"]), drs_result["dual"], color="darkorange", linestyle="--",
                      label="Dual (DRS)")
         plt.semilogy(range(a2dr_result["num_iters"]), a2dr_result["dual"], color="darkorange", label="Dual (A2DR) ")
-        plt.title("Residuals")
+        # plt.title("Residuals")
         plt.legend()
+        if savefig:
+            plt.savefig(savefig, bbox_inches="tight")
         plt.show()
