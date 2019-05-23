@@ -1,7 +1,7 @@
 import cvxpy
 import numpy as np
 import scipy as sp
-from scipy.optimize import minimize, Bounds
+from scipy.optimize import minimize
 from cvxpy import Constant, Variable, Parameter, Problem, Minimize
 from cvxpy.atoms.affine.unary_operators import NegExpression
 from cvxpy.atoms.affine.binary_operators import MulExpression, multiply
