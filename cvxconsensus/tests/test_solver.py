@@ -22,16 +22,26 @@ import scipy as sp
 import numpy.linalg as LA
 import matplotlib.pyplot as plt
 from cvxpy import *
+from scipy import sparse
 from scipy.optimize import nnls
 from cvxconsensus import a2dr
 from cvxconsensus.tests.base_test import BaseTest
 
-def prox_sum_squares(X, y, rcond = None):
+def prox_sum_squares(X, y, type = "lsqr"):
     n = X.shape[1]
-    def prox(v, rho):
-        A = np.vstack((X, np.sqrt(rho/2)*np.eye(n)))
-        b = np.concatenate((y, np.sqrt(rho/2)*v))
-        return LA.lstsq(A, b, rcond=rcond)[0]
+    if type == "lsqr":
+        X = sparse.csc_matrix(X)
+        def prox(v, rho):
+            A = sparse.vstack((X, np.sqrt(rho/2)*sparse.eye(n)))
+            b = np.concatenate((y, np.sqrt(rho/2)*v))
+            return sparse.linalg.lsqr(A, b, atol=1e-16, btol=1e-16)[0]
+    elif type == "lstsq":
+        def prox(v, rho):
+           A = np.vstack((X, np.sqrt(rho/2)*np.eye(n)))
+           b = np.concatenate((y, np.sqrt(rho/2)*v))
+           return LA.lstsq(A, b, rcond=None)[0]
+    else:
+        raise ValueError("Algorithm type not supported:", type)
     return prox
 
 def prox_neg_log_det(A, rho):

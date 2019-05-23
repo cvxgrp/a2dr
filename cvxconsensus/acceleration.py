@@ -76,7 +76,7 @@ def aa_weights_alt(residuals, lam=None, type="exact", *args, **kwargs):
 	else:
 		raise ValueError("type must be either 'exact' or 'inexact'")
 
-def aa_weights(Y, g, reg = 0, *args, **kwargs):
+def aa_weights(Y, g, reg = 0, type = "lstsq", *args, **kwargs):
 	""" Solve the constrained least-squares problem
 		Minimize sum_squares(\sum_{j=0}^m w_j * G^(k-m+j))
 			subject to \sum_{j=0}^m w_j = 1.
@@ -93,11 +93,21 @@ def aa_weights(Y, g, reg = 0, *args, **kwargs):
 		Minimize sum_squares(g - Y*c) + \lambda*sum_squares(c)
 	and return w as defined above.
 	"""
-	if reg != 0:
-		m = Y.shape[1]
-		Y = np.vstack([Y, np.sqrt(reg)*np.eye(m)])
-		g = np.concatenate([g, np.zeros(m)])
-	gamma = np.linalg.lstsq(Y, g, *args, **kwargs)[0]
+	if type == "lstsq":
+		if reg != 0:
+			m = Y.shape[1]
+			Y = np.vstack([Y, np.sqrt(reg)*np.eye(m)])
+			g = np.concatenate([g, np.zeros(m)])
+		gamma = np.linalg.lstsq(Y, g, *args, **kwargs)[0]
+	elif type == "lsqr":
+		if reg != 0:
+			m = Y.shape[1]
+			Y = sp.csc_matrix(Y)
+			Y = sp.vstack([Y, np.sqrt(reg)*sp.eye(m)])
+			g = np.concatenate([g, np.zeros(m)])
+		gamma = sp.linalg.lsqr(Y, g, *args, **kwargs)[0]
+	else:
+		raise ValueError("Algorithm type not supported:", type)
 	gamma_diff = np.diff(gamma, n=1)
 	alpha = np.concatenate(([gamma[0]], gamma_diff, [1-gamma[-1]]))
 	return alpha

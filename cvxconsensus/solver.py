@@ -25,6 +25,8 @@ from cvxconsensus.proximal.prox_point import prox_point
 from cvxconsensus.precondition import precondition
 from cvxconsensus.acceleration import aa_weights
 
+NNZ_RATIO = 0.1   # Maximum number of nonzeros to be considered sparse.
+
 def a2dr_worker(pipe, prox, v_init, A, rho, anderson, m_accel):
     # Initialize AA-II parameters.
     if anderson:   # TODO: Store and update these efficiently as arrays.
@@ -139,8 +141,15 @@ def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
     # Precondition data.
     if precond:
         p_list, A_list, b, e_pre = precondition(p_list, A_list, b, tol=eps_abs, max_iter=max_iter)
-    A = np.hstack(A_list)
-    AAT = A.dot(A.T)   # Store for projection step.
+
+    # Store constraint matrix for projection step.
+    # A = np.hstack(A_list)
+    A = sp.csr_matrix(np.hstack(A_list))
+    if A.count_nonzero() <= NNZ_RATIO*A.size:   # If sparse, define linear operator.
+       AATx_fun = lambda x: A.dot(A.T.dot(x))
+       AAT = sp.linalg.LinearOperator((A.shape[0], A.shape[0]), matvec=AATx_fun, rmatvec=AATx_fun)
+    else:
+       AAT = A.dot(A.T)   # If dense, calculate directly and cache.
 
     # Set up the workers.
     pipes = []
@@ -167,6 +176,10 @@ def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
     r_primal = np.zeros(max_iter)
     r_dual = np.zeros(max_iter)
 
+    # Warm start terms.
+    d_half = np.zeros(A.shape[0])
+    sol = np.zeros(A.shape[0])
+
     start = time()
     while not finished:
         # Gather v_i^(k+1/2) from nodes.
@@ -174,7 +187,8 @@ def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
 
         # Projection step for x^(k+1).
         v_half = np.concatenate(v_halves, axis=0)
-        d_half = LA.lstsq(AAT, A.dot(v_half) - b, rcond=None)[0]
+        # d_half = LA.lstsq(AAT, A.dot(v_half) - b, rcond=None)[0]
+        d_half = sp.linalg.lsqr(AAT, A.dot(v_half) - b, atol=1e-16, btol=1e-16, x0=d_half)[0]
 
         # Scatter d^(k+1/2) = (AA^T)^{-1}(Av^(k+1/2) - b).
         for pipe in pipes:
@@ -224,7 +238,7 @@ def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
                 # Compute and scatter AA-II weights.
                 Y_mat = np.column_stack(y_hist)
                 S_mat = np.column_stack(s_hist)
-                reg = lam_accel * (LA.norm(Y_mat) ** 2 + LA.norm(S_mat) ** 2)  # AA-II regularization.
+                reg = lam_accel * (LA.norm(Y_mat)**2 + LA.norm(S_mat)**2)  # AA-II regularization.
                 alpha = aa_weights(Y_mat, g_new, reg, rcond=None)
                 for pipe in pipes:
                     pipe.send(alpha)
@@ -234,7 +248,8 @@ def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
         Ax_halves, xv_diffs = map(list, zip(*r_update))
         r_primal[k] = LA.norm(sum(Ax_halves) - b, ord=2)
         subgrad = rho_init*np.concatenate(xv_diffs)
-        sol = LA.lstsq(A.T, subgrad, rcond=None)[0]
+        # sol = LA.lstsq(A.T, subgrad, rcond=None)[0]
+        sol = sp.linalg.lsqr(A.T, subgrad, atol=1e-16, btol=1e-16, x0=sol)[0]
         r_dual[k] = LA.norm(A.T.dot(sol) - subgrad, ord=2)
 
         # Stop if residual norms fall below tolerance.
