@@ -186,7 +186,7 @@ class TestSolver(BaseTest):
         # minimize ||y - X\beta||_2^2 with respect to \beta >= 0.
         m = 100
         n = 10
-        N = 4   # Number of splits.
+        N = 5   # Number of splits.
         beta_true = np.array(np.arange(-n/2,n/2) + 1)
         X = np.random.randn(m,n)
         y = X.dot(beta_true) + np.random.randn(m)

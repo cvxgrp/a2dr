@@ -6,7 +6,14 @@ from cvxpy import Constant, Variable, Parameter, Problem, Minimize
 from cvxpy.atoms.affine.unary_operators import NegExpression
 from cvxpy.atoms.affine.binary_operators import MulExpression, multiply
 from cvxpy.atoms.affine.add_expr import AddExpression
-from cvxconsensus.utilities import flip_obj
+
+def flip_obj(prob):
+	"""Helper function to flip sign of objective function.
+	"""
+	if isinstance(prob.objective, Minimize):
+		return prob.objective
+	else:
+		return -prob.objective
 
 class ProxOperator(object):
     def __init__(self, problem, y_vals = {}, rho_vals = {}, use_cvxpy = False):
