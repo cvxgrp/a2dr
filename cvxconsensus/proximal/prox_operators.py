@@ -1,6 +1,7 @@
 import cvxpy
 import numpy as np
 import scipy as sp
+from scipy.optimize import minimize, Bounds
 from cvxpy import Constant, Variable, Parameter, Problem, Minimize
 from cvxpy.atoms.affine.unary_operators import NegExpression
 from cvxpy.atoms.affine.binary_operators import MulExpression, multiply
@@ -153,6 +154,29 @@ def proj_l1(x, r = 1):
     """
     beta = proj_simplex(np.abs(x), r)
     return np.sign(x) * beta
+
+def prox_logistic(u, rho, x0 = np.random.randn(), y = -1):
+    """Returns the proximal operator for f(x) = log(1 + exp(-y*x)), where y is a given scalar quantity, solved using
+       the Newton-CG method from scipy.optimize.minimize.
+    """
+    # g(x) = log(1 + exp(-y*x)) + (\rho/2)*||x - u||_2^2
+    def fun(x, y, u, rho):
+        # expit(x) = 1/(1 + exp(-x))
+        return -np.log(sp.special.expit(y*x)) + (rho/2)*np.sum((x - u)**2)
+
+    # g'(x) = -y/(1 + exp(y*x)) + \rho*(x - u)
+    def jac(x, y, u, rho):
+        return -y*sp.special.expit(-y*x) + rho*(x - u)
+
+    # g''(x) = y^2*exp(y*x)/(1 + exp(y*x))^2 + rho
+    def hess(x, y, u, rho):
+        return y**2*np.exp(y*x)*sp.special.expit(-y*x)**2 + rho
+
+    res = minimize(fun, x0, args=(y, u, rho), method='Newton-CG', jac=jac, hess=hess)
+    if res.success:
+        return res.x[0]
+    else:
+        raise RuntimeWarning(res.message)
 
 def prox_func_vector(f, constr = []):
     """Returns the proximal operator for simple functions evaluated at u with scaling factor rho.

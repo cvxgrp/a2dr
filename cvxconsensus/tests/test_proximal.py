@@ -17,6 +17,8 @@ You should have received a copy of the GNU General Public License
 along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 """
 
+import scipy as sp
+from scipy.optimize import minimize as sp_min
 from cvxpy.atoms import *
 from cvxconsensus.proximal.prox_operators import *
 from cvxconsensus.tests.base_test import BaseTest
@@ -101,3 +103,35 @@ class TestProximal(BaseTest):
 
         self.compare_prox_oper(Problem(Minimize(2*norm(self.Y, "fro"))), Y_to_A, Y_to_rho)
         self.compare_prox_oper(Problem(Minimize(2*sum(abs(self.Y)))), Y_to_A, Y_to_rho)
+
+    def test_prox_logistic(self):
+        # Scalar logistic.
+        y = -1
+        rho = 1.0
+        z = np.random.randn()
+
+        x = Variable()
+        obj = logistic(-y*x) + (rho/2)*sum_squares(x - z)
+        prob = Problem(Minimize(obj))
+        prob.solve()
+        cvxpy_var = x.value
+
+        x0 = np.random.randn()
+        scipy_var = prox_logistic(z, rho, x0, y)
+        self.assertAlmostEqual(cvxpy_var, scipy_var)
+
+        # Sum of logistic functions.
+        m = 100
+        Y = np.random.randint(0,2,size=m)
+        Y = 2*Y - 1
+        Z = np.random.randn(m)
+
+        X = Variable(m)
+        obj = sum(logistic(-multiply(Y,X))) + (rho/2)*sum_squares(X - Z)
+        prob = Problem(Minimize(obj))
+        prob.solve()
+        cvxpy_var = X.value
+
+        X0 = np.random.randn(m)
+        scipy_var = np.array([prox_logistic(Z[i], rho, X0[i], Y[i]) for i in range(m)])
+        self.assertItemsAlmostEqual(cvxpy_var, scipy_var)
