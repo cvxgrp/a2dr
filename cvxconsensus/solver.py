@@ -85,7 +85,6 @@ def a2dr_worker(pipe, prox, v_init, A, rho, anderson, m_accel):
         if finished:
             pipe.send(x_half)
 
-# TODO: Warm start lstsq. Implement sparse handling.
 def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
     # Problem parameters.
     max_iter = kwargs.pop("max_iter", 1000)

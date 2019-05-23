@@ -25,6 +25,7 @@ from cvxpy import *
 from scipy import sparse
 from scipy.optimize import nnls
 from cvxconsensus import a2dr
+from cvxconsensus.proximal.prox_operators import prox_logistic
 from cvxconsensus.tests.base_test import BaseTest
 
 def prox_sum_squares(X, y, type = "lsqr"):
@@ -67,29 +68,32 @@ def prox_quad_form(Q):
         raise Exception("Q must be a positive semidefinite matrix.")
     return lambda v, rho: LA.lstsq(Q + rho*np.eye(v.shape[0]), rho*v, rcond=None)[0]
 
-def prox_logistic(y, x0 = None):
-    # if not x0:
-    #    x0 = np.random.randn(y.shape[0])
+def prox_multi_logistic(y, x0 = None):
+    n = y.shape[0]
+    if not x0:
+        x0 = np.random.randn(n)
+    return lambda v, rho: np.array([prox_logistic(v[i], rho, x0[i], y[i]) for i in range(n)])
+
+    # def prox(v, rho):
+    #     fun = lambda x: np.sum(-np.log(sp.special.expit(np.multiply(y,x)))) + (rho/2.0)*np.sum((x-v)**2)
+    #     jac = lambda x: -y*sp.special.expit(-np.multiply(y,x)) + rho*(x-v)
+    #     res = sp.optimize.minimize(fun, x0, method='L-BFGS-B', jac=jac)
+    #     return res.x
+    # return prox
+
+    # z = Variable(y.shape[0])
+    # rho_parm = Parameter(nonneg=True)
+    # v_parm = Parameter(y.shape[0])
+    # loss = sum(logistic(-multiply(y, z)))
+    # reg = (rho_parm/2)*sum_squares(z - v_parm)
+    # prob = Problem(Minimize(loss + reg))
     #
     # def prox(v, rho):
-    #   fun = lambda x: np.sum(-np.log(sp.special.expit(np.multiply(y,x)))) + (rho/2.0)*np.sum((x-v)**2)
-    #    jac = lambda x: -y*sp.special.expit(np.multiply(y,x)) + rho*(x-v)
-    #    res = sp.optimize.minimize(fun, x0, method='L-BFGS-B', jac=jac)
-    #    return res.x
-
-    z = Variable(y.shape[0])
-    rho_parm = Parameter(nonneg=True)
-    v_parm = Parameter(y.shape[0])
-    loss = sum(logistic(-multiply(y, z)))
-    reg = (rho_parm/2)*sum_squares(z - v_parm)
-    prob = Problem(Minimize(loss + reg))
-
-    def prox(v, rho):
-        rho_parm.value = rho
-        v_parm.value = v
-        prob.solve()
-        return z.value
-    return prox
+    #     rho_parm.value = rho
+    #     v_parm.value = v
+    #     prob.solve()
+    #     return z.value
+    # return prox
 
 def prox_norm1(lam = 1.0):
     return lambda v, rho: np.maximum(v-lam/rho,0) - np.maximum(-v-lam/rho,0)
@@ -301,7 +305,7 @@ class TestSolver(BaseTest):
 
         def prox_logistic_wrapper(y):
             def prox(v, rho):
-                z_prox = prox_logistic(y)(v[:m], rho)
+                z_prox = prox_multi_logistic(y)(v[:m], rho)
                 return np.concatenate([z_prox, v[m:]])
             return prox
 
@@ -344,7 +348,7 @@ class TestSolver(BaseTest):
         b = np.zeros(M)
 
         # Solve transformed problem with CVXPY.
-        # zt_list = [Variable(m + n) for k in range(K)]
+        # zt_list = [Variable(m+n) for k in range(K)]
         # theta1 = Variable(n*K)
         # theta2 = Variable(n*K)
         #
@@ -353,8 +357,8 @@ class TestSolver(BaseTest):
         # for k in range(K):
         #     Ax += E_mats[k]*zt_list[k]
         #     loss += sum(logistic(-multiply(Y[:,k], zt_list[k][:m])))
-        # reg1 = lam[0] * sum(norm(reshape(theta1, (n,K)), 2, axis=0))
-        # reg2 = lam[1] * normNuc(reshape(theta2, (n,K)))
+        # reg1 = lam[0]*sum(norm(reshape(theta1, (n,K)), 2, axis=0))
+        # reg2 = lam[1]*normNuc(reshape(theta2, (n,K)))
         # prob = Problem(Minimize(loss + reg1 + reg2), [Ax == b])
         # prob.solve()
         # print("CVXPY Transformed Objective:", prob.value)

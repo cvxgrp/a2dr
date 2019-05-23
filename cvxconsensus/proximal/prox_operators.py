@@ -157,7 +157,7 @@ def proj_l1(x, r = 1):
 
 def prox_logistic(u, rho, x0 = np.random.randn(), y = -1):
     """Returns the proximal operator for f(x) = log(1 + exp(-y*x)), where y is a given scalar quantity, solved using
-       the Newton-CG method from scipy.optimize.minimize.
+       the Newton-CG method from scipy.optimize.minimize. The function defaults to y = -1 -> f(x) = log(1 + e^x).
     """
     # g(x) = log(1 + exp(-y*x)) + (\rho/2)*||x - u||_2^2
     def fun(x, y, u, rho):

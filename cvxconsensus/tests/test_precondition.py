@@ -18,48 +18,36 @@ along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 """
 
 import numpy as np
+import scipy as sp
 import matplotlib.pyplot as plt
-from cvxpy import Variable, Problem, Minimize
-from cvxpy.atoms import *
-from cvxconsensus import Problems
+from cvxconsensus import a2dr
 from cvxconsensus.precondition import mat_equil
 from cvxconsensus.tests.base_test import BaseTest
 
-def standardize(x, center = True, scale = True, axis = 0):
-	mu = np.mean(x, axis = axis)
-	sigma = np.std(x, axis = axis)
-	if center:
-		x = x - mu
-	if scale:
-		x = x/sigma
-	return x
-
-def probs_nnls(A_split, b_split, center = True, scale = True, axis = 0):
-	# Minimize \sum_i f_i(x) subject to x >= 0
-	# where f_i(x) = ||A_ix - b_i||_2^2 for subproblem i = 1,...,N.
-	n = A_split[0].shape[1]
-	x = Variable(n)
-	constr = [x >= 0]
-	
-	p_list = []
-	for A_sub, b_sub in zip(A_split, b_split):
-		# Standardize data locally.
-		A_sub = standardize(A_sub, center, scale, axis)
-		b_sub = standardize(b_sub, center, scale, axis)
-		
-		obj = sum_squares(A_sub*x - b_sub)
-		# p_list += [Problem(Minimize(obj), constr)]
-		p_list += [Problem(Minimize(obj))]
-	p_list += [Problem(Minimize(0), constr)]
-	probs = Problems(p_list)
-	# probs.pretty_vars()
-	return probs
+def prox_sum_squares(X, y, type = "lsqr"):
+    n = X.shape[1]
+    if type == "lsqr":
+        X = sp.sparse.csc_matrix(X)
+        def prox(v, rho):
+            A = sp.sparse.vstack((X, np.sqrt(rho/2)*sp.sparse.eye(n)))
+            b = np.concatenate((y, np.sqrt(rho/2)*v))
+            return sp.sparse.linalg.lsqr(A, b, atol=1e-16, btol=1e-16)[0]
+    elif type == "lstsq":
+        def prox(v, rho):
+           A = np.vstack((X, np.sqrt(rho/2)*np.eye(n)))
+           b = np.concatenate((y, np.sqrt(rho/2)*v))
+           return np.linalg.lstsq(A, b, rcond=None)[0]
+    else:
+        raise ValueError("Algorithm type not supported:", type)
+    return prox
 
 class TestPrecondition(BaseTest):
 	"""Unit tests for preconditioning data before S-DRS"""
 	
 	def setUp(self):
 		np.random.seed(1)
+		self.eps_rel = 1e-8
+		self.eps_abs = 1e-6
 		self.MAX_ITER = 2000
 
 	def test_mat_equil(self):
@@ -118,43 +106,55 @@ class TestPrecondition(BaseTest):
 		plt.plot(e)
 		plt.title('e: min = {:.3}, max = {:.3}, mean = {:.3}'.format(np.min(e), np.max(e), np.average(e)))
 		plt.show()
-	
+
 	def test_nnls(self):
 		# Solve the non-negative least squares problem
-		# Minimize (1/2) ||Ax - b||_2^2 subject to x >= 0.
-		m = 50
-		n = 100
-		N = 5   # Number of nodes.
-		rho = 10   # Step size.
-		
+		# Minimize (1/2)*||A*x - b||_2^2 subject to x >= 0.
+		m = 100
+		n = 10
+		N = 4   # Number of nodes.
+
 		# Problem data.
 		mu = 100
 		sigma = 10
-		A = mu + sigma*np.random.randn(m,n)
-		b = mu + sigma*np.random.randn(m)
-		A_split = np.split(A, N)
-		b_split = np.split(b, N)
-		
-		# Solve without standardization.
-		probs = probs_nnls(A_split, b_split, center = False, scale = False)
-		probs.solve(method = "consensus", rho_init = rho, max_iter = self.MAX_ITER)
-		res = probs.residuals
-		
-		# Solve with centering only.
-		probs = probs_nnls(A_split, b_split, center = False, scale = True)
-		probs.solve(method = "consensus", rho_init = rho, max_iter = self.MAX_ITER)
-		res_cnt = probs.residuals
-		
-		# Solve with centering and scaling.
-		probs = probs_nnls(A_split, b_split, center = True, scale = True)
-		probs.solve(method = "consensus", rho_init = rho, max_iter = self.MAX_ITER)
-		res_std = probs.residuals
-		
-		# Plot and compare residuals.
-		plt.semilogy(range(res.shape[0]), res, label = "Original")
-		plt.semilogy(range(res_cnt.shape[0]), res_cnt, label = "Scaled")
-		plt.semilogy(range(res_std.shape[0]), res_std, label = "Centered and Scaled")
-		plt.legend()
-		plt.xlabel("Iteration")
-		plt.ylabel("Residual")
-		plt.show()
+		X = mu + sigma*np.random.randn(m,n)
+		y = mu + sigma*np.random.randn(m)
+
+		# Solve with SciPy.
+		sp_result = sp.optimize.nnls(X, y)
+		sp_beta = sp_result[0]
+		sp_obj = sp_result[1] ** 2  # SciPy objective is ||y - X\beta||_2.
+		print("Scipy Objective:", sp_obj)
+		print("SciPy Solution:", sp_beta)
+
+		X_split = np.split(X, N)
+		y_split = np.split(y, N)
+		p_list = [prox_sum_squares(X_sub, y_sub) for X_sub, y_sub in zip(X_split, y_split)]
+		p_list += [lambda u, rho: np.maximum(u, 0)]   # Projection onto non-negative orthant.
+		v_init = (N + 1) * [np.random.randn(n)]
+		A_list = np.hsplit(np.eye(N*n), N) + [-np.vstack(N*(np.eye(n),))]
+		b = np.zeros(N*n)
+
+		# Solve with A2DR.
+		a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, \
+						   eps_rel=self.eps_rel, anderson=True)
+		a2dr_beta = a2dr_result["x_vals"][-1]
+		a2dr_obj = np.sum((y - X.dot(a2dr_beta))**2)
+		print("A2DR Objective:", a2dr_obj)
+		print("A2DR Solution:", a2dr_beta)
+		# self.assertAlmostEqual(sp_obj, a2dr_obj)
+		# self.assertItemsAlmostEqual(sp_beta, a2dr_beta, places=3)
+		self.plot_residuals(a2dr_result["primal"], a2dr_result["dual"], normalize=True, title="A2DR Residuals", \
+							semilogy=True)
+
+		# Solve with preconditioned A2DR.
+		cond_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, \
+						   eps_rel=self.eps_rel, anderson=True, precond=True)
+		cond_beta = cond_result["x_vals"][-1]
+		cond_obj = np.sum((y - X.dot(cond_beta))**2)
+		print("Preconditioned A2DR Objective:", cond_obj)
+		print("Preconditioned A2DR Solution:", cond_beta)
+		# self.assertAlmostEqual(sp_obj, cond_obj)
+		# self.assertItemsAlmostEqual(sp_beta, cond_beta, places=3)
+		self.plot_residuals(cond_result["primal"], cond_result["dual"], normalize=True, \
+							title="Preconditioned A2DR Residuals", semilogy=True)
