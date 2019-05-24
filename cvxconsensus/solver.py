@@ -21,7 +21,7 @@ import numpy.linalg as LA
 import scipy.sparse as sp
 from time import time
 from multiprocessing import Process, Pipe
-from cvxconsensus.proximal.prox_point import prox_point
+from cvxconsensus.prox_point import prox_point
 from cvxconsensus.precondition import precondition
 from cvxconsensus.acceleration import aa_weights
 

@@ -18,5 +18,4 @@ along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 """
 
 from cvxconsensus.solver import a2dr
-from cvxconsensus.proximal.prox_operators import ProxOperator
-from cvxconsensus.proximal.prox_point import prox_point
+from cvxconsensus.prox_point import prox_point

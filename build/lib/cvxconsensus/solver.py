@@ -17,10 +17,9 @@ You should have received a copy of the GNU General Public License
 along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 """
 import numpy as np
-import scipy.sparse as sp
 from time import time
 from multiprocessing import Process, Pipe
-from cvxconsensus.proximal.prox_point import prox_point
+from cvxconsensus.prox_point import prox_point
 from cvxconsensus.precondition import precondition
 from cvxconsensus.acceleration import aa_weights
 
