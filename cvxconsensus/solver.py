@@ -181,6 +181,10 @@ def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
 
     start = time()
     while not finished:
+        # TODO: Add verbose printout.
+        # if k % 10 == 0:
+        #    print("Iteration:", k)
+
         # Gather v_i^(k+1/2) from nodes.
         v_halves = [pipe.recv() for pipe in pipes]
 

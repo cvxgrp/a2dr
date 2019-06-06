@@ -1,4 +1,5 @@
 import cvxpy
+import warnings
 import numpy as np
 import scipy as sp
 from scipy.optimize import minimize
@@ -173,10 +174,9 @@ def prox_logistic(u, rho, x0 = np.random.randn(), y = -1):
         return y**2*np.exp(y*x)*sp.special.expit(-y*x)**2 + rho
 
     res = minimize(fun, x0, args=(y, u, rho), method='Newton-CG', jac=jac, hess=hess)
-    if res.success:
-        return res.x[0]
-    else:
-        raise RuntimeWarning(res.message)
+    if not res.success:
+        warnings.warn(res.message)
+    return res.x[0]
 
 def prox_func_vector(f, constr = []):
     """Returns the proximal operator for simple functions evaluated at u with scaling factor rho.
