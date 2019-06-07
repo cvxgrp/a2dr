@@ -17,8 +17,6 @@ You should have received a copy of the GNU General Public License
 along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 """
 
-import scipy as sp
-from scipy.optimize import minimize as sp_min
 from cvxpy.atoms import *
 from cvxconsensus.proximal.prox_operators import *
 from cvxconsensus.tests.base_test import BaseTest
@@ -133,5 +131,5 @@ class TestProximal(BaseTest):
         cvxpy_var = X.value
 
         X0 = np.random.randn(m)
-        scipy_var = np.array([prox_logistic(Z[i], rho, X0[i], Y[i]) for i in range(m)])
+        scipy_var = prox_logistic(Z, rho, X0, Y)
         self.assertItemsAlmostEqual(cvxpy_var, scipy_var)

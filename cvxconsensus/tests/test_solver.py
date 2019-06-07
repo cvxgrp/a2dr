@@ -21,10 +21,12 @@ import numpy as np
 import scipy as sp
 import numpy.linalg as LA
 import matplotlib.pyplot as plt
+
 from cvxpy import *
 from scipy import sparse
 from scipy.optimize import nnls
 from sklearn.datasets import make_sparse_spd_matrix
+
 from cvxconsensus import a2dr
 from cvxconsensus.proximal.prox_operators import prox_logistic
 from cvxconsensus.tests.base_test import BaseTest
@@ -68,33 +70,6 @@ def prox_quad_form(Q):
     if not np.all(LA.eigvals(Q) >= 0):
         raise Exception("Q must be a positive semidefinite matrix.")
     return lambda v, rho: LA.lstsq(Q + rho*np.eye(v.shape[0]), rho*v, rcond=None)[0]
-
-def prox_multi_logistic(y, x0 = None):
-    n = y.shape[0]
-    if not x0:
-        x0 = np.random.randn(n)
-    return lambda v, rho: np.array([prox_logistic(v[i], rho, x0[i], y[i]) for i in range(n)])
-
-    # def prox(v, rho):
-    #     fun = lambda x: np.sum(-np.log(sp.special.expit(np.multiply(y,x)))) + (rho/2.0)*np.sum((x-v)**2)
-    #     jac = lambda x: -y*sp.special.expit(-np.multiply(y,x)) + rho*(x-v)
-    #     res = sp.optimize.minimize(fun, x0, method='L-BFGS-B', jac=jac)
-    #     return res.x
-    # return prox
-
-    # z = Variable(y.shape[0])
-    # rho_parm = Parameter(nonneg=True)
-    # v_parm = Parameter(y.shape[0])
-    # loss = sum(logistic(-multiply(y, z)))
-    # reg = (rho_parm/2)*sum_squares(z - v_parm)
-    # prob = Problem(Minimize(loss + reg))
-    #
-    # def prox(v, rho):
-    #     rho_parm.value = rho
-    #     v_parm.value = v
-    #     prob.solve()
-    #     return z.value
-    # return prox
 
 def prox_norm1(lam = 1.0):
     return lambda v, rho: np.maximum(v-lam/rho,0) - np.maximum(-v-lam/rho,0)
@@ -290,7 +265,7 @@ class TestSolver(BaseTest):
         #    subject to Z = X\theta, ||.||_{2,1} = group lasso, ||.||_* = nuclear norm.
 
         # Problem data.
-        K = 5    # Number of tasks.
+        K = 5     # Number of tasks.
         n = 20    # Number of features.
         m = 100   # Number of samples.
         X = np.random.randn(m,n)
@@ -303,6 +278,11 @@ class TestSolver(BaseTest):
             reg = lam[0]*np.sum([LA.norm(theta[:,k], 2) for k in range(K)])
             reg += lam[1]*LA.norm(theta, ord='nuc')
             return obj + reg
+
+        def prox_logistic_wrapper(y, x0 = None):
+            if x0 is None:
+                x0 = np.random.randn(*y.shape)
+            return lambda v, rho: prox_logistic(v, rho, x0, y)
 
         # Solve with CVXPY.
         theta = Variable((n,K))
@@ -320,7 +300,7 @@ class TestSolver(BaseTest):
         # Split problem as f_k(z_k) = \sum_i log(1 + exp(-Y_{ik}*Z_{ik})) for k = 1,...,K
         # f_{K+1}(\theta) = lam1*||\theta||_{2,1}, f_{K+2}(\theta) = lam2*||\theta||_*.
         M = m*K + n*K
-        p_list = [prox_multi_logistic(Y[:,k]) for k in range(K)]
+        p_list = [prox_logistic_wrapper(Y[:,k]) for k in range(K)]
         p_list += [lambda v, rho: prox_group_lasso(lam[0].value)(np.reshape(v, (n,K), order='F'), rho),
                    lambda v, rho: prox_nuc_norm(lam[1].value)(np.reshape(v, (n,K), order='F'), rho)]
         v_init = K*[np.zeros(m)] + 2*[np.random.randn(n*K)]
