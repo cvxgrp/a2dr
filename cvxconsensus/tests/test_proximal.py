@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License
 along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 """
 
+import scipy as sp
 from cvxpy.atoms import *
 from cvxconsensus.proximal.prox_operators import *
 from cvxconsensus.tests.base_test import BaseTest

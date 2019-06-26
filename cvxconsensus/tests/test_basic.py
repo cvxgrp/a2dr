@@ -18,10 +18,12 @@ along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
 """
 
 import numpy as np
+from scipy.linalg import block_diag
 from cvxpy import Variable, Parameter, Problem, Minimize
 from cvxpy.atoms import *
-from cvxconsensus import Problems
+from cvxconsensus import Problems, a2dr
 from cvxconsensus.tests.base_test import BaseTest
+from cvxconsensus.proximal.prox_operators import prox_logistic
 
 class TestBasic(BaseTest):
 	"""Basic unit tests for consensus optimization"""
@@ -235,3 +237,73 @@ class TestBasic(BaseTest):
 		self.assertAlmostEqual(obj_admm, obj_comb)
 		for i in range(N):
 			self.assertItemsAlmostEqual(x_admm[i], x_comb[i], places = 2)
+
+	def test_single_logistic(self):
+		# minimize \sum_i log(1 + exp(-y_i*z_i)) + lam*||\theta||_2 subject to z = X\theta.
+		n = 5
+		m = 10
+		X = np.random.randn(m,n)
+		theta_true = np.random.randn(n)
+		Z_true = X.dot(theta_true)
+		y = 2*(Z_true > 0) - 1
+
+		theta = Variable(n)
+		lam = Parameter(nonneg=True)
+		obj = sum(logistic(-multiply(y,X*theta))) + lam*norm(theta,2)
+		prob = Problem(Minimize(obj))
+
+		lam.value = 1.0
+		prob.solve()
+		cvxpy_theta = theta.value
+		cvxpy_obj = prob.value
+		print("CVXPY Objective:", cvxpy_obj)
+		print("CVXPY Theta:", cvxpy_theta)
+
+		p_list = [lambda v, rho: np.array([prox_logistic(v[i], rho, y = y[i]) for i in range(m)]),
+				  lambda v, rho: np.maximum(1 - 1.0 / (rho/lam.value * np.linalg.norm(v, 2)), 0) * v]
+		A_list = [np.eye(m), -X]
+		b = np.zeros(m)
+		v_init = [np.random.randn(m), np.random.randn(n)]
+
+		drs_result = a2dr(p_list, v_init, A_list, b, max_iter=2000, eps_abs=1e-8, eps_rel=1e-6, anderson=True)
+		drs_theta = drs_result["x_vals"][-1]
+
+		theta.value = drs_theta
+		drs_obj = obj.value
+		print("DRS Objective:", drs_obj)
+		print("DRS Theta:", drs_theta)
+
+		self.assertAlmostEqual(cvxpy_obj, drs_obj)
+		self.assertItemsAlmostEqual(cvxpy_theta, drs_theta)
+
+	def test_multi_logistic(self):
+		# minimize \sum_k \sum_i log(1 + exp(-Y_{ik}*Z_{ik})) + lam*||\theta_k||_2 subject to Z = X\theta.
+		K = 2
+		n = 5
+		m = 10
+		X = np.random.randn(m,n)
+		theta_true = np.random.randn(n,K)
+		Z_true = X.dot(theta_true)
+		Y = 2*(Z_true > 0) - 1  # y = 1 or -1.
+
+		theta = Variable((n,K))
+		Z = X*theta
+		lam = Parameter(nonneg=True)
+		obj = sum(logistic(-multiply(Y,Z))) + lam*sum(norm(theta,2,axis=0))
+		prob = Problem(Minimize(obj))
+
+		lam.value = 1.0
+		prob.solve()
+		cvxpy_theta = theta.value
+		cvxpy_obj = prob.value
+		print("CVXPY Objective:", cvxpy_obj)
+		print("CVXPY Theta:", cvxpy_theta)
+
+		A_list = [np.vstack((np.eye(m*K), np.zeros((n*K,m*K)))),
+				  np.vstack((-block_diag(*(K*[X])), np.eye(n*K))),
+				  np.vstack((np.zeros((m*K,n*K)), -np.eye(n*K)))]
+
+		Z_ravel = Z.value.ravel(order='F')
+		theta_ravel = theta.value.ravel(order='F')
+		Ax_sum = A_list[0].dot(Z_ravel) + A_list[1].dot(theta_ravel) + A_list[2].dot(theta_ravel)
+		self.assertItemsAlmostEqual(Ax_sum, np.zeros(m*K + n*K))
