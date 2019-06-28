@@ -337,7 +337,7 @@ class TestSolver(BaseTest):
 
     def test_sparse_covariance(self):
         # minimize -log(det(S)) + trace(S*Y) + \alpha*||S||_1
-        #   subject to S is PSD, where Y and \alpha >= are parameters.
+        #   subject to S is PSD, where Y and \alpha >= 0 are parameters.
 
         # Problem data.
         m = 25    # Dimension of matrix.
