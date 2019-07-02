@@ -76,6 +76,7 @@ class TestPaper(BaseTest):
         self.eps_rel = 1e-8
         self.eps_abs = 1e-6
         self.MAX_ITER = 1000
+        self.TOLERANCE = 1e-8
 
 	def test_nnls(self):
         # minimize ||y - X\beta||_2^2 subject to \beta >= 0.
@@ -210,6 +211,183 @@ class TestPaper(BaseTest):
         a2dr_obj = np.sum((y - a2dr_x)**2)/2 + alpha*np.sum(np.abs(np.diff(a2dr_x,2)))
         self.assertAlmostEqual(cvxpy_obj, a2dr_obj)
         self.assertItemsAlmostEqual(cvxpy_x, a2dr_x)
+        self.compare_primal_dual(drs_result, a2dr_result)
+
+    def test_commodity_flow(self):
+    	# Problem data.
+        m = 25    # Number of sources.
+        n = 100   # Number of flows.
+
+        # Construct incidence matrix so columns sum to zero.
+        R = sparse.csr_matrix((m,n))
+        arcs = np.random.randint(0, m/2, size=n)
+        for j in range(n):
+        	idxs = np.random.choice(m, size=2*arcs[j], replace=False)
+        	R[idxs[:arcs[j]],j] = 1
+        	R[idxs[arcs[j]:],j] = -1
+
+        # Flow cost = \sum_j h_j*x_j^2 for 0 <= x_j <= x_max.
+        h_vec = np.full((n,1), 0.5)
+        H = sparse.diags(h_vec)
+        x_max = np.full((n,1), 1)
+
+        # Source generators.
+        m_free = 10  # Number of generators free to vary.
+        m_off = 5    # Number of generators that are off (s_i = 0).
+        m_pin = 5    # Number of generators that are pinned to max (s_i = s_max).
+        m_gen = m_off + m_pin + m_free
+
+        # Source loads.
+        m_load = m - m_gen   # Number of loads (s_i = L_i < 0)
+        m_fixed = m_off + m_pin + m_load
+        loads = np.full((m_load,1), -1)
+
+        # Generator cost = \sum_i d_i*(s_i - c_i)^2 for 0 <= s_i <= s_max.
+        c_vec = np.full((m_free,1), 0.5)
+        d_vec = np.full((m_free,1), 0.5)
+        D = sparse.diags(d_vec)
+        s_max = np.full((m_free,1), 1)
+
+        def calc_obj(x, s):
+        	s_free, s_off, s_pin, s_load = np.split(s, [m_free, m_free + m_off, m_free + m_off + m_pin])
+        	if not (np.all(x >= 0 and x <= x_max) and np.all(s_free >= 0 and s_free <= s_max) and \
+        	   	    np.allclose(s_off, 0) and np.allclose(s_pin, s_max) and np.allclose(s_load, loads)):
+        		return np.inf
+        	return np.sum(np.multiply(h_vec, x**2)) + np.sum(np.multiply(d_vec, (s_free - c_vec)**2))
+
+        # Solve with CVXPY
+        x = Variable(n)
+        s_free = Variable(m_free)
+        s_off = Variable(m_off)
+        s_pin = Variable(m_pin)
+        s_load = Variable(m_load)
+        s = vstack([s_free, s_off, s_pin, s_load])
+
+        obj = quad_form(s_free - c_vec, D) + quad_form(x, H)
+        constr = [R*x + s == 0, x >= 0, x <= x_max, s_free >= 0, s_free <= s_max,
+                  s_off == 0, s_pin == s_max, s_load == loads]
+        prob = Problem(Minimize(obj), constr)
+        prob.solve()
+        cvxpy_obj = prob.value
+        cvxpy_x = x.value
+        cvxpy_s = s.value
+
+        # Convert problem to standard form.
+        # f_1(x) = \sum_j h_j*x_j^2 + I(0 <= x_j <= x_max),
+        # f_2(s) = \sum_i d_i*(s_i^(free) - c_i)^2 + I(0 <= s_i^(free) <= s_max).
+        # A_1 = [R; 0], A_2 = [I; E], b = [0; g], where E*s = [s^(off); s^(pin); s^(load)] and g = [0; s_max; L].
+        prox_list = [lambda v, t: np.maximum(np.minimum(v/(1 + 2*t*h_vec), x_max), 0),
+        			 lambda u, t: np.maximum(np.minimum((u + 2*t*c_vec*d_vec)/(1 + 2*t*d_vec), s_max), 0)]
+        E = sparse.hstack([sparse.csr_matrix((m_fixed,m_free)), sparse.eye(m_fixed)])
+        g = sparse.vstack([sparse.csr_matrix((m_off,1)), s_max, loads])
+        A_list = [sparse.vstack([R, sparse.csr_matrix((m_fixed,n))]), 
+        		  sparse.vstack(sparse.eye(n), E)]
+       	b = sparse.vstack([sparse.csr_matrix((n,1)), g])
+
+       	# Solve with DRS.
+        drs_result = a2dr(prox_list, A_list, b, anderson=False)
+        drs_x = drs_result["x_vals"][0]
+        drs_s = drs_result["x_vals"][1]
+        drs_obj = calc_obj(drs_x, drs_s)
+        self.assertAlmostEqual(cvxpy_obj, drs_obj)
+        self.assertItemsAlmostEqual(cvxpy_x, drs_x)
+        self.assertItemsAlmostEqual(cvxpy_s, drs_s)
+
+        # Solve with A2DR.
+        a2dr_result = a2dr(prox_list, A_list, b, anderson=True)
+        a2dr_x = a2dr_result["x_vals"][0]
+        a2dr_s = a2dr_result["x_vals"][1]
+        a2dr_obj = calc_obj(a2dr_x, a2dr_s)
+        self.assertAlmostEqual(cvxpy_obj, a2dr_obj)
+        self.assertItemsAlmostEqual(cvxpy_x, a2dr_x)
+        self.assertItemsAlmostEqual(cvxpy_s, a2dr_s)
+        self.compare_primal_dual(drs_result, a2dr_result)
+
+    def test_optimal_control(self):
+        m = 2
+        n = 5
+        T = 20
+        K = T*(m+n)
+        u_bnd = 1      # Upper bound on all |u_t|.
+        w_eps = 0.01   # Lower bound on eigenvalues of R.
+        A_eps = 0.05
+
+        # Dynamic matrices.
+        # TODO: Generate problem so max(|u_t|) hits the upper bound!
+        A = np.eye(n) + A_eps*np.random.randn(n,n)
+        A = A/np.max(np.abs(LA.eigvals(A)))   # Scale A so largest eigenvalue has magnitude of one.
+        B = np.random.randn(n,m)
+        c = np.zeros(n)
+        x_init = np.random.randn(n)
+
+        # Cost matrices.
+        Q = np.random.randn(n,n)
+        Q = Q.T.dot(Q)   # Q is positive semidefinite.
+        R = np.random.randn(m,m)
+        R = R.T.dot(R)
+        w, v = LA.eig(R)
+        w = np.maximum(w, w_eps)
+        R = v.dot(np.diag(w)).dot(v.T)   # R is positive definite.
+        QR_diag = sparse.linalg.block_diag(T*[Q] + T*[R])   # Quadratic form cost = x^T*Q*x + u^T*R*u
+
+        def calc_obj(x, u):
+        	z = np.concatenate([x, u])
+            u_inf = np.max(np.abs(u))
+            return z.T.dot(QR_diag).dot(z) if u_inf <= u_bnd else np.inf
+
+        # Solve with CVXPY.
+        x = Variable((T,n))
+        u = Variable((T,m))
+        obj = sum([quad_form(x[t], Q) + quad_form(u[t], R) for t in range(T)])
+        constr = [x[0] == x_init, norm_inf(u) <= u_bnd]
+        constr += [x[t+1] == A*x[t] + B*u[t] + c for t in range(T-1)]
+        prob = Problem(Minimize(obj), constr)
+        prob.solve()
+        cvxpy_obj = prob.value
+        cvxpy_x = x.value.ravel(order='C')
+        cvxpy_u = u.value.ravel(order='C')
+
+        # Construct dynamics matrix
+        # x_{t+1} = A_t*x_t + B_t*u_t + c_t for t = 1,...,T-1
+        # D = [[ I, 0, 0, ..., 0, 0, 0, 0, ..., 0, 0],
+        #      [-A, I, 0, ..., 0, 0,-B, 0, ..., 0, 0],
+        #	   [ 0,-A, I, ..., 0, 0, 0,-B, ..., 0, 0],
+        # 	   [ .................................. ],
+        #      [ 0, 0, 0, ...,-A, I, 0, 0, ...,-B, 0]]
+        D_left = sparse.lil_matrix((T*n,T*n))
+       	D_left[n:,:(T-1)*n] = -sparse.block_diag((T-1)*[A])
+        D_left.setdiag(1)
+        D_right = sparse.lil_matrix((T*n,T*m))
+        D_right[n:,:(T-1)*m] = -sparse.block_diag((T-1)*[B])
+        D = sparse.hstack([D_left, D_right])
+       	e_vec = np.concatenate([x_init] + T*[c])
+       	e_vec = sparse.csc_matrix(e_vec).T
+
+        # Convert problem to standard form.
+        # f_1(x,u) = \sum_t x_t^T*Q*x_t + u_t^T*R*u_t,
+        # f_2(x,u) = \sum_t I(||u_t||_{\infty} <= u_bnd).
+        # A_1 = [D; I], A_2 = [0; -I], b = [e; 0], where D*[x; u] = [x_init; c] = e is the dynamic constraint.
+        prox_list = [prox_quad_form(QR_diag),
+        			 lambda v, t: np.maximum(np.minimum(v[(T*n):], 1), -1)]
+        A_list = [sparse.vstack([D, sparse.eye(K)]), 
+        		  sparse.vstack([sparse.csc_matrix((D.shape[0], K)), -sparse.eye(K)])]
+       	b = sparse.vstack([e_vec, sparse.csc_matrix((K,1))])
+
+        # Solve with DRS.
+        drs_result = a2dr(prox_list, A_list, b, anderson=False)
+        drs_x, drs_u = np.split(drs_result["x_vals"][-1], T*n)
+        drs_obj = calc_obj(drs_x, drs_u)
+        self.assertAlmostEqual(cvxpy_obj, drs_obj)
+        self.assertItemsAlmostEqual(cvxpy_x, drs_x)
+        self.assertItemsAlmostEqual(cvxpy_u, drs_u)
+
+        # Solve with A2DR.
+        a2dr_result = a2dr(prox_list, A_list, b, anderson=True)
+        a2dr_x, a2dr_u = np.split(a2dr_result["x_vals"][-1], T*n)
+        a2dr_obj = calc_obj(a2dr_x, a2dr_u)
+        self.assertAlmostEqual(cvxpy_obj, a2dr_obj)
+        self.assertItemsAlmostEqual(cvxpy_x, a2dr_x)
+        self.assertItemsAlmostEqual(cvxpy_u, a2dr_u)
         self.compare_primal_dual(drs_result, a2dr_result)
 
     def test_multi_task_logistic(self):
