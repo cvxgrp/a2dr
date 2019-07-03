@@ -88,15 +88,15 @@ def a2dr_worker(pipe, prox, v_init, A, rho, anderson, m_accel):
 def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, *args, **kwargs):
     # Problem parameters.
     max_iter = kwargs.pop("max_iter", 1000)
-    rho_init = kwargs.pop("rho_init", 1.0)  # Step size.
+    rho_init = kwargs.pop("rho_init", 10)  # Step size.
     eps_abs = kwargs.pop("eps_abs", 1e-6)   # Absolute stopping tolerance.
     eps_rel = kwargs.pop("eps_rel", 1e-8)   # Relative stopping tolerance.
     precond = kwargs.pop("precond", False)  # Precondition A and b?
 
     # AA-II parameters.
     anderson = kwargs.pop("anderson", False)
-    m_accel = int(kwargs.pop("m_accel", 5))  # Maximum past iterations to keep (>= 0).
-    lam_accel = kwargs.pop("lam_accel", 0)   # AA-II regularization weight.
+    m_accel = int(kwargs.pop("m_accel", 10))    # Maximum past iterations to keep (>= 0).
+    lam_accel = kwargs.pop("lam_accel", 1e-6)   # AA-II regularization weight.
 
     # Safeguarding parameters.
     D_safe = kwargs.pop("D_safe", 1e6)
@@ -130,7 +130,7 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, *args, **kwargs):
     if len(A_list) != N:
         raise ValueError("A_list must be empty or contain exactly {} entries".format(N))
     if v_init is None:
-        v_init = [np.zeros(A.shape[1]) for A in A_list]
+        v_init = [np.random.randn(A.shape[1]) for A in A_list]
         # v_init = [sp.csc_matrix((A.shape[1],1)) for A in A_list]
     if len(v_init) != N:
         raise ValueError("v_init must None or contain exactly {} entries".format(N))
