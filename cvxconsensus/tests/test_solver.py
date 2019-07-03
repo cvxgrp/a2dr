@@ -129,7 +129,7 @@ class TestSolver(BaseTest):
         print("NumPy Solution:", np_beta)
 
         # Solve with DRS (proximal point method).
-        drs_result = a2dr(p_list, v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, \
+        drs_result = a2dr(p_list, v_init=v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, \
                           eps_rel=self.eps_rel, anderson=False)
         drs_beta = drs_result["x_vals"]
         drs_obj = np.sum([(yi - Xi.dot(beta))**2 for yi,Xi,beta in zip(y_split,X_split,drs_beta)])
@@ -137,7 +137,7 @@ class TestSolver(BaseTest):
         print("DRS Solution:", drs_beta)
 
         # Solve with A2DR (proximal point method with Anderson acceleration).
-        a2dr_result = a2dr(p_list, v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, \
+        a2dr_result = a2dr(p_list, v_init=v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, \
                            eps_rel=self.eps_rel, anderson=True)
         a2dr_beta = a2dr_result["x_vals"]
         a2dr_obj = np.sum([(yi - Xi.dot(beta))**2 for yi, Xi, beta in zip(y_split, X_split, drs_beta)])
@@ -184,7 +184,7 @@ class TestSolver(BaseTest):
         b = np.zeros(N*n)
 
         # Solve with DRS.
-        drs_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, \
+        drs_result = a2dr(p_list, A_list, b, v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, \
                           eps_rel=self.eps_rel, anderson=False)
         drs_beta = drs_result["x_vals"][-1]
         drs_obj = np.sum((y - X.dot(drs_beta))**2)
@@ -195,7 +195,7 @@ class TestSolver(BaseTest):
         self.plot_residuals(drs_result["primal"], drs_result["dual"], normalize=True, title="DRS Residuals", semilogy=True)
 
         # Solve with A2DR.
-        a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, \
+        a2dr_result = a2dr(p_list, A_list, b, v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, \
                            eps_rel=self.eps_rel, anderson=True)
         a2dr_beta = a2dr_result["x_vals"][-1]
         a2dr_obj = np.sum((y - X.dot(a2dr_beta))**2)
@@ -238,7 +238,7 @@ class TestSolver(BaseTest):
         b = np.zeros(n-2)
 
         # Solve with DRS.
-        drs_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, \
+        drs_result = a2dr(p_list, A_list, b, v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, \
                           eps_rel=self.eps_rel, anderson=False)
         drs_x = drs_result["x_vals"][0]
         drs_obj = np.sum((y - drs_x)**2)/2 + lam*np.sum(np.abs(np.diff(drs_x,2)))
@@ -249,7 +249,7 @@ class TestSolver(BaseTest):
         self.plot_residuals(drs_result["primal"], drs_result["dual"], normalize=True, title="DRS Residuals", semilogy=True)
 
         # Solve with A2DR.
-        a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
+        a2dr_result = a2dr(p_list, A_list, b, v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
                            eps_rel=self.eps_rel, anderson=True)
         a2dr_x = a2dr_result["x_vals"][0]
         a2dr_obj = np.sum((y - a2dr_x)**2)/2 + lam*np.sum(np.abs(np.diff(a2dr_x,2)))
@@ -315,7 +315,7 @@ class TestSolver(BaseTest):
         b = np.zeros(M)
 
         # Solve with DRS.
-        drs_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
+        drs_result = a2dr(p_list, A_list, b, v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
                           eps_rel=self.eps_rel, anderson=False)
         drs_theta = drs_result["x_vals"][-1].reshape((n, K), order='F')
         drs_obj = calc_obj(drs_theta, lam.value)
@@ -325,7 +325,7 @@ class TestSolver(BaseTest):
         self.plot_residuals(drs_result["primal"], drs_result["dual"], normalize=True, title="DRS Residuals", semilogy=True)
 
         # Solve with A2DR.
-        a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
+        a2dr_result = a2dr(p_list, A_list, b, v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
                            eps_rel=self.eps_rel, anderson=True)
         a2dr_theta = a2dr_result["x_vals"][-1].reshape((n, K), order='F')
         a2dr_obj = calc_obj(a2dr_theta, lam.value)
@@ -380,7 +380,7 @@ class TestSolver(BaseTest):
         b = np.zeros(N*n)
 
         # Solve with DRS.
-        drs_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
+        drs_result = a2dr(p_list, A_list, b, v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
                           eps_rel=self.eps_rel, anderson=False)
         drs_S = drs_result["x_vals"][-1].reshape((m,m), order='C')
         drs_obj = -LA.slogdet(drs_S)[1] + np.sum(np.diag(drs_S.dot(Y))) + alpha.value*np.sum(np.abs(drs_S))
@@ -390,7 +390,7 @@ class TestSolver(BaseTest):
         # self.plot_residuals(drs_result["primal"], drs_result["dual"], normalize=True, title="DRS Residuals", semilogy=True)
 
         # Solve with A2DR.
-        a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
+        a2dr_result = a2dr(p_list, A_list, b, v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
                            eps_rel=self.eps_rel, anderson=True)
         a2dr_S = a2dr_result["x_vals"][-1].reshape((m,m), order='C')
         a2dr_obj = -LA.slogdet(a2dr_S)[1] + np.sum(np.diag(a2dr_S.dot(Y))) + alpha.value*np.sum(np.abs(a2dr_S))
@@ -460,7 +460,7 @@ class TestSolver(BaseTest):
         b = np.concatenate([np.zeros(m+1), np.zeros(m_off), np.full(m_pin, s_max), load, np.zeros(m+n)])
 
         # Solve with DRS.
-        drs_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
+        drs_result = a2dr(p_list, A_list, b, v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
                           eps_rel=self.eps_rel, anderson=False)
         drs_x = drs_result["x_vals"][0]
         drs_s = drs_result["x_vals"][1]
@@ -473,7 +473,7 @@ class TestSolver(BaseTest):
                             normalize=True, title="DRS Residuals", semilogy=True)
 
         # Solve with A2DR.
-        a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
+        a2dr_result = a2dr(p_list, A_list, b, v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
                            eps_rel=self.eps_rel, anderson=True)
         a2dr_x = a2dr_result["x_vals"][0]
         a2dr_s = a2dr_result["x_vals"][1]
@@ -563,7 +563,7 @@ class TestSolver(BaseTest):
         b = np.concatenate([e_vec, np.zeros(K)])
 
         # Solve with DRS.
-        drs_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
+        drs_result = a2dr(p_list, A_list, b, v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
                           eps_rel=self.eps_rel, anderson=False)
         drs_z = drs_result["x_vals"][-1]
         drs_x, drs_u = extract_xu(drs_z)
@@ -575,7 +575,7 @@ class TestSolver(BaseTest):
         self.plot_residuals(drs_result["primal"], drs_result["dual"], normalize=True, title="DRS Residuals", semilogy=True)
 
         # Solve with A2DR.
-        a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
+        a2dr_result = a2dr(p_list, A_list, b, v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
                            eps_rel=self.eps_rel, anderson=True)
         a2dr_z = a2dr_result["x_vals"][-1]
         a2dr_x, a2dr_u = extract_xu(a2dr_z)
@@ -724,7 +724,7 @@ class TestSolver(BaseTest):
         # self.assertAlmostEqual(prob.value, cvxpy_obj)
 
         # Solve with DRS.
-        drs_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
+        drs_result = a2dr(p_list, A_list, b, v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
                           eps_rel=self.eps_rel, anderson=False)
         drs_z_list = [extract_xu(z) for z in drs_result["x_vals"][:S]]
         drs_x_list, drs_u_list = map(list, zip(*drs_z_list))
@@ -738,7 +738,7 @@ class TestSolver(BaseTest):
                             normalize=True, title="DRS Residuals", semilogy=True)
 
         # Solve with A2DR.
-        a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
+        a2dr_result = a2dr(p_list, A_list, b, v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs,
                            eps_rel=self.eps_rel, anderson=True)
         a2dr_z_list = [extract_xu(z) for z in a2dr_result["x_vals"][:S]]
         a2dr_x_list, a2dr_u_list = map(list, zip(*a2dr_z_list))

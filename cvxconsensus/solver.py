@@ -85,7 +85,7 @@ def a2dr_worker(pipe, prox, v_init, A, rho, anderson, m_accel):
         if finished:
             pipe.send(x_half)
 
-def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
+def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, *args, **kwargs):
     # Problem parameters.
     max_iter = kwargs.pop("max_iter", 1000)
     rho_init = kwargs.pop("rho_init", 1.0)  # Step size.
@@ -125,12 +125,15 @@ def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
 
     # DRS parameters.
     N = len(p_list)   # Number of subproblems.
-    if len(v_init) != N:
-        raise ValueError("p_list and v_init must contain the same number of entries")
     if len(A_list) == 0:
         return prox_point(p_list, v_init, *args, **kwargs)
     if len(A_list) != N:
         raise ValueError("A_list must be empty or contain exactly {} entries".format(N))
+    if v_init is None:
+        v_init = [np.zeros(A.shape[1]) for A in A_list]
+        # v_init = [sp.csc_matrix((A.shape[1],1)) for A in A_list]
+    if len(v_init) != N:
+        raise ValueError("v_init must None or contain exactly {} entries".format(N))
     for i in range(N):
         if A_list[i].shape[0] != b.shape[0]:
             raise ValueError("Dimension mismatch: nrow(A_i) != nrow(b)")
@@ -143,8 +146,8 @@ def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
 
     # Store constraint matrix for projection step.
     # A = np.hstack(A_list)
-    A = sp.csr_matrix(np.hstack(A_list))
-    if A.count_nonzero() <= NNZ_RATIO*A.size:   # If sparse, define linear operator.
+    A = sp.csr_matrix(sp.hstack(A_list))
+    if A.count_nonzero() <= NNZ_RATIO*np.prod(A.shape):   # If sparse, define linear operator.
        AATx_fun = lambda x: A.dot(A.T.dot(x))
        AAT = sp.linalg.LinearOperator((A.shape[0], A.shape[0]), matvec=AATx_fun, rmatvec=AATx_fun)
     else:
@@ -162,7 +165,7 @@ def a2dr(p_list, v_init, A_list = [], b = np.array([]), *args, **kwargs):
 
     # Initialize AA-II variables.
     if anderson:   # TODO: Store and update these efficiently as arrays.
-        n_sum = np.sum([v.size for v in v_init])
+        n_sum = np.sum([np.prod(v.shape) for v in v_init])
         g_vec = np.zeros(n_sum)   # g^(k) = v^(k) - F(v^(k)).
         s_hist = []  # History of s^(j) = v^(j+1) - v^(j), kept in S^(k) = [s^(k-m_k) ... s^(k-1)].
         y_hist = []  # History of y^(j) = g^(j+1) - g^(j), kept in Y^(k) = [y^(k-m_k) ... y^(k-1)].

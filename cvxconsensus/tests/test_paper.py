@@ -43,15 +43,15 @@ def prox_quad_form(Q):
 def prox_sum_squares(X, y, type = "lsqr"):
     n = X.shape[1]
     if type == "lsqr":
-        X = sparse.csc_matrix(X)
+        X = sparse.csr_matrix(X)
         def prox(v, t):
-            A = sparse.vstack((X, 1/np.sqrt(2*t)*sparse.eye(n)))
-            b = np.concatenate((y, 1/np.sqrt(2*t)*v))
+            A = sparse.vstack([X, 1/np.sqrt(2*t)*sparse.eye(n)])
+            b = np.concatenate([y, 1/np.sqrt(2*t)*v])
             return sparse.linalg.lsqr(A, b, atol=1e-16, btol=1e-16)[0]
     elif type == "lstsq":
         def prox(v, t):
-           A = np.vstack((X, 1/np.sqrt(2*t)*np.eye(n)))
-           b = np.concatenate((y, 1/np.sqrt(2*t)*v))
+           A = np.vstack([X, 1/np.sqrt(2*t)*np.eye(n)])
+           b = np.concatenate([y, 1/np.sqrt(2*t)*v])
            return LA.lstsq(A, b, rcond=None)[0]
     else:
         raise ValueError("Algorithm type not supported:", type)
@@ -63,7 +63,7 @@ def prox_neg_log_det(Q, t, order = 'C', PSD = False):
     #     raise Exception("Proximal operator for negative log-determinant only operates on symmetric matrices.")
     s, u = LA.eig(Q_symm)
     if PSD:
-    	s = np.maximum(s, 0)
+        s = np.maximum(s, 0)
     s_new = (s + np.sqrt(s**2 + 4.0*t))/2
     Q_new = u.dot(np.diag(s_new)).dot(u.T)
     return Q_new.ravel(order=order)
@@ -78,7 +78,7 @@ class TestPaper(BaseTest):
         self.MAX_ITER = 1000
         self.TOLERANCE = 1e-8
 
-	def test_nnls(self):
+    def test_nnls(self):
         # minimize ||y - X\beta||_2^2 subject to \beta >= 0.
 
         # Problem data.
@@ -95,9 +95,11 @@ class TestPaper(BaseTest):
         # Convert problem to standard form.
         # f_1(\beta_1) = ||y - X\beta_1||_2^2, f_2(\beta_2) = I(\beta_2 >= 0).
         # A_1 = I_n, A_2 = -I_n, b = 0.
-        prox_list = [prox_sum_squares(X, y), lambda v, t: np.maximum(v, 0)]
+        prox_list = [prox_sum_squares(X, y),
+                     lambda v, t: v.maximum(0) if sparse.issparse(v) else np.maximum(v,0)]
         A_list = [sparse.eye(n), -sparse.eye(n)]
-        b = sparse.csc_matrix((n,))
+        # b = sparse.csc_matrix((n,1))
+        b = np.zeros(n)
 
         # Solve with DRS.
         drs_result = a2dr(prox_list, A_list, b, anderson=False)
@@ -114,7 +116,7 @@ class TestPaper(BaseTest):
         self.assertItemsAlmostEqual(sp_beta, a2dr_beta, places=3)
         self.compare_primal_dual(drs_result, a2dr_result)
 
-	def test_sparse_inv_covariance(self):
+    def test_sparse_inv_covariance(self):
         # minimize -log(det(S)) + trace(S*Y) + \alpha*||S||_1 subject to S is symmetric PSD.
 
         # Problem data.
@@ -140,14 +142,14 @@ class TestPaper(BaseTest):
         # f_1(S) = -log(det(S)) on symmetric PSD matrices, f_2(S) = trace(S*Q), f_3(S) = \alpha*||S||_1.
         # A_1 = [I; 0], A_2 = [-I; I], A_3 = [0; -I], b = 0.
         prox_list = [lambda v, t: prox_neg_log_det(v.reshape((n,n), order='C'), t, order='C', PSD=True),
-                  	 lambda v, t: v - t*Y.ravel(order='C'),
-                  	 lambda v, t: prox_norm1(alpha)]
+                  	 lambda v, t: v - t*Q.ravel(order='C'),
+                  	 lambda v, t: prox_norm1(alpha)(v,t)]
         A_list = [sparse.vstack([sparse.eye(n*n), sparse.csc_matrix((n*n,n*n))]),
         		  sparse.vstack([-sparse.eye(n*n), sparse.eye(n*n)]),
         		  sparse.vstack([sparse.csc_matrix((n*n,n*n)), -sparse.eye(n*n)])]
         b = np.zeros(2*n*n)
 
-   		# Ensure initial point is symmetric PSD.
+        # Ensure initial point is symmetric PSD.
         S_init = np.random.randn(n,n)
         S_init = S_init.T.dot(S_init)
         v_init = 3*[S_init.ravel(order='C')]
@@ -194,9 +196,11 @@ class TestPaper(BaseTest):
         # Convert problem to standard form.
         # f_1(x_1) = (1/2)||y - x_1||_2^2, f_2(x_2) = \alpha*||x_2||_1.
         # A_1 = D, A_2 = -I_{n-2}, b = 0.
-        prox_list = [lambda v, t: (t*y + v)/(t + 1.0), prox_norm1(alpha)]
+        prox_list = [lambda v, t: (t*y + v)/(t + 1.0),
+                     lambda v, t: prox_norm1(alpha)(v,t)]
         A_list = [D, -sparse.eye(n-2)]
-        b = sparse.csc_matrix((n-2,))
+        # b = sparse.csc_matrix((n-2,1))
+        b = np.zeros(n-2)
 
         # Solve with DRS.
         drs_result = a2dr(prox_list, A_list, b, anderson=False)
@@ -214,7 +218,7 @@ class TestPaper(BaseTest):
         self.compare_primal_dual(drs_result, a2dr_result)
 
     def test_commodity_flow(self):
-    	# Problem data.
+        # Problem data.
         m = 25    # Number of sources.
         n = 100   # Number of flows.
 
@@ -222,9 +226,9 @@ class TestPaper(BaseTest):
         R = sparse.csr_matrix((m,n))
         arcs = np.random.randint(0, m/2, size=n)
         for j in range(n):
-        	idxs = np.random.choice(m, size=2*arcs[j], replace=False)
-        	R[idxs[:arcs[j]],j] = 1
-        	R[idxs[arcs[j]:],j] = -1
+            idxs = np.random.choice(m, size=2*arcs[j], replace=False)
+            R[idxs[:arcs[j]],j] = 1
+            R[idxs[arcs[j]:],j] = -1
 
         # Flow cost = \sum_j h_j*x_j^2 for 0 <= x_j <= x_max.
         h_vec = np.full((n,1), 0.5)
@@ -249,11 +253,11 @@ class TestPaper(BaseTest):
         s_max = np.full((m_free,1), 1)
 
         def calc_obj(x, s):
-        	s_free, s_off, s_pin, s_load = np.split(s, [m_free, m_free + m_off, m_free + m_off + m_pin])
-        	if not (np.all(x >= 0 and x <= x_max) and np.all(s_free >= 0 and s_free <= s_max) and \
-        	   	    np.allclose(s_off, 0) and np.allclose(s_pin, s_max) and np.allclose(s_load, loads)):
-        		return np.inf
-        	return np.sum(np.multiply(h_vec, x**2)) + np.sum(np.multiply(d_vec, (s_free - c_vec)**2))
+            s_free, s_off, s_pin, s_load = np.split(s, [m_free, m_free + m_off, m_free + m_off + m_pin])
+            if not (np.all(x >= 0 and x <= x_max) and np.all(s_free >= 0 and s_free <= s_max) and \
+                    np.allclose(s_off, 0) and np.allclose(s_pin, s_max) and np.allclose(s_load, loads)):
+                return np.inf
+            return np.sum(np.multiply(h_vec, x**2)) + np.sum(np.multiply(d_vec, (s_free - c_vec)**2))
 
         # Solve with CVXPY
         x = Variable(n)
@@ -282,9 +286,9 @@ class TestPaper(BaseTest):
         g = sparse.vstack([sparse.csr_matrix((m_off,1)), s_max, loads])
         A_list = [sparse.vstack([R, sparse.csr_matrix((m_fixed,n))]), 
         		  sparse.vstack(sparse.eye(n), E)]
-       	b = sparse.vstack([sparse.csr_matrix((n,1)), g])
+        b = sparse.vstack([sparse.csr_matrix((n,1)), g])
 
-       	# Solve with DRS.
+        # Solve with DRS.
         drs_result = a2dr(prox_list, A_list, b, anderson=False)
         drs_x = drs_result["x_vals"][0]
         drs_s = drs_result["x_vals"][1]
@@ -331,7 +335,7 @@ class TestPaper(BaseTest):
         QR_diag = sparse.linalg.block_diag(T*[Q] + T*[R])   # Quadratic form cost = x^T*Q*x + u^T*R*u
 
         def calc_obj(x, u):
-        	z = np.concatenate([x, u])
+            z = np.concatenate([x, u])
             u_inf = np.max(np.abs(u))
             return z.T.dot(QR_diag).dot(z) if u_inf <= u_bnd else np.inf
 
@@ -355,13 +359,13 @@ class TestPaper(BaseTest):
         # 	   [ .................................. ],
         #      [ 0, 0, 0, ...,-A, I, 0, 0, ...,-B, 0]]
         D_left = sparse.lil_matrix((T*n,T*n))
-       	D_left[n:,:(T-1)*n] = -sparse.block_diag((T-1)*[A])
+        D_left[n:,:(T-1)*n] = -sparse.block_diag((T-1)*[A])
         D_left.setdiag(1)
         D_right = sparse.lil_matrix((T*n,T*m))
         D_right[n:,:(T-1)*m] = -sparse.block_diag((T-1)*[B])
         D = sparse.hstack([D_left, D_right])
-       	e_vec = np.concatenate([x_init] + T*[c])
-       	e_vec = sparse.csc_matrix(e_vec).T
+        e_vec = np.concatenate([x_init] + T*[c])
+        e_vec = sparse.csc_matrix(e_vec).T
 
         # Convert problem to standard form.
         # f_1(x,u) = \sum_t x_t^T*Q*x_t + u_t^T*R*u_t,
@@ -371,7 +375,7 @@ class TestPaper(BaseTest):
         			 lambda v, t: np.maximum(np.minimum(v[(T*n):], 1), -1)]
         A_list = [sparse.vstack([D, sparse.eye(K)]), 
         		  sparse.vstack([sparse.csc_matrix((D.shape[0], K)), -sparse.eye(K)])]
-       	b = sparse.vstack([e_vec, sparse.csc_matrix((K,1))])
+        b = sparse.vstack([e_vec, sparse.csc_matrix((K,1))])
 
         # Solve with DRS.
         drs_result = a2dr(prox_list, A_list, b, anderson=False)
