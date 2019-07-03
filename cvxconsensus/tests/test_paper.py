@@ -1,7 +1,6 @@
 import numpy as np
 import scipy as sp
 import numpy.linalg as LA
-import matplotlib.pyplot as plt
 
 from cvxpy import *
 from scipy import sparse
@@ -13,15 +12,19 @@ from cvxconsensus.proximal.prox_operators import prox_logistic
 from cvxconsensus.tests.base_test import BaseTest
 
 def prox_norm1(alpha = 1.0):
-    return lambda v, t: np.maximum(v - t*alpha,0) - np.maximum(-v - t*alpha,0)
+    return lambda v, t: (v - t*alpha).maximum(0) - (-v - t*alpha).maximum(0) if sparse.issparse(v) else \
+                        np.maximum(v - t*alpha,0) - np.maximum(-v - t*alpha,0)
+
 
 def prox_norm2(alpha = 1.0):
-    return lambda v, t: np.maximum(1 - 1.0/(t*alpha*LA.norm(v,2)),0) * v
+    return lambda v, t: (1 - 1.0/(t*alpha*sparse.linalg.norm(v,'fro'))).maximum(0) * v if sparse.issparse(v) else \
+                        np.maximum(1 - 1.0/(t*alpha*LA.norm(v,2)),0) * v
 
 def prox_norm_inf(bound):
     if bound < 0:
         raise ValueError("bound must be a non-negative scalar.")
-    return lambda v, t: np.maximum(np.minimum(v, bound), -bound)
+    return lambda v, t: v.minimum(bound).maximum(-bound) if sparse.issparse(v) else \
+                        np.maximum(np.minimum(v, bound), -bound)
 
 def prox_nuc_norm(alpha = 1.0, order = 'C'):
     def prox(Q, t):
@@ -95,8 +98,7 @@ class TestPaper(BaseTest):
         # Convert problem to standard form.
         # f_1(\beta_1) = ||y - X\beta_1||_2^2, f_2(\beta_2) = I(\beta_2 >= 0).
         # A_1 = I_n, A_2 = -I_n, b = 0.
-        prox_list = [prox_sum_squares(X, y),
-                     lambda v, t: v.maximum(0) if sparse.issparse(v) else np.maximum(v,0)]
+        prox_list = [prox_sum_squares(X, y), lambda v, t: v.maximum(0) if sparse.issparse(v) else np.maximum(v,0)]
         A_list = [sparse.eye(n), -sparse.eye(n)]
         # b = sparse.csc_matrix((n,1))
         b = np.zeros(n)
@@ -143,7 +145,7 @@ class TestPaper(BaseTest):
         # A_1 = [I; 0], A_2 = [-I; I], A_3 = [0; -I], b = 0.
         prox_list = [lambda v, t: prox_neg_log_det(v.reshape((n,n), order='C'), t, order='C', PSD=True),
                   	 lambda v, t: v - t*Q.ravel(order='C'),
-                  	 lambda v, t: prox_norm1(alpha)(v,t)]
+                  	 prox_norm1(alpha)]
         A_list = [sparse.vstack([sparse.eye(n*n), sparse.csc_matrix((n*n,n*n))]),
         		  sparse.vstack([-sparse.eye(n*n), sparse.eye(n*n)]),
         		  sparse.vstack([sparse.csc_matrix((n*n,n*n)), -sparse.eye(n*n)])]
@@ -175,7 +177,7 @@ class TestPaper(BaseTest):
         # Reference: https://web.stanford.edu/~boyd/papers/l1_trend_filter.html
 
         # Problem data.
-        n = 1000
+        n = 10
         alpha = 1.0
         y = np.random.randn(n)
 
@@ -196,8 +198,7 @@ class TestPaper(BaseTest):
         # Convert problem to standard form.
         # f_1(x_1) = (1/2)||y - x_1||_2^2, f_2(x_2) = \alpha*||x_2||_1.
         # A_1 = D, A_2 = -I_{n-2}, b = 0.
-        prox_list = [lambda v, t: (t*y + v)/(t + 1.0),
-                     lambda v, t: prox_norm1(alpha)(v,t)]
+        prox_list = [lambda v, t: (t*y + v)/(t + 1.0), prox_norm1(alpha)]
         A_list = [D, -sparse.eye(n-2)]
         # b = sparse.csc_matrix((n-2,1))
         b = np.zeros(n-2)
@@ -231,31 +232,32 @@ class TestPaper(BaseTest):
             R[idxs[arcs[j]:],j] = -1
 
         # Flow cost = \sum_j h_j*x_j^2 for 0 <= x_j <= x_max.
-        h_vec = np.full((n,1), 0.5)
+        h_vec = np.full((n,), 0.5)
         H = sparse.diags(h_vec)
-        x_max = np.full((n,1), 1)
+        x_max = np.full((n,), 1)
 
         # Source generators.
         m_free = 10  # Number of generators free to vary.
         m_off = 5    # Number of generators that are off (s_i = 0).
         m_pin = 5    # Number of generators that are pinned to max (s_i = s_max).
         m_gen = m_off + m_pin + m_free
+        s_max_pin = np.full((m_pin,), 1)
 
         # Source loads.
         m_load = m - m_gen   # Number of loads (s_i = L_i < 0)
         m_fixed = m_off + m_pin + m_load
-        loads = np.full((m_load,1), -1)
+        loads = np.full((m_load,), -1)
 
         # Generator cost = \sum_i d_i*(s_i - c_i)^2 for 0 <= s_i <= s_max.
-        c_vec = np.full((m_free,1), 0.5)
-        d_vec = np.full((m_free,1), 0.5)
+        c_vec = np.full((m_free,), 0.5)
+        d_vec = np.full((m_free,), 0.5)
         D = sparse.diags(d_vec)
-        s_max = np.full((m_free,1), 1)
+        s_max_free = np.full((m_free,), 1)
 
         def calc_obj(x, s):
             s_free, s_off, s_pin, s_load = np.split(s, [m_free, m_free + m_off, m_free + m_off + m_pin])
-            if not (np.all(x >= 0 and x <= x_max) and np.all(s_free >= 0 and s_free <= s_max) and \
-                    np.allclose(s_off, 0) and np.allclose(s_pin, s_max) and np.allclose(s_load, loads)):
+            if not (np.all(x >= 0) and np.all(x <= x_max) and np.all(s_free >= 0) and np.all(s_free <= s_max_free) and \
+                    np.allclose(s_off, 0) and np.allclose(s_pin, s_max_pin) and np.allclose(s_load, loads)):
                 return np.inf
             return np.sum(np.multiply(h_vec, x**2)) + np.sum(np.multiply(d_vec, (s_free - c_vec)**2))
 
@@ -265,11 +267,11 @@ class TestPaper(BaseTest):
         s_off = Variable(m_off)
         s_pin = Variable(m_pin)
         s_load = Variable(m_load)
-        s = vstack([s_free, s_off, s_pin, s_load])
+        s = hstack([s_free, s_off, s_pin, s_load])
 
         obj = quad_form(s_free - c_vec, D) + quad_form(x, H)
-        constr = [R*x + s == 0, x >= 0, x <= x_max, s_free >= 0, s_free <= s_max,
-                  s_off == 0, s_pin == s_max, s_load == loads]
+        constr = [R*x + s == 0, x >= 0, x <= x_max, s_free >= 0, s_free <= s_max_free,
+                  s_off == 0, s_pin == s_max_pin, s_load == loads]
         prob = Problem(Minimize(obj), constr)
         prob.solve()
         cvxpy_obj = prob.value
@@ -281,12 +283,14 @@ class TestPaper(BaseTest):
         # f_2(s) = \sum_i d_i*(s_i^(free) - c_i)^2 + I(0 <= s_i^(free) <= s_max).
         # A_1 = [R; 0], A_2 = [I; E], b = [0; g], where E*s = [s^(off); s^(pin); s^(load)] and g = [0; s_max; L].
         prox_list = [lambda v, t: np.maximum(np.minimum(v/(1 + 2*t*h_vec), x_max), 0),
-        			 lambda u, t: np.maximum(np.minimum((u + 2*t*c_vec*d_vec)/(1 + 2*t*d_vec), s_max), 0)]
+        			 lambda u, t: np.concatenate([np.maximum(np.minimum((u[:m_free] + 2*t*c_vec*d_vec)/(1 + 2*t*d_vec), s_max_free), 0), u[m_free:]])]
         E = sparse.hstack([sparse.csr_matrix((m_fixed,m_free)), sparse.eye(m_fixed)])
-        g = sparse.vstack([sparse.csr_matrix((m_off,1)), s_max, loads])
+        # g = sparse.vstack([sparse.csr_matrix((m_off,1)), s_max_pin, loads])
+        g = np.concatenate([np.zeros(m_off), s_max_pin, loads])
         A_list = [sparse.vstack([R, sparse.csr_matrix((m_fixed,n))]), 
-        		  sparse.vstack(sparse.eye(n), E)]
-        b = sparse.vstack([sparse.csr_matrix((n,1)), g])
+        		  sparse.vstack([sparse.eye(m), E])]
+        # b = sparse.vstack([sparse.csr_matrix((m,1)), g])
+        b = np.concatenate([np.zeros(m), g])
 
         # Solve with DRS.
         drs_result = a2dr(prox_list, A_list, b, anderson=False)
@@ -332,7 +336,7 @@ class TestPaper(BaseTest):
         w, v = LA.eig(R)
         w = np.maximum(w, w_eps)
         R = v.dot(np.diag(w)).dot(v.T)   # R is positive definite.
-        QR_diag = sparse.linalg.block_diag(T*[Q] + T*[R])   # Quadratic form cost = x^T*Q*x + u^T*R*u
+        QR_diag = sparse.block_diag(T*[Q] + T*[R])   # Quadratic form cost = x^T*Q*x + u^T*R*u
 
         def calc_obj(x, u):
             z = np.concatenate([x, u])
