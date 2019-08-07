@@ -110,3 +110,26 @@ class BaseTest(TestCase):
         if savefig:
             plt.savefig(savefig, bbox_inches="tight")
         plt.show()
+        
+    def compare_total(self, drs_result, a2dr_result, savefig = None):
+        # Compare residuals
+        plt.semilogy(range(drs_result["num_iters"]), np.sqrt(drs_result["primal"]**2+drs_result["dual"]**2), color="blue", label="Residuals (DRS)")
+        plt.semilogy(range(a2dr_result["num_iters"]), np.sqrt(a2dr_result["primal"]**2+a2dr_result["dual"]**2), color="darkorange", label="Residuals (A2DR)")
+        # plt.title("Residuals")
+        plt.legend()
+        if savefig:
+            plt.savefig(savefig, bbox_inches="tight")
+        plt.show()
+        
+    def compare_total_all(self, results, names, savefig = None):
+        # Compare residuals in the results list
+        # len(names) must be equal to len(results)
+        for i in range(len(names)):
+            result = results[i]
+            name = names[i]
+            plt.semilogy(range(result["num_iters"]), np.sqrt(result["primal"]**2+result["dual"]**2), linestyle="--", label="Residuals (" + name + ")")
+        # plt.title("Residuals")
+        plt.legend()
+        if savefig:
+            plt.savefig(savefig, bbox_inches="tight")
+        plt.show()

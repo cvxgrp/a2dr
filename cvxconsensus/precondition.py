@@ -1,14 +1,20 @@
 import numpy as np
-from scipy.linalg import block_diag
+from scipy.sparse import block_diag, issparse, csr_matrix, diags
+import scipy.linalg as sLA
 
-def precondition(p_list, A_list, b, tol = 1e-6, max_iter = 1000):
+def precondition(p_list, A_list, b, tol = 1e-3, max_iter = 5):
     n_list = [A.shape[1] for A in A_list]
-    A = np.hstack(A_list)
+    A_list_dense = [(A_list[i].todense() if issparse(A_list[i]) else A_list[i]) for i in range(len(A_list))]
+    A = np.array(np.hstack(A_list_dense))
     d, e, A_hat, k = mat_equil(A, n_list, tol, max_iter)
 
     split_idx = np.cumsum(n_list)
     A_eq_list = np.split(A_hat, split_idx, axis=1)[:-1]
-    p_eq_list = [lambda v, rho: prox(ei*v, rho/ei**2)/ei for prox, ei in zip(p_list, e)]
+    A_eq_list = [csr_matrix(A_eq_list[i]) for i in range(len(A_eq_list))]
+#     p_eq_list = [lambda v, rho: prox(ei*v, rho/ei**2)/ei for prox, ei in zip(p_list, e)] ### this is wrong, since prox and ei are modified in place in the new lambda functions!!!
+    def proto(i, p_list, e):
+        return lambda v, rho: p_list[i](e[i]*v, rho/e[i]**2)/e[i]
+    p_eq_list = list(map(lambda i: proto(i,p_list,e), range(len(p_list))))
     return p_eq_list, A_eq_list, d*b, e
 
 def mat_equil(A, n_list, tol, max_iter):
@@ -41,11 +47,13 @@ def mat_equil(A, n_list, tol, max_iter):
     gamma = (m + N)/m/N * np.sqrt(np.finfo(float).eps)
     A2 = A ** 2 
     ave_list = [np.ones([n_i,1]) for n_i in n_list]
-    A_block = A2.dot(block_diag(*ave_list))
+    A_block = A2.dot(sLA.block_diag(*ave_list))
     A_block_T = A_block.transpose()
+    print(A_block.shape)
     
     # Apply regularized Sinkhorn-Knopp on A_block
     for k in range(max_iter):
+        print(k)
         d1 = N / (A_block.dot(e) + N * gamma * em)
         e1 = m / (A_block_T.dot(d) + m * gamma * eN)
         err_d = np.linalg.norm(d1 - d)
@@ -57,10 +65,14 @@ def mat_equil(A, n_list, tol, max_iter):
     
     d = np.sqrt(d)
     e = np.sqrt(e)
+#     d = np.ones(len(d)) ### debug
+#     e = np.ones(len(e)) ### debug
     I_list = [np.eye(n_list[i]) * e[i] for i in range(N)]
-    E = block_diag(*I_list)
-    D = np.diag(d)
-    B = D.dot(A.dot(E))
+    E = block_diag(I_list)
+    D = diags(d)
+    print('generate D, E')
+    B = D.dot(csr_matrix(A).dot(E)).todense()
+    print('compute scaled matrix')
     
     # Rescale to have \|DAE\|_2 close to 1
     scale = np.linalg.norm(B, 'fro') / np.sqrt(np.min([m,N]))
