@@ -11,7 +11,7 @@ def precondition(p_list, A_list, b, tol = 1e-3, max_iter = 5):
     split_idx = np.cumsum(n_list)
     A_eq_list = np.split(A_hat, split_idx, axis=1)[:-1]
     A_eq_list = [csr_matrix(A_eq_list[i]) for i in range(len(A_eq_list))]
-#     p_eq_list = [lambda v, rho: prox(ei*v, rho/ei**2)/ei for prox, ei in zip(p_list, e)] ### this is wrong, since prox and ei are modified in place in the new lambda functions!!!
+    ### the original definition of p_eq_list was wrong: prox and ei are modified in place in the new lambda functions
     def proto(i, p_list, e):
         return lambda v, rho: p_list[i](e[i]*v, rho/e[i]**2)/e[i]
     p_eq_list = list(map(lambda i: proto(i,p_list,e), range(len(p_list))))
@@ -65,8 +65,6 @@ def mat_equil(A, n_list, tol, max_iter):
     
     d = np.sqrt(d)
     e = np.sqrt(e)
-#     d = np.ones(len(d)) ### debug
-#     e = np.ones(len(e)) ### debug
     I_list = [np.eye(n_list[i]) * e[i] for i in range(N)]
     E = block_diag(I_list)
     D = diags(d)

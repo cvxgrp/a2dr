@@ -157,33 +157,12 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, *args, **kwargs):
     # variable size list
     n_list = [A_list[i].shape[1] for i in range(N)]
     n_list_cumsum = np.insert(np.cumsum(n_list), 0, 0)
-    
-#     # total primal residual (\rho selection)
-#     p_res_tot = 0
-    
-#     print('######')
-# #     print(type(A_list[0]), type(A_list[1]))
-# #     #print(b)
-# #     print(p_list)
 
     # Precondition data.
     if precond:
-#         print('******')
-#         print(p_list)
-#         print(A_list)
-#         print(b)
-#         print(eps_abs)
-#         print(max_iter)
-        p_list, A_list, b, e_pre = precondition(p_list, A_list, b)#, tol=eps_abs, max_iter=max_iter)
-#         print('******')
-        t_init = 1/gmean(e_pre)**2/1000 #gmean(e_pre) ** 2 * 10
+        p_list, A_list, b, e_pre = precondition(p_list, A_list, b)
+        t_init = 1/gmean(e_pre)**2/1000
         print('after preconditioning, t_init changed to {}'.format(t_init))
-    
-    
-#     print(e_pre)
-# #     print(type(A_list[0]), type(A_list[1]))
-# #     #print(b)
-# #     print(p_list)
 
     # Store constraint matrix for projection step.
     # A = np.hstack(A_list)
@@ -226,7 +205,6 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, *args, **kwargs):
 
     start = time()
     while not finished:
-#         print('ZZZ')
         # TODO: Add verbose printout.
         if k % 10 == 0:
             print("Iteration:", k)
@@ -286,7 +264,6 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, *args, **kwargs):
                 S_mat = np.column_stack(s_hist)
                 if ada_reg:
                     reg = lam_accel * (LA.norm(Y_mat)**2 + LA.norm(S_mat)**2)  # AA-II regularization.
-                    #print(reg)
                 else:
                     reg = lam_accel
                 alpha = aa_weights(Y_mat, g_new, reg, rcond=None)
@@ -307,11 +284,6 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, *args, **kwargs):
         # sol = LA.lstsq(A.T, subgrad, rcond=None)[0]
         sol = sp.linalg.lsqr(A.T, subgrad, atol=1e-16, btol=1e-16, x0=sol)[0]
         r_dual[k] = LA.norm(A.T.dot(sol) - subgrad, ord=2)
-        
-#         # Compute cumulate xv_diffs for estimating \rho (\rho selection)
-#         p_res_tot += np.linalg.norm(np.concatenate(xv_diffs))**2
-#         if k % 10 == 0:
-#             print('rho est = {}'.format(np.sqrt(p_res_tot / k / np.linalg.norm(A.todense(), 'fro')**2)))
 
         # Stop if residual norms fall below tolerance.
         k = k + 1
@@ -321,12 +293,10 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, *args, **kwargs):
             pipe.send(finished)
 
     # Gather and return x_i^(k+1/2) from nodes.
-#     print('YYY')
     x_final = [pipe.recv() for pipe in pipes]
     [p.terminate() for p in procs]
     if precond:
         x_final = [ei*x for x, ei in zip(x_final, e_pre)]
     end = time()
-#     print('YYY2')
     return {"x_vals": x_final, "primal": np.array(r_primal[:k]), "dual": np.array(r_dual[:k]), \
             "num_iters": k, "solve_time": (end - start)}
