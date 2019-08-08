@@ -16,7 +16,6 @@ def precondition(p_list, A_list, b, tol = 1e-3, max_iter = 5):
     def proto(i, p_list, e):
         return lambda v, t: p_list[i](e[i]*v, t*e[i]**2)/e[i]
     p_eq_list = list(map(lambda i: proto(i,p_list,e), range(len(p_list))))
-    print(e)
     return p_eq_list, A_eq_list, d*b, e
 
 def mat_equil(A, n_list, tol, max_iter):

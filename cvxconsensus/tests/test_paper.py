@@ -89,22 +89,15 @@ class TestPaper(BaseTest):
         self.eps_rel = 1e-8 #specify these in all examples?
         self.eps_abs = 1e-6
         self.MAX_ITER = 1000
-        self.TOLERANCE = 1e-8 #???
 
     def test_nnls(self):
         # minimize ||y - X\beta||_2^2 subject to \beta >= 0.
 
         # Problem data.
-        m, n = 10000, 8000 #500, 1000 #1000, 2000 #10000, 8000 
+        m, n = 10000, 8000
         density = 0.001
         X = sparse.random(m, n, density=density, data_rvs=np.random.randn)
         y = np.random.randn(m)
-        
-#         # Solve with SciPy.
-#         sp_result = nnls(X.todense(), y)
-#         sp_beta = sp_result[0]
-#         sp_obj = sp_result[1]**2   # SciPy objective is ||y - X\beta||_2.
-#         print('Finish Scipy.')
 
         # Convert problem to standard form.
         # f_1(\beta_1) = ||y - X\beta_1||_2^2, f_2(\beta_2) = I(\beta_2 >= 0).
@@ -123,17 +116,13 @@ class TestPaper(BaseTest):
         print('nonzero entries proportion = {}'.format(np.sum(a2dr_beta > 0)*1.0/len(a2dr_beta)))
         print('Finish A2DR.')
         self.compare_total(drs_result, a2dr_result)
-        
-#         a2dr_obj = np.sum((y - X.dot(a2dr_beta))**2)
-#         print(sp_obj, a2dr_obj)
-#         self.assertAlmostEqual(sp_obj, a2dr_obj)
 
 
     def test_nnls_reg(self):
         # minimize ||y - X\beta||_2^2 subject to \beta >= 0.
 
         # Problem data.
-        m, n = 300, 500 #1000, 10000 #500, 1000 #300, 500  #500, 1000 #1000, 10000 
+        m, n = 300, 500
         density = 0.001
         X = sparse.random(m, n, density=density, data_rvs=np.random.randn)
         y = np.random.randn(m)
@@ -159,11 +148,11 @@ class TestPaper(BaseTest):
         
         self.compare_total_all([a2dr_noreg_result, a2dr_consreg_result, a2dr_result], ['no-reg', 'constant-reg', 'ada-reg'])
 
-    def test_sparse_inv_covariance(self):
+    def test_sparse_inv_covariance(self, n, alpha_ratio):
         # minimize -log(det(S)) + trace(S*Y) + \alpha*||S||_1 subject to S is symmetric PSD.
 
         # Problem data.
-        n = 50 #100 #135 #125 #30   # Dimension of matrix.
+        # n: Dimension of matrix.
         m = 1000  # Number of samples.
         ratio = 0.9   # Fraction of zeros in S.
 
@@ -174,15 +163,8 @@ class TestPaper(BaseTest):
         mask = np.ones(Q.shape, dtype=bool)
         np.fill_diagonal(mask, 0)
         alpha_max = np.max(np.abs(Q)[mask])
-        alpha = 0.01*alpha_max #0.001*alpha_max #for n=100
+        alpha = alpha_ratio*alpha_max #0.001 for n=100, 0.01 for n=50
         
-#         # Solve with CVXPY.
-#         S = Variable((n,n), PSD=True)
-#         obj = -log_det(S) + trace(S*Q) + alpha*norm1(S)
-#         prob = Problem(Minimize(obj))
-#         prob.solve(eps=self.eps_abs)
-#         cvxpy_obj = prob.value
-#         cvxpy_S = S.value
 
         # Convert problem to standard form.
         # f_1(S) = -log(det(S)) on symmetric PSD matrices, f_2(S) = trace(S*Q), f_3(S) = \alpha*||S||_1.
@@ -194,20 +176,15 @@ class TestPaper(BaseTest):
 
         # Solve with DRS.
         drs_result = a2dr(prox_list, A_list, b, anderson=False, precond=True)
-#         drs_S = drs_result["x_vals"][-1].reshape((n,n), order='C')
-#         drs_obj = -LA.slogdet(drs_S)[1] + np.sum(np.diag(drs_S.dot(Q))) + alpha*np.sum(np.abs(drs_S))
         print('Finished DRS.')
 
         # Solve with A2DR.
-        a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True) #lam_accel=0 seems to work well sometimes, although oscillating very much
+        a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True) 
+        #lam_accel=0 seems to work well sometimes, although oscillating very much
         a2dr_S = a2dr_result["x_vals"][-1].reshape((n,n), order='C')
-#         a2dr_obj = -LA.slogdet(a2dr_S)[1] + np.sum(np.diag(a2dr_S.dot(Q))) + alpha*np.sum(np.abs(a2dr_S))
         self.compare_total(drs_result, a2dr_result)
         print('Finished A2DR.')
         print('recovered sparsity = {}'.format(np.sum(a2dr_S!=0)*1.0/a2dr_S.shape[0]**2))
-        
-#         print(cvxpy_obj, a2dr_obj)
-#         self.assertAlmostEqual(cvxpy_obj, a2dr_obj)
 
         
     def test_l1_trend_filtering(self):
@@ -220,13 +197,6 @@ class TestPaper(BaseTest):
         y = np.random.randn(n)
         alpha = 0.01*np.linalg.norm(y, np.inf)
         
-#         # Solve with CVXPY.
-#         x = Variable(n)
-#         obj = sum_squares(y - x)/2 + alpha*norm1(diff(x,2))
-#         prob = Problem(Minimize(obj))
-#         prob.solve()
-#         cvxpy_obj = prob.value
-#         cvxpy_x = x.value
 
         # Form second difference matrix.
         D = sparse.lil_matrix(sparse.eye(n))
@@ -249,12 +219,6 @@ class TestPaper(BaseTest):
         a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER)
         self.compare_total(drs_result, a2dr_result)
         print('Finished A2DR.')
-        
-#         a2dr_x = a2dr_result["x_vals"][0]
-#         a2dr_obj = np.sum((y - a2dr_x)**2)/2 + alpha*np.sum(np.abs(np.diff(a2dr_x,2)))
-#         cvxpy_obj_raw = np.sum((y - cvxpy_x)**2)/2 + alpha*np.sum(np.abs(np.diff(cvxpy_x,2)))
-#         print(cvxpy_obj, cvxpy_obj_raw, a2dr_obj)
-#         self.assertAlmostEqual(cvxpy_obj, a2dr_obj)
 
         
         
@@ -452,8 +416,8 @@ class TestPaper(BaseTest):
 
         # Problem data.
         K = 10 # Number of tasks.
-        p = 500 #1000 #20#30 # Number of features.
-        m = 300 #500 #20#30 # Number of samples.
+        p = 500 # Number of features.
+        m = 300 # Number of samples.
         alpha = 0.1
         beta = 0.1
 
@@ -463,27 +427,18 @@ class TestPaper(BaseTest):
         Y = 2*(Z_true > 0) - 1   # Y_{ij} = 1 or -1.
 
         def calc_obj(theta):
-            obj = np.sum(-np.log(sp.special.expit(np.multiply(Y, X.dot(theta))))) #* gamma #debug
+            obj = np.sum(-np.log(sp.special.expit(np.multiply(Y, X.dot(theta)))))
             reg = alpha*np.sum([LA.norm(theta[:,k], 2) for k in range(K)])
             reg += beta*LA.norm(theta, ord='nuc')
             return obj + reg
-
-#         # Solve with CVXPY.
-#         theta = Variable((p,K))
-#         loss = sum(logistic(-multiply(Y, X*theta))) #* gamma # debug
-#         reg = alpha*sum(norm(theta, 2, axis=0)) + beta*normNuc(theta)
-#         prob = Problem(Minimize(loss + reg))
-#         prob.solve()
-#         cvxpy_obj = prob.value
-#         cvxpy_theta = theta.value
-#         print('CVXPY finished.')
 
         # Convert problem to standard form. 
         # f_1(Z) = \sum_{ik} log(1 + exp(-Y_{ik}*Z_{ik})), 
         # f_2(\theta) = \alpha*||\theta||_{2,1}, 
         # f_3(\tilde \theta) = \beta*||\tilde \theta||_*.
         # A_1 = [I; 0], A_2 = [-X; I], A_3 = [0; -I], b = 0.
-        prox_list = [lambda v, t: prox_logistic(v, 1.0/t, y = Y.ravel(order='F')),   # TODO: Calculate in parallel for k = 1,...K.
+        prox_list = [lambda v, t: prox_logistic(v, 1.0/t, y = Y.ravel(order='F')),   
+                     # TODO: Calculate in parallel for k = 1,...K.
         		  	 lambda v, t: prox_group_lasso(alpha)(v.reshape((p,K), order='F'), t),
                   	 lambda v, t: prox_nuc_norm(beta, order='F')(v.reshape((p,K), order='F'), t)]
         A_list = [sparse.vstack([sparse.eye(m*K), sparse.csr_matrix((p*K,m*K))]),
@@ -500,9 +455,3 @@ class TestPaper(BaseTest):
         a2dr_theta = a2dr_result["x_vals"][-1].reshape((p,K), order='F')
         print('A2DR finished.')
         self.compare_total(drs_result, a2dr_result)
-
-        
-#         a2dr_obj = calc_obj(a2dr_theta)
-#         cvxpy_obj_raw = calc_obj(cvxpy_theta)
-#         print('cvxpy_obj = {}, cvxpy_obj_raw = {}, a2dr_obj = {}'.format(cvxpy_obj, cvxpy_obj_raw, a2dr_obj))
-#         self.assertAlmostEqual(cvxpy_obj_raw, a2dr_obj, places=3)
