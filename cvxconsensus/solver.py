@@ -109,7 +109,7 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, *args, **kwargs):
     # AA-II parameters.
     anderson = kwargs.pop("anderson", False)
     m_accel = int(kwargs.pop("m_accel", 10))    # Maximum past iterations to keep (>= 0).
-    lam_accel = kwargs.pop("lam_accel", 1e-14)   # AA-II regularization weight.
+    lam_accel = kwargs.pop("lam_accel", 1e-8) #1e-10   # AA-II regularization weight.
 
     # Safeguarding parameters.
     D_safe = kwargs.pop("D_safe", 1e6)
@@ -161,7 +161,7 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, *args, **kwargs):
     # Precondition data.
     if precond:
         p_list, A_list, b, e_pre = precondition(p_list, A_list, b)
-        t_init = 1/gmean(e_pre)**2/1000
+        t_init = 1/gmean(e_pre)**2/10
         print('after preconditioning, t_init changed to {}'.format(t_init))
 
     # Store constraint matrix for projection step.

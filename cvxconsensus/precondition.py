@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.sparse import block_diag, issparse, csr_matrix, diags
 import scipy.linalg as sLA
+from scipy.stats.mstats import gmean
 
 def precondition(p_list, A_list, b, tol = 1e-3, max_iter = 5):
     n_list = [A.shape[1] for A in A_list]
@@ -15,6 +16,7 @@ def precondition(p_list, A_list, b, tol = 1e-3, max_iter = 5):
     def proto(i, p_list, e):
         return lambda v, t: p_list[i](e[i]*v, t*e[i]**2)/e[i]
     p_eq_list = list(map(lambda i: proto(i,p_list,e), range(len(p_list))))
+    print(e)
     return p_eq_list, A_eq_list, d*b, e
 
 def mat_equil(A, n_list, tol, max_iter):
@@ -74,8 +76,8 @@ def mat_equil(A, n_list, tol, max_iter):
     
     # Rescale to have \|DAE\|_2 close to 1
     scale = np.linalg.norm(B, 'fro') / np.sqrt(np.min([m,N]))
-    d_mean = np.mean(d)
-    e_mean = np.mean(e)
+    d_mean = gmean(d)
+    e_mean = gmean(e)
     q = np.log(d_mean / e_mean * scale) / 2 / np.log(scale)
     d = d * (scale ** (-q))
     e = e * (scale ** (q-1))

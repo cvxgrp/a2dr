@@ -127,7 +127,8 @@ class BaseTest(TestCase):
         for i in range(len(names)):
             result = results[i]
             name = names[i]
-            plt.semilogy(range(result["num_iters"]), np.sqrt(result["primal"]**2+result["dual"]**2), linestyle="--", label="Residuals (" + name + ")")
+            plt.semilogy(range(result["num_iters"]), np.sqrt(result["primal"]**2+result["dual"]**2), 
+                         label="Residuals (" + name + ")")
         # plt.title("Residuals")
         plt.legend()
         if savefig:
