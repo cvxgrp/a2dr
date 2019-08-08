@@ -18,8 +18,15 @@ def prox_norm1(alpha = 1.0):
 
 
 def prox_norm2(alpha = 1.0):
-    return lambda v, t: (1 - 1.0/(t*alpha*sparse.linalg.norm(v,'fro'))).maximum(0) * v if sparse.issparse(v) else \
-                        np.maximum(1 - 1.0/(t*alpha*LA.norm(v,2)),0) * v
+    def prox_norm2_inner(v, t):
+        if np.linalg.norm(v) == 0:
+            return np.zeros(len(v))
+        elif sparse.issparse(v):
+            return (1 - t*alpha*1.0/(sparse.linalg.norm(v,'fro'))).maximum(0) * v
+        else: 
+            return np.maximum(1 - t*alpha*1.0/(LA.norm(v,2)),0) * v 
+            
+    return lambda v, t: prox_norm2_inner(v, t)
 
 def prox_norm_inf(bound):
     if bound < 0:
@@ -88,10 +95,15 @@ class TestPaper(BaseTest):
         # minimize ||y - X\beta||_2^2 subject to \beta >= 0.
 
         # Problem data.
-        m, n = 10000, 8000 
+        m, n = 100, 200#10000, 8000 
         density = 0.001
         X = sparse.random(m, n, density=density, data_rvs=np.random.randn)
         y = np.random.randn(m)
+        
+        # Solve with SciPy.
+        sp_result = nnls(X.todense(), y)
+        sp_beta = sp_result[0]
+        sp_obj = sp_result[1]**2   # SciPy objective is ||y - X\beta||_2.
 
         # Convert problem to standard form.
         # f_1(\beta_1) = ||y - X\beta_1||_2^2, f_2(\beta_2) = I(\beta_2 >= 0).
@@ -106,9 +118,13 @@ class TestPaper(BaseTest):
     
         # Solve with A2DR.
         a2dr_result = a2dr(prox_list, A_list, b, t_init = 1, anderson=True, precond=True, max_iter=self.MAX_ITER)
+        a2dr_beta = a2dr_result["x_vals"][-1]
+        a2dr_obj = np.sum((y - X.dot(a2dr_beta))**2)
         print('nonzero entries proportion = {}'.format(np.sum(a2dr_beta > 0)*1.0/len(a2dr_beta)))
         print('Finish A2DR.')
         self.compare_total(drs_result, a2dr_result)
+        print(sp_obj, a2dr_obj)
+        self.assertAlmostEqual(sp_obj, a2dr_obj)
 
 
     def test_nnls_reg(self):
@@ -145,7 +161,7 @@ class TestPaper(BaseTest):
         # minimize -log(det(S)) + trace(S*Y) + \alpha*||S||_1 subject to S is symmetric PSD.
 
         # Problem data.
-        n = 125   # Dimension of matrix.
+        n = 30 #125   # Dimension of matrix.
         m = 1000  # Number of samples.
         ratio = 0.9   # Fraction of zeros in S.
 
@@ -157,6 +173,14 @@ class TestPaper(BaseTest):
         np.fill_diagonal(mask, 0)
         alpha_max = np.max(np.abs(Q)[mask])
         alpha = 0.75*alpha_max
+        
+        # Solve with CVXPY.
+        S = Variable((n,n), PSD=True)
+        obj = -log_det(S) + trace(S*Q) + alpha*norm1(S)
+        prob = Problem(Minimize(obj))
+        prob.solve(eps=self.eps_abs)
+        cvxpy_obj = prob.value
+        cvxpy_S = S.value
 
         # Convert problem to standard form.
         # f_1(S) = -log(det(S)) on symmetric PSD matrices, f_2(S) = trace(S*Q), f_3(S) = \alpha*||S||_1.
@@ -179,6 +203,8 @@ class TestPaper(BaseTest):
         self.compare_total(drs_result, a2dr_result)
         print('Finished A2DR.')
         print('recovered sparsity = {}'.format(np.sum(a2dr_S!=0)*1.0/a2dr_S.shape[0]**2))
+        print(cvxpy_obj, a2dr_obj)
+        self.assertAlmostEqual(cvxpy_obj, a2dr_obj)
 
         
     def test_l1_trend_filtering(self):
@@ -187,9 +213,18 @@ class TestPaper(BaseTest):
         # Reference: https://web.stanford.edu/~boyd/papers/l1_trend_filter.html
 
         # Problem data.
-        n = int(1.5*10**4)
+        n = 10#100#5#100#int(1.5*10**4)
         y = np.random.randn(n)
-        alpha = 0.1*np.linalg.norm(y, np.inf)
+        alpha = 1.0#0.1*np.linalg.norm(y, np.inf)
+        print(alpha)
+        
+        # Solve with CVXPY.
+        x = Variable(n)
+        obj = sum_squares(y - x)/2 + alpha*norm1(diff(x,2))
+        prob = Problem(Minimize(obj))
+        prob.solve()
+        cvxpy_obj = prob.value
+        cvxpy_x = x.value
 
         # Form second difference matrix.
         D = sparse.lil_matrix(sparse.eye(n))
@@ -205,13 +240,28 @@ class TestPaper(BaseTest):
         b = np.zeros(n-2)
 
         # Solve with DRS.
-        drs_result = a2dr(prox_list, A_list, b, anderson=False, precond=True, max_iter=self.MAX_ITER)
+        drs_result = a2dr(prox_list, A_list, b, anderson=False, precond=False, max_iter=self.MAX_ITER, 
+                          eps_abs=1e-16, eps_rel=1e-16)
+        drs_x = drs_result["x_vals"][0]
+        drs_obj = np.sum((y - drs_x)**2)/2 + alpha*np.sum(np.abs(np.diff(drs_x,2)))
         print('Finished DRS.')
+#         self.assertAlmostEqual(cvxpy_obj, drs_obj)
 
         # Solve with A2DR.
-        a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER)
+        a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=False, max_iter=self.MAX_ITER, 
+                           eps_abs=1e-16, eps_rel=1e-16)
+        a2dr_x = a2dr_result["x_vals"][0]
+        a2dr_obj = np.sum((y - a2dr_x)**2)/2 + alpha*np.sum(np.abs(np.diff(a2dr_x,2)))
         self.compare_total(drs_result, a2dr_result)
         print('Finished A2DR.')
+        cvxpy_obj_raw = np.sum((y - cvxpy_x)**2)/2 + alpha*np.sum(np.abs(np.diff(cvxpy_x,2)))
+        print(cvxpy_obj, cvxpy_obj_raw, a2dr_obj)
+        a2dr_x2 = a2dr_result["x_vals"][1]
+        print('constraint violation = {}'.format(np.linalg.norm(D.dot(a2dr_x)-a2dr_x2)))
+        print('constraint violation 2 = {}'.format(np.linalg.norm(np.diff(a2dr_x,2)-a2dr_x2)))
+        print(alpha)
+        self.assertAlmostEqual(cvxpy_obj, a2dr_obj)
+
         
         
     def test_optimal_control(self):
@@ -407,11 +457,13 @@ class TestPaper(BaseTest):
         # subject to Z = X\theta, ||.||_{2,1} = group lasso, ||.||_* = nuclear norm.
 
         # Problem data.
-        K = 5     # Number of tasks.
-        p = 20    # Number of features.
-        m = 100   # Number of samples.
-        alpha = 1.0
-        beta = 1.0
+        K = 5 #5     # Number of tasks.
+        p = 20#100 #10 #200 #20    # Number of features.
+        m = 20#100 #20 #200 #100   # Number of samples.
+        alpha = 0.1 #10 #0.1
+        beta = 0.1 #0 #0.1
+#         # debug
+#         gamma = 0
 
         X = np.random.randn(m,p)
         theta_true = np.random.randn(p,K)
@@ -419,44 +471,69 @@ class TestPaper(BaseTest):
         Y = 2*(Z_true > 0) - 1   # Y_{ij} = 1 or -1.
 
         def calc_obj(theta):
-            obj = np.sum(-np.log(sp.special.expit(np.multiply(Y, X.dot(theta)))))
+            obj = np.sum(-np.log(sp.special.expit(np.multiply(Y, X.dot(theta))))) #* gamma #debug
             reg = alpha*np.sum([LA.norm(theta[:,k], 2) for k in range(K)])
             reg += beta*LA.norm(theta, ord='nuc')
             return obj + reg
 
         # Solve with CVXPY.
         theta = Variable((p,K))
-        loss = sum(logistic(-multiply(Y, X*theta)))
+        loss = sum(logistic(-multiply(Y, X*theta))) #* gamma # debug
         reg = alpha*sum(norm(theta, 2, axis=0)) + beta*normNuc(theta)
         prob = Problem(Minimize(loss + reg))
         prob.solve()
         cvxpy_obj = prob.value
         cvxpy_theta = theta.value
+        print('CVXPY finished.')
 
         # Convert problem to standard form. 
         # f_1(Z) = \sum_{ik} log(1 + exp(-Y_{ik}*Z_{ik})), 
         # f_2(\theta) = \alpha*||\theta||_{2,1}, 
         # f_3(\tilde \theta) = \beta*||\tilde \theta||_*.
         # A_1 = [I; 0], A_2 = [-X; I], A_3 = [0; -I], b = 0.
-        prox_list = [lambda v, t: prox_logistic(v, t, y = Y.ravel(order='F')),   # TODO: Calculate in parallel for k = 1,...K.
+        prox_list = [lambda v, t: prox_logistic(v, 1.0/t, y = Y.ravel(order='F')),   # TODO: Calculate in parallel for k = 1,...K.
         		  	 lambda v, t: prox_group_lasso(alpha)(v.reshape((p,K), order='F'), t),
                   	 lambda v, t: prox_nuc_norm(beta, order='F')(v.reshape((p,K), order='F'), t)]
         A_list = [sparse.vstack([sparse.eye(m*K), sparse.csr_matrix((p*K,m*K))]),
 		  		  sparse.vstack([-sparse.block_diag(K*[X]), sparse.eye(p*K)]),
 		  		  sparse.vstack([sparse.csr_matrix((m*K,p*K)), -sparse.eye(p*K)])]
         b = np.zeros(m*K + p*K)
+        
+        ## debug
+        t = 0.01
+        Q = np.random.randn(p, K)
+        v = Q.ravel(order='F')
+        vhat = prox_list[1](v,t).reshape((p,K), order='F')
+        v_cvxpy = Variable((p,K))
+        prob = Problem(Minimize(alpha*sum(norm(v_cvxpy, 2, axis=0)) + 1.0/2/t*sum_squares(v_cvxpy-Q)))
+        prob.solve(solver='ECOS', verbose = True)
+        v_cvxpy_val = v_cvxpy.value
+        print('check group lasso prox correctness = {}'.format(np.linalg.norm(v_cvxpy_val - vhat)))
 
+        #debug
+        v_init=[np.random.randn(m*K), np.random.randn(p*K), np.random.randn(p*K)]
+        
         # Solve with DRS.
-        drs_result = a2dr(prox_list, A_list, b, anderson=False)
-        drs_theta = drs_result["x_vals"][-1].reshape((p,K), order='F')
-        drs_obj = calc_obj(drs_theta)
-        self.assertAlmostEqual(cvxpy_obj, drs_obj, places=3)
-        # self.assertItemsAlmostEqual(cvxpy_theta, drs_theta)
+        drs_result = a2dr(prox_list, A_list, b, v_init=v_init, anderson=False, precond=True, eps_abs=1e-12, eps_rel=1e-12)
+#         drs_theta = drs_result["x_vals"][-1].reshape((p,K), order='F')
+#         drs_obj = calc_obj(drs_theta)
+#         self.assertAlmostEqual(cvxpy_obj, drs_obj, places=3)
+        print('DRS finished.')
 
         # Solve with A2DR.
-        a2dr_result = a2dr(prox_list, A_list, b, anderson=True)
+        a2dr_result = a2dr(prox_list, A_list, b, v_init=v_init, anderson=True, precond=True, eps_abs=1e-12, eps_rel=1e-12)
         a2dr_theta = a2dr_result["x_vals"][-1].reshape((p,K), order='F')
+        print('A2DR finished.')
+        
+        ## debug
+        a2dr_Z = a2dr_result["x_vals"][0].reshape((m,K), order='F')
+        a2dr_theta0 = a2dr_result["x_vals"][1].reshape((p,K), order='F')
+        print('constraints violation = {} and {}'.format(np.linalg.norm(a2dr_Z-X.dot(a2dr_theta0)), 
+                                                         np.linalg.norm(a2dr_theta0-a2dr_theta)))
+        print('theta difference = {}'.format(np.linalg.norm(cvxpy_theta - a2dr_theta)))
+        
         a2dr_obj = calc_obj(a2dr_theta)
-        self.assertAlmostEqual(cvxpy_obj, a2dr_obj, places=3)
-        self.assertItemsAlmostEqual(cvxpy_theta, a2dr_theta)
-        self.compare_primal_dual(drs_result, a2dr_result)
+        cvxpy_obj_raw = calc_obj(cvxpy_theta)
+        self.compare_total(drs_result, a2dr_result)
+        print('cvxpy_obj = {}, cvxpy_obj_raw = {}, a2dr_obj = {}'.format(cvxpy_obj, cvxpy_obj_raw, a2dr_obj))
+        self.assertAlmostEqual(cvxpy_obj_raw, a2dr_obj, places=3)

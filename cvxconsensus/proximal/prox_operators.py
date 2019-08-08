@@ -164,7 +164,7 @@ def prox_logistic(u, rho, x0 = None, y = None):
        so that f(x) = \sum_i log(1 + e^x_i).
     """
     if x0 is None:
-        x0 = np.random.randn(*u.shape)
+        x0 = u#np.random.randn(*u.shape)
     if y is None:
         y = -np.ones(u.shape)
 
@@ -182,6 +182,7 @@ def prox_logistic(u, rho, x0 = None, y = None):
         return np.diag(np.multiply(np.multiply(y**2, np.exp(np.multiply(y,x))), expit(-np.multiply(y,x))**2) + rho)
 
     res = minimize(fun, x0, args=(y, u, rho), method='Newton-CG', jac=jac, hess=hess)
+    #res = minimize(fun, x0, args=(y, u, rho), method='Newton-CG', jac=jac)
     if not res.success:
         warnings.warn(res.message)
     return res.x[0] if res.x.size == 1 else res.x

@@ -13,7 +13,7 @@ def precondition(p_list, A_list, b, tol = 1e-3, max_iter = 5):
     A_eq_list = [csr_matrix(A_eq_list[i]) for i in range(len(A_eq_list))]
     ### the original definition of p_eq_list was wrong: prox and ei are modified in place in the new lambda functions
     def proto(i, p_list, e):
-        return lambda v, rho: p_list[i](e[i]*v, rho/e[i]**2)/e[i]
+        return lambda v, t: p_list[i](e[i]*v, t*e[i]**2)/e[i]
     p_eq_list = list(map(lambda i: proto(i,p_list,e), range(len(p_list))))
     return p_eq_list, A_eq_list, d*b, e
 
