@@ -3,7 +3,7 @@ from scipy.sparse import block_diag, issparse, csr_matrix, diags
 import scipy.linalg as sLA
 from scipy.stats.mstats import gmean
 
-def precondition(p_list, A_list, b, tol = 1e-3, max_iter = 5):
+def precondition(p_list, A_list, b, tol = 1e-3, max_iter = 1000):
     n_list = [A.shape[1] for A in A_list]
     A_list_dense = [(A_list[i].todense() if issparse(A_list[i]) else A_list[i]) for i in range(len(A_list))]
     A = np.array(np.hstack(A_list_dense))
@@ -50,18 +50,19 @@ def mat_equil(A, n_list, tol, max_iter):
     ave_list = [np.ones([n_i,1]) for n_i in n_list]
     A_block = A2.dot(sLA.block_diag(*ave_list))
     A_block_T = A_block.transpose()
-    print(A_block.shape)
+    print('Block matrix shape = {}'.format(A_block.shape))
+    print('gamma={}'.format(gamma))
     
     # Apply regularized Sinkhorn-Knopp on A_block
     for k in range(max_iter):
-        print(k)
         d1 = N / (A_block.dot(e) + N * gamma * em)
-        e1 = m / (A_block_T.dot(d) + m * gamma * eN)
+        e1 = m / (A_block_T.dot(d1) + m * gamma * eN)
         err_d = np.linalg.norm(d1 - d)
         err_e = np.linalg.norm(e1 - e)
         d = d1
         e = e1
-        if err_d <= tol and err_e <= tol:
+        print('k={}, err_d={}, err_e={}'.format(k, err_d/np.sqrt(m), err_e/np.sqrt(N)))
+        if err_d/np.sqrt(m) <= tol and err_e/np.sqrt(N) <= tol:
             break
     
     d = np.sqrt(d)
