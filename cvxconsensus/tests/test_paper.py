@@ -16,7 +16,6 @@ def prox_norm1(alpha = 1.0):
     return lambda v, t: (v - t*alpha).maximum(0) - (-v - t*alpha).maximum(0) if sparse.issparse(v) else \
                         np.maximum(v - t*alpha,0) - np.maximum(-v - t*alpha,0)
 
-
 def prox_norm2(alpha = 1.0):
     def prox_norm2_inner(v, t):
         if np.linalg.norm(v) == 0:
@@ -72,6 +71,22 @@ def prox_sum_squares(X, y, type = "lsqr"):
     else:
         raise ValueError("Algorithm type not supported:", type)
     return prox
+
+def prox_qp(Q, F, g):
+    # check warmstart/parameter mode -- make sure the problem reduction is only done once
+    n = Q.shape[0]
+    I = np.eye(n)
+    v_par = Parameter(n)
+    t_par = Parameter(nonneg=True)
+    x = Variable(n)
+    obj = quad_form(x, Q) + sum_squares(x)/2/t_par - v_par*x #quad_form(x, Q+1.0/2/t_par*I) - v_par*x
+    constr = [F * x <= g]
+    prob = Problem(Minimize(obj), constr)
+    def prox_qp1(v, t):
+        v_par.value, t_par.value = v, t
+        prob.solve(warm_start=False)
+        return x.value
+    return prox_qp1
 
 def prox_neg_log_det_aff(Q, S, t, order = 'C'):
     Q_symm = (Q + Q.T) / 2.0
@@ -135,15 +150,15 @@ class TestPaper(BaseTest):
         b = np.zeros(n)
 
         # Solve with no regularization.
-        a2dr_noreg_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, lam_accel=0)
+        a2dr_noreg_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, lam_accel=0, max_iter=self.MAX_ITER)
         print('Finish A2DR no regularization.')
         
         # Solve with constant regularization.
-        a2dr_consreg_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, ada_reg=False)
+        a2dr_consreg_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, ada_reg=False, max_iter=self.MAX_ITER)
         print('Finish A2DR constant regularization.')
         
         # Solve with adaptive regularization.
-        a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True) 
+        a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER) 
         print('Finish A2DR adaptive regularization.')
         
         self.compare_total_all([a2dr_noreg_result, a2dr_consreg_result, a2dr_result], ['no-reg', 'constant-reg', 'ada-reg'])
@@ -175,11 +190,11 @@ class TestPaper(BaseTest):
         b = np.zeros(n*n)
 
         # Solve with DRS.
-        drs_result = a2dr(prox_list, A_list, b, anderson=False, precond=True)
+        drs_result = a2dr(prox_list, A_list, b, anderson=False, precond=True, max_iter=self.MAX_ITER)
         print('Finished DRS.')
 
         # Solve with A2DR.
-        a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True) 
+        a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER) 
         #lam_accel=0 seems to work well sometimes, although oscillating very much
         a2dr_S = a2dr_result["x_vals"][-1].reshape((n,n), order='C')
         self.compare_total(drs_result, a2dr_result)
@@ -311,12 +326,37 @@ class TestPaper(BaseTest):
         self.compare_primal_dual(drs_result, a2dr_result)
         
         
-    def coupled_qp(self):
-        # Problem data
-        K = 100
-        p = 10
-        nk = 50
+    def test_coupled_qp(self):
+        # Problem data.
+        K = 8 #8 #4 #5 #100
+        p = 50 #50 #50 #50 #10
+        nk = 300 #500 #300 #500 #50
+        mk = 100 #100 #100 #300 #100
+        A_list = [np.random.randn(p, nk) for k in range(K)]
+        F_list = [np.random.randn(mk, nk) for k in range(K)]
+        q_list = [np.random.randn(nk) for k in range(K)]
+        x_list = [np.random.randn(nk) for k in range(K)]
+        g_list = [F_list[k].dot(x_list[k])+0.1 for k in range(K)]
+        A = np.hstack(A_list)
+        x = np.hstack(x_list)
+        b = A.dot(x)
+        P_list = [np.random.randn(nk,nk) for k in range(K)]
+        Q_list = [P_list[k].T.dot(P_list[k]) for k in range(K)]
         
+        # Convert problem to standard form.
+        def tmp(k, Q_list, F_list, g_list):
+            return prox_qp(Q_list[k], F_list[k], g_list[k])
+            
+        prox_list = list(map(lambda k: tmp(k,Q_list,F_list,g_list), range(K)))
+        
+        # Solve with DRS.
+        drs_result = a2dr(prox_list, A_list, b, anderson=False, precond=True, max_iter=self.MAX_ITER)
+        print('DRS finished.')
+
+        # Solve with A2DR.
+        a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER)
+        print('A2DR finished.')
+        self.compare_total(drs_result, a2dr_result)
 
     def test_commodity_flow(self):
         # Problem data.
@@ -447,11 +487,11 @@ class TestPaper(BaseTest):
         b = np.zeros(m*K + p*K)
         
         # Solve with DRS.
-        drs_result = a2dr(prox_list, A_list, b, anderson=False, precond=True)
+        drs_result = a2dr(prox_list, A_list, b, anderson=False, precond=True, max_iter=self.MAX_ITER)
         print('DRS finished.')
 
         # Solve with A2DR.
-        a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True)
+        a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER)
         a2dr_theta = a2dr_result["x_vals"][-1].reshape((p,K), order='F')
         print('A2DR finished.')
         self.compare_total(drs_result, a2dr_result)
