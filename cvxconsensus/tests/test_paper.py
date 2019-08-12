@@ -247,9 +247,9 @@ class TestPaper(BaseTest):
         
     def test_optimal_control(self):
         # Problem data/
-        m = 50
-        n = 100
-        K = 30
+        m = 10#50
+        n = 20#100
+        K = 5#30
         A = np.random.randn(n,n)
         B = np.random.randn(n,m)
         c = np.random.randn(n)
@@ -257,7 +257,9 @@ class TestPaper(BaseTest):
         A = A / np.max(np.abs(LA.eigvals(A)))
         xhat = x_init
         for k in range(K-1):
-            xhat = A.dot(xhat) + B.dot(np.random.randn(m)) + c
+            uhat = np.random.randn(m)
+            uhat = uhat / np.max(np.abs(uhat))
+            xhat = A.dot(xhat) + B.dot(uhat) + c
         x_term = xhat
         
         # Convert problem to standard form.
@@ -271,8 +273,24 @@ class TestPaper(BaseTest):
         A_list = [sparse.csr_matrix(A1), sparse.csr_matrix(A2)]
         b_list = [x_init]
         b_list.extend((K-1)*[c])
-        b_list.extend([np.zeros(n)])
+        b_list.extend([x_term])
         b = np.concatenate(b_list)
+        
+        # Solve with CVXPY
+        x = Variable((K,n))
+        u = Variable((K,m))
+        obj = sum([sum_squares(x[k]) + sum_squares(u[k]) for k in range(K)])
+        constr = [x[0] == x_init, norm_inf(u) <= 1]
+        constr += [x[k+1] == A*x[k] + B*u[k] + c for k in range(K-1)]
+        constr += [x[K-1] == x_term]
+        prob = Problem(Minimize(obj), constr)
+        prob.solve(solver='SCS', eps=1e-9, verbose=True) 
+        # OSQP fails for m=50, n=100, K=30
+        # SCS also kind of fails
+        # but why per iteration cost our approach is higher (than SCS)?
+        cvxpy_obj = prob.value
+        cvxpy_x = x.value.ravel(order='C')
+        cvxpy_u = u.value.ravel(order='C')
         
         # Solve with DRS.
         drs_result = a2dr(prox_list, A_list, b, anderson=False, precond=True, max_iter=self.MAX_ITER)
@@ -282,6 +300,25 @@ class TestPaper(BaseTest):
         a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER)
         self.compare_total(drs_result, a2dr_result)
         print('Finished A2DR.')
+        
+        # check solution correctness
+        a2dr_x = a2dr_result['x_vals'][0]
+        a2dr_u = a2dr_result['x_vals'][1]
+        a2dr_obj = np.sum(a2dr_x**2) + np.sum(a2dr_u**2)
+        cvxpy_X = cvxpy_x.reshape([K,n], order='C')
+        cvxpy_U = cvxpy_u.reshape([K,m], order='C')
+        a2dr_X = a2dr_x.reshape([K,n], order='C')
+        a2dr_U = a2dr_u.reshape([K,m], order='C')
+        cvxpy_constr_vio = [np.linalg.norm(cvxpy_X[0]-x_init), np.linalg.norm(cvxpy_X[K-1]-x_term)]
+        a2dr_constr_vio = [np.linalg.norm(a2dr_X[0]-x_init), np.linalg.norm(a2dr_X[K-1]-x_term)]
+        for k in range(K-1):
+            cvxpy_constr_vio.append(np.linalg.norm(cvxpy_X[k+1]-A.dot(cvxpy_X[k])-B.dot(cvxpy_U[k])-c))
+            a2dr_constr_vio.append(np.linalg.norm(a2dr_X[k+1]-A.dot(a2dr_X[k])-B.dot(a2dr_U[k])-c))    
+        print('linear constr vio cvxpy = {}, linear constr_vio a2dr = {}'.format(
+            np.mean(cvxpy_constr_vio), np.mean(a2dr_constr_vio)))
+        print('norm constr vio cvxpy = {}, norm constr vio a2dr = {}'.format(np.max(cvxpy_u), np.max(a2dr_u)))
+        self.assertAlmostEqual(cvxpy_obj, a2dr_obj)
+
         
     def test_coupled_qp(self):
         # Problem data.
@@ -380,7 +417,9 @@ class TestPaper(BaseTest):
         # f_2(s) = \sum_i d_i*(s_i^(free) - c_i)^2 + I(0 <= s_i^(free) <= s_max).
         # A_1 = [R; 0], A_2 = [I; E], b = [0; g], where E*s = [s^(off); s^(pin); s^(load)] and g = [0; s_max; L].
         prox_list = [lambda v, t: np.maximum(np.minimum(v/(1 + 2*t*h_vec), x_max), 0),
-                     lambda u, t: np.concatenate([np.maximum(np.minimum((u[:m_free] + 2*t*c_vec*d_vec)/(1 + 2*t*d_vec), s_max_free), 0), u[m_free:]])]
+                     lambda u, t: np.concatenate(
+                         [np.maximum(np.minimum((u[:m_free] + 
+                                                 2*t*c_vec*d_vec)/(1 + 2*t*d_vec), s_max_free), 0), u[m_free:]])]
         E = sparse.hstack([sparse.csr_matrix((m_fixed,m_free)), sparse.eye(m_fixed)])
         g = np.concatenate([np.zeros(m_off), s_max_pin, loads])
         A_list = [sparse.vstack([R, sparse.csr_matrix((m_fixed,n))]), 
