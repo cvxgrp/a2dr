@@ -54,7 +54,15 @@ def prox_quad_form(Q):
         if not np.all(LA.eigvals(Q) >= 0):
             raise Exception("Q must be a positive semidefinite matrix.")
         return lambda v, t: LA.lstsq(Q + (1/t)*np.eye(v.shape[0]), v/t, rcond=None)[0]
+    
+def prox_square(v, t):
+    return v/(1.0+2*t)
 
+def prox_sat(v, t):
+    def sat(u, c):
+        return np.maximum(np.minimum(u, c), -c)
+    return sat(v/(1.0+2*t), 1)
+    
 def prox_sum_squares(X, y, type = "lsqr"):
     n = X.shape[1]
     if type == "lsqr":
@@ -238,100 +246,49 @@ class TestPaper(BaseTest):
         
         
     def test_optimal_control(self):
-        m = 2
-        n = 5
-        T = 20
-        K = T*(m+n)
-        u_bnd = 1      # Upper bound on all |u_t|.
-        w_eps = 0.01   # Lower bound on eigenvalues of R.
-        A_eps = 0.05
-
-        # Dynamic matrices.
-        # TODO: Generate problem so max(|u_t|) hits the upper bound!
-        A = np.eye(n) + A_eps*np.random.randn(n,n)
-        A = A/np.max(np.abs(LA.eigvals(A)))   # Scale A so largest eigenvalue has magnitude of one.
+        # Problem data/
+        m = 50
+        n = 100
+        K = 30
+        A = np.random.randn(n,n)
         B = np.random.randn(n,m)
-        c = np.zeros(n)
+        c = np.random.randn(n)
         x_init = np.random.randn(n)
-
-        # Cost matrices.
-        Q = np.random.randn(n,n)
-        Q = Q.T.dot(Q)   # Q is positive semidefinite.
-        R = np.random.randn(m,m)
-        R = R.T.dot(R)
-        w, v = LA.eig(R)
-        w = np.maximum(w, w_eps)
-        R = v.dot(np.diag(w)).dot(v.T)   # R is positive definite.
-        QR_diag = sparse.block_diag(T*[Q] + T*[R])   # Quadratic form cost = x^T*Q*x + u^T*R*u
-
-        def calc_obj(x, u):
-            z = np.concatenate([x, u])
-            u_inf = np.max(np.abs(u))
-            return z.T @ QR_diag @ z if u_inf <= u_bnd else np.inf
-
-        # Solve with CVXPY.
-        x = Variable((T,n))
-        u = Variable((T,m))
-        obj = sum([quad_form(x[t], Q) + quad_form(u[t], R) for t in range(T)])
-        constr = [x[0] == x_init, norm_inf(u) <= u_bnd]
-        constr += [x[t+1] == A*x[t] + B*u[t] + c for t in range(T-1)]
-        prob = Problem(Minimize(obj), constr)
-        prob.solve()
-        cvxpy_obj = prob.value
-        cvxpy_x = x.value.ravel(order='C')
-        cvxpy_u = u.value.ravel(order='C')
-
-        # Construct dynamics matrix
-        # x_{t+1} = A_t*x_t + B_t*u_t + c_t for t = 1,...,T-1
-        # D = [[ I, 0, 0, ..., 0, 0, 0, 0, ..., 0, 0],
-        #      [-A, I, 0, ..., 0, 0,-B, 0, ..., 0, 0],
-        #	   [ 0,-A, I, ..., 0, 0, 0,-B, ..., 0, 0],
-        # 	   [ .................................. ],
-        #      [ 0, 0, 0, ...,-A, I, 0, 0, ...,-B, 0]]
-        D_left = sparse.lil_matrix((T*n,T*n))
-        D_left[n:,:(T-1)*n] = -sparse.block_diag((T-1)*[A])
-        D_left.setdiag(1)
-        D_right = sparse.lil_matrix((T*n,T*m))
-        D_right[n:,:(T-1)*m] = -sparse.block_diag((T-1)*[B])
-        D = sparse.hstack([D_left, D_right])
-        e_vec = np.concatenate([x_init] + (T-1)*[c])
-
+        A = A / np.max(np.abs(LA.eigvals(A)))
+        xhat = x_init
+        for k in range(K-1):
+            xhat = A.dot(xhat) + B.dot(np.random.randn(m)) + c
+        x_term = xhat
+        
         # Convert problem to standard form.
-        # f_1(x,u) = \sum_t x_t^T*Q*x_t + u_t^T*R*u_t,
-        # f_2(x,u) = \sum_t I(||u_t||_{\infty} <= u_bnd).
-        # A_1 = [D; I], A_2 = [0; -I], b = [e; 0], where D*[x; u] = [x_init; c] = e is the dynamic constraint.
-        prox_list = [prox_quad_form(QR_diag),
-        			 lambda v, t: np.concatenate([v[:(T*n)], np.maximum(np.minimum(v[(T*n):], 1), -1)])]
-        A_list = [sparse.vstack([D, sparse.eye(K)]), 
-        		  sparse.vstack([sparse.csr_matrix((D.shape[0], K)), -sparse.eye(K)])]
-        b = np.concatenate([e_vec, np.zeros(K)])
-
+        prox_list = [prox_square, prox_sat]
+        A1 = sparse.lil_matrix(((K+1)*n,K*n))
+        A1[n:K*n,:(K-1)*n] = -sparse.block_diag((K-1)*[A])
+        A1.setdiag(1)
+        A1[K*n:,(K-1)*n:] = sparse.eye(n)
+        A2 = sparse.lil_matrix(((K+1)*n,K*m))
+        A2[n:K*n,:(K-1)*m] = -sparse.block_diag((K-1)*[B])
+        A_list = [sparse.csr_matrix(A1), sparse.csr_matrix(A2)]
+        b_list = [x_init]
+        b_list.extend((K-1)*[c])
+        b_list.extend([np.zeros(n)])
+        b = np.concatenate(b_list)
+        
         # Solve with DRS.
-        drs_result = a2dr(prox_list, A_list, b, anderson=False)
-        drs_x = drs_result["x_vals"][-1][:(T*n)]
-        drs_u = drs_result["x_vals"][-1][(T*n):]
-        drs_obj = calc_obj(drs_x, drs_u)
-        self.assertAlmostEqual(cvxpy_obj, drs_obj)
-        self.assertItemsAlmostEqual(cvxpy_x, drs_x)
-        self.assertItemsAlmostEqual(cvxpy_u, drs_u)
+        drs_result = a2dr(prox_list, A_list, b, anderson=False, precond=True, max_iter=self.MAX_ITER)
+        print('Finished DRS.')
 
         # Solve with A2DR.
-        a2dr_result = a2dr(prox_list, A_list, b, anderson=True)
-        a2dr_x = a2dr_result["x_vals"][-1][:(T*n)]
-        a2dr_u = a2dr_result["x_vals"][-1][(T*n):]
-        a2dr_obj = calc_obj(a2dr_x, a2dr_u)
-        self.assertAlmostEqual(cvxpy_obj, a2dr_obj)
-        self.assertItemsAlmostEqual(cvxpy_x, a2dr_x)
-        self.assertItemsAlmostEqual(cvxpy_u, a2dr_u)
-        self.compare_primal_dual(drs_result, a2dr_result)
-        
+        a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER)
+        self.compare_total(drs_result, a2dr_result)
+        print('Finished A2DR.')
         
     def test_coupled_qp(self):
         # Problem data.
-        K = 8 #8 #4 #5 #100
-        p = 50 #50 #50 #50 #10
-        nk = 300 #500 #300 #500 #50
-        mk = 100 #100 #100 #300 #100
+        K = 8 # number of blocks
+        p = 50 # number of coupling constraints
+        nk = 300 # variable dimension of each subproblem QP
+        mk = 100 # constrain dimension of each subproblem QP
         A_list = [np.random.randn(p, nk) for k in range(K)]
         F_list = [np.random.randn(mk, nk) for k in range(K)]
         q_list = [np.random.randn(nk) for k in range(K)]
@@ -423,11 +380,11 @@ class TestPaper(BaseTest):
         # f_2(s) = \sum_i d_i*(s_i^(free) - c_i)^2 + I(0 <= s_i^(free) <= s_max).
         # A_1 = [R; 0], A_2 = [I; E], b = [0; g], where E*s = [s^(off); s^(pin); s^(load)] and g = [0; s_max; L].
         prox_list = [lambda v, t: np.maximum(np.minimum(v/(1 + 2*t*h_vec), x_max), 0),
-        			 lambda u, t: np.concatenate([np.maximum(np.minimum((u[:m_free] + 2*t*c_vec*d_vec)/(1 + 2*t*d_vec), s_max_free), 0), u[m_free:]])]
+                     lambda u, t: np.concatenate([np.maximum(np.minimum((u[:m_free] + 2*t*c_vec*d_vec)/(1 + 2*t*d_vec), s_max_free), 0), u[m_free:]])]
         E = sparse.hstack([sparse.csr_matrix((m_fixed,m_free)), sparse.eye(m_fixed)])
         g = np.concatenate([np.zeros(m_off), s_max_pin, loads])
         A_list = [sparse.vstack([R, sparse.csr_matrix((m_fixed,n))]), 
-        		  sparse.vstack([sparse.eye(m), E])]
+                  sparse.vstack([sparse.eye(m), E])]
         b = np.concatenate([np.zeros(m), g])
 
         # Solve with DRS.
@@ -479,11 +436,11 @@ class TestPaper(BaseTest):
         # A_1 = [I; 0], A_2 = [-X; I], A_3 = [0; -I], b = 0.
         prox_list = [lambda v, t: prox_logistic(v, 1.0/t, y = Y.ravel(order='F')),   
                      # TODO: Calculate in parallel for k = 1,...K.
-        		  	 lambda v, t: prox_group_lasso(alpha)(v.reshape((p,K), order='F'), t),
-                  	 lambda v, t: prox_nuc_norm(beta, order='F')(v.reshape((p,K), order='F'), t)]
+                     lambda v, t: prox_group_lasso(alpha)(v.reshape((p,K), order='F'), t),
+                     lambda v, t: prox_nuc_norm(beta, order='F')(v.reshape((p,K), order='F'), t)]
         A_list = [sparse.vstack([sparse.eye(m*K), sparse.csr_matrix((p*K,m*K))]),
-		  		  sparse.vstack([-sparse.block_diag(K*[X]), sparse.eye(p*K)]),
-		  		  sparse.vstack([sparse.csr_matrix((m*K,p*K)), -sparse.eye(p*K)])]
+                  sparse.vstack([-sparse.block_diag(K*[X]), sparse.eye(p*K)]),
+                  sparse.vstack([sparse.csr_matrix((m*K,p*K)), -sparse.eye(p*K)])]
         b = np.zeros(m*K + p*K)
         
         # Solve with DRS.
