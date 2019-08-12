@@ -214,7 +214,7 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, *args, **kwargs):
 
         # Projection step for x^(k+1).
         v_half = np.concatenate(v_halves, axis=0)
-        dk = sp.linalg.lsqr(A, A.dot(v_half) - b, x0=dk)[0] #atol=1e-16, btol=1e-16, x0=dk)[0]
+        dk = sp.linalg.lsqr(A, A.dot(v_half) - b, x0=dk)[0]
 
         # Scatter d^k = A^\dagger(Av^(k+1/2) - b).
         for i in range(N):
@@ -282,7 +282,7 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, *args, **kwargs):
         r_primal[k] = LA.norm(sum(Ax_halves) - b, ord=2)
         subgrad = np.concatenate(xv_diffs)/t_init
         # sol = LA.lstsq(A.T, subgrad, rcond=None)[0]
-        sol = sp.linalg.lsqr(A.T, subgrad, x0=sol)[0] #atol=1e-16, btol=1e-16, x0=sol)[0]
+        sol = sp.linalg.lsqr(A.T, subgrad, x0=sol)[0]
         r_dual[k] = LA.norm(A.T.dot(sol) - subgrad, ord=2)
 
         # Stop if residual norms fall below tolerance.

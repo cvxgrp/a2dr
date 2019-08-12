@@ -247,9 +247,9 @@ class TestPaper(BaseTest):
         
     def test_optimal_control(self):
         # Problem data/
-        m = 80#100#10#50
-        n = 150#200#20#100
-        K = 20#30#5#30
+        m = 80
+        n = 150
+        K = 20
         A = np.random.randn(n,n)
         B = np.random.randn(n,m)
         c = np.random.randn(n)
@@ -261,6 +261,8 @@ class TestPaper(BaseTest):
             uhat = uhat / np.max(np.abs(uhat))
             xhat = A.dot(xhat) + B.dot(uhat) + c
         x_term = xhat
+        # uhat no normalization actually leads to more significant improvement of A2DR over DRS, and also happens to be feasible
+        # x_term = 0 also happens to be feasible
         
         # Convert problem to standard form.
         prox_list = [prox_square, prox_sat]
@@ -286,8 +288,7 @@ class TestPaper(BaseTest):
         prob = Problem(Minimize(obj), constr)
         prob.solve(solver='OSQP', verbose=True) 
         # OSQP fails for m=50, n=100, K=30, and also for m=100, n=200, K=30
-        # SCS also kind of fails
-        # but why per iteration cost our approach is higher (than SCS)?
+        # SCS also fails to converge
         cvxpy_obj = prob.value
         cvxpy_x = x.value.ravel(order='C')
         cvxpy_u = u.value.ravel(order='C')
