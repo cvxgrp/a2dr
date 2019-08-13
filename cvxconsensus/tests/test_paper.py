@@ -2,6 +2,7 @@ import numpy as np
 import scipy as sp
 import numpy.linalg as LA
 import copy
+import time
 
 from cvxpy import *
 from scipy import sparse
@@ -87,12 +88,12 @@ def prox_qp(Q, F, g):
     v_par = Parameter(n)
     t_par = Parameter(nonneg=True)
     x = Variable(n)
-    obj = quad_form(x, Q) + sum_squares(x)/2/t_par - v_par*x #quad_form(x, Q+1.0/2/t_par*I) - v_par*x
+    obj = quad_form(x, Q) + sum_squares(x)/2/t_par - v_par*x/t_par
     constr = [F * x <= g]
     prob = Problem(Minimize(obj), constr)
     def prox_qp1(v, t):
         v_par.value, t_par.value = v, t
-        prob.solve(warm_start=False)
+        prob.solve()
         return x.value
     return prox_qp1
 
@@ -134,11 +135,16 @@ class TestPaper(BaseTest):
         print('Finish DRS.')
     
         # Solve with A2DR.
+        t0 = time.time()
         a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER)
+        t1 = time.time()
         a2dr_beta = a2dr_result["x_vals"][-1]
         print('nonzero entries proportion = {}'.format(np.sum(a2dr_beta > 0)*1.0/len(a2dr_beta)))
         print('Finish A2DR.')
         self.compare_total(drs_result, a2dr_result)
+        print('run time of A2DR = {}'.format(t1-t0))
+        print('constraint violation of A2DR = {}'.format(np.min(a2dr_beta)))
+        print('objective value of A2DR = {}'.format(np.linalg.norm(X.dot(a2dr_beta)-y)))
 
 
     def test_nnls_reg(self):
@@ -286,7 +292,7 @@ class TestPaper(BaseTest):
         constr += [x[k+1] == A*x[k] + B*u[k] + c for k in range(K-1)]
         constr += [x[K-1] == x_term]
         prob = Problem(Minimize(obj), constr)
-        prob.solve(solver='OSQP', verbose=True) 
+        prob.solve(solver='SCS', verbose=True) 
         # OSQP fails for m=50, n=100, K=30, and also for m=100, n=200, K=30
         # SCS also fails to converge
         cvxpy_obj = prob.value
@@ -349,13 +355,26 @@ class TestPaper(BaseTest):
         prox_list = list(map(lambda k: tmp(k,Q_list,F_list,g_list), range(K)))
         
         # Solve with DRS.
-        drs_result = a2dr(prox_list, A_list, b, anderson=False, precond=True, max_iter=self.MAX_ITER)
+        drs_result = a2dr(prox_list, A_list, b, anderson=False, precond=True, max_iter=200)#=self.MAX_ITER)
         print('DRS finished.')
 
+        ### ensure that OSQP does not warm start from DRS solutions -- is this necessary???
+        prox_list = list(map(lambda k: tmp(k,Q_list,F_list,g_list), range(K))) 
+        
         # Solve with A2DR.
         a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER)
         print('A2DR finished.')
+        a2dr_x = a2dr_result['x_vals']
         self.compare_total(drs_result, a2dr_result)
+        a2dr_obj = np.sum([a2dr_x[k].dot(Q_list[k]).dot(a2dr_x[k]) 
+                           + q_list[k].dot(a2dr_x[k]) for k in range(K)])
+        a2dr_constr_vio = [np.linalg.norm(np.maximum(F_list[k].dot(a2dr_x[k])-g_list[k],0))**2 
+                                  for k in range(K)]
+        a2dr_constr_vio += [np.linalg.norm(A.dot(np.hstack(a2dr_x))-b)**2]
+        #a2dr_constr_vio += [np.linalg.norm(np.sum([A_list[k].dot(a2dr_x[k]) for k in range(K)], axis=0) - b)**2]
+        a2dr_constr_vio_val = np.sqrt(np.sum(a2dr_constr_vio))
+        print('objective value of A2DR = {}'.format(a2dr_obj))
+        print('constraint violation of A2DR = {}'.format(a2dr_constr_vio))
 
     def test_commodity_flow(self):
         # Problem data.
