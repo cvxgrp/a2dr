@@ -81,14 +81,14 @@ def prox_sum_squares(X, y, type = "lsqr"):
         raise ValueError("Algorithm type not supported:", type)
     return prox
 
-def prox_qp(Q, F, g):
+def prox_qp(Q, q, F, g):
     # check warmstart/parameter mode -- make sure the problem reduction is only done once
     n = Q.shape[0]
     I = np.eye(n)
     v_par = Parameter(n)
     t_par = Parameter(nonneg=True)
     x = Variable(n)
-    obj = quad_form(x, Q) + sum_squares(x)/2/t_par - v_par*x/t_par
+    obj = quad_form(x, Q) + sum_squares(x)/2/t_par + (q-v_par/t_par)*x
     constr = [F * x <= g]
     prob = Problem(Minimize(obj), constr)
     def prox_qp1(v, t):
@@ -142,6 +142,8 @@ class TestPaper(BaseTest):
         print('nonzero entries proportion = {}'.format(np.sum(a2dr_beta > 0)*1.0/len(a2dr_beta)))
         print('Finish A2DR.')
         self.compare_total(drs_result, a2dr_result)
+        
+        # Check solution correctness.
         print('run time of A2DR = {}'.format(t1-t0))
         print('constraint violation of A2DR = {}'.format(np.min(a2dr_beta)))
         print('objective value of A2DR = {}'.format(np.linalg.norm(X.dot(a2dr_beta)-y)))
@@ -336,7 +338,7 @@ class TestPaper(BaseTest):
         K = 8 # number of blocks
         p = 50 # number of coupling constraints
         nk = 300 # variable dimension of each subproblem QP
-        mk = 100 # constrain dimension of each subproblem QP
+        mk = 200 # constrain dimension of each subproblem QP
         A_list = [np.random.randn(p, nk) for k in range(K)]
         F_list = [np.random.randn(mk, nk) for k in range(K)]
         q_list = [np.random.randn(nk) for k in range(K)]
@@ -349,32 +351,30 @@ class TestPaper(BaseTest):
         Q_list = [P_list[k].T.dot(P_list[k]) for k in range(K)]
         
         # Convert problem to standard form.
-        def tmp(k, Q_list, F_list, g_list):
-            return prox_qp(Q_list[k], F_list[k], g_list[k])
+        def tmp(k, Q_list, q_list, F_list, g_list):
+            return prox_qp(Q_list[k], q_list[k], F_list[k], g_list[k])
             
-        prox_list = list(map(lambda k: tmp(k,Q_list,F_list,g_list), range(K)))
+        prox_list = list(map(lambda k: tmp(k,Q_list,q_list,F_list,g_list), range(K)))
         
         # Solve with DRS.
-        drs_result = a2dr(prox_list, A_list, b, anderson=False, precond=True, max_iter=200)#=self.MAX_ITER)
+        drs_result = a2dr(prox_list, A_list, b, anderson=False, precond=True, max_iter=self.MAX_ITER)
         print('DRS finished.')
-
-        ### ensure that OSQP does not warm start from DRS solutions -- is this necessary???
-        prox_list = list(map(lambda k: tmp(k,Q_list,F_list,g_list), range(K))) 
         
         # Solve with A2DR.
         a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER)
         print('A2DR finished.')
-        a2dr_x = a2dr_result['x_vals']
         self.compare_total(drs_result, a2dr_result)
+        
+        # Check solution correctness.
+        a2dr_x = a2dr_result['x_vals']
         a2dr_obj = np.sum([a2dr_x[k].dot(Q_list[k]).dot(a2dr_x[k]) 
                            + q_list[k].dot(a2dr_x[k]) for k in range(K)])
         a2dr_constr_vio = [np.linalg.norm(np.maximum(F_list[k].dot(a2dr_x[k])-g_list[k],0))**2 
                                   for k in range(K)]
         a2dr_constr_vio += [np.linalg.norm(A.dot(np.hstack(a2dr_x))-b)**2]
-        #a2dr_constr_vio += [np.linalg.norm(np.sum([A_list[k].dot(a2dr_x[k]) for k in range(K)], axis=0) - b)**2]
         a2dr_constr_vio_val = np.sqrt(np.sum(a2dr_constr_vio))
         print('objective value of A2DR = {}'.format(a2dr_obj))
-        print('constraint violation of A2DR = {}'.format(a2dr_constr_vio))
+        print('constraint violation of A2DR = {}'.format(a2dr_constr_vio_val))
 
     def test_commodity_flow(self):
         # Problem data.
