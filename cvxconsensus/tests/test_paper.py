@@ -416,29 +416,25 @@ class TestPaper(BaseTest):
         s_tilde[m1:m2] = -np.abs(s_tilde[m1:m2])
         s_tilde[m2:] = np.sum(np.abs(s_tilde[m1:m2])) / (m2-m1)
         L = s_tilde[m1:m2]
-#         s_max = np.hstack([s_tilde[m2:m3], s_tilde[m3:]*2])
-#         print('######')
-#         print(np.linalg.norm(s_max))
         
-        ## debug (what's the difference from the above line???) -- forgot to do copy.deepcopy, so modified s_tilde
-        print(np.linalg.norm(s_tilde))
-        s_max = copy.deepcopy(s_tilde[m2:])#+0.001 ## perturb
-        s_max[m3-m2:] = s_max[m3-m2:]*2 # s_max[m3:] = s_max[m3:]*2 (different, and smaller number of relaxed constraints, but not necessarily larger infimal displacement)
-        print('######')
-        print(np.linalg.norm(s_max))
-        print(np.linalg.norm(s_tilde))
-
+        ## unperturbed version (stuck completely even if run for 2000 iterations)
+#         s_max = np.hstack([s_tilde[m2:m3], s_tilde[m3:]*2])
+#         res = sparse.linalg.lsqr(B, -s_tilde, atol=1e-16, btol=1e-16)
+#         x_tilde = res[0]
+#         n1 = int(n/2)
+#         x_max = np.abs(x_tilde)
+#         x_max[n1:] = x_max[n1:]*2
+        
+        ## perturbed version (finally converges after 2000 iterations)
+        s_max = np.hstack([s_tilde[m2:m3]+0.001, (s_tilde[m3:]+0.001)*2])
         res = sparse.linalg.lsqr(B, -s_tilde, atol=1e-16, btol=1e-16)
         x_tilde = res[0]
         n1 = int(n/2)
-        x_max = np.abs(x_tilde)#+0.001 ## perturb
+        x_max = np.abs(x_tilde)+0.001
         x_max[n1:] = x_max[n1:]*2
         
         ## debug
         print(res)
-        print()
-        print(np.max(L))
-        print()
         
         # Generate cost coefficients
         c = np.random.rand(n)
@@ -468,11 +464,11 @@ class TestPaper(BaseTest):
         b = np.zeros(m)
         
         # Solve with DRS.
-        drs_result = a2dr(prox_list, A_list, b, anderson=False, precond=True, max_iter=self.MAX_ITER)
+        drs_result = a2dr(prox_list, A_list, b, anderson=False, precond=True, max_iter=self.MAX_ITER*2)
         print('DRS finished.')
         
         # Solve with A2DR.
-        a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER)
+        a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER*2)
         print('A2DR finished.')
         self.compare_total(drs_result, a2dr_result)
         
