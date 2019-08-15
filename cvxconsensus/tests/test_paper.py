@@ -3,6 +3,7 @@ import scipy as sp
 import numpy.linalg as LA
 import copy
 import time
+import scipy.sparse.linalg
 
 from cvxpy import *
 from scipy import sparse
@@ -59,10 +60,21 @@ def prox_quad_form(Q):
 def prox_square(v, t):
     return v/(1.0+2*t)
 
-def prox_sat(v, t):
-    def sat(u, c):
-        return np.maximum(np.minimum(u, c), -c)
-    return sat(v/(1.0+2*t), 1)
+# def prox_sat(v, t):
+#     def sat(u, c):
+#         return np.maximum(np.minimum(u, c), -c)
+#     return sat(v/(1.0+2*t), 1)
+
+def prox_sat(c, x_max):
+    def sat(u, b):
+        return np.maximum(np.minimum(u, b), -b)
+    return lambda v, t: sat(v/(1.0+2*t*c), x_max)
+
+def prox_sat_pos(c, x_max):
+    def sat_pos(u, b):
+        return np.maximum(np.minimum(u, b), 0)
+    return lambda v, t: sat_pos(v/(1.0+2*t*c), x_max)
+
     
 def prox_sum_squares(X, y, type = "lsqr"):
     n = X.shape[1]
@@ -273,7 +285,7 @@ class TestPaper(BaseTest):
         # x_term = 0 also happens to be feasible
         
         # Convert problem to standard form.
-        prox_list = [prox_square, prox_sat]
+        prox_list = [prox_square, prox_sat(1,1)]
         A1 = sparse.lil_matrix(((K+1)*n,K*n))
         A1[n:K*n,:(K-1)*n] = -sparse.block_diag((K-1)*[A])
         A1.setdiag(1)
@@ -378,97 +390,114 @@ class TestPaper(BaseTest):
 
     def test_commodity_flow(self):
         # Problem data.
-        m = 25    # Number of sources.
-        n = 100   # Number of flows.
+        m = 5000 #3000#600#5000    # Number of sources.
+        n = 10000 #5000#2000#10000   # Number of flows.
 
-        # Construct incidence matrix so columns sum to zero.
-        R = sparse.csr_matrix((m,n))
-        arcs = np.random.randint(0, m/2, size=n)
-        for j in range(n):
-            idxs = np.random.choice(m, size=2*arcs[j], replace=False)
-            R[idxs[:arcs[j]],j] = 1
-            R[idxs[arcs[j]:],j] = -1
+        # Construct a random incidence matrix.
+        B = sparse.lil_matrix((m,n))
+        for i in range(n-m+1):
+            idxs = np.random.choice(m, size=2, replace=False)
+            tmp = np.random.rand()
+            if tmp > 0.5:
+                B[idxs[0],i] = 1
+                B[idxs[1],i] = -1
+            else:
+                B[idxs[0],i] = -1
+                B[idxs[1],i] = 1
+        for j in range(n-m+1,n):
+            B[j-(n-m+1),j] = 1
+            B[j-(n-m),j] = -1 
+        B = sparse.csr_matrix(B)
+        
+        # Generate source and flow range data
+        s_tilde = np.random.randn(m)
+        m1, m2, m3 = int(m/3), int(m/3*2), int(m/6*5)
+        s_tilde[:m1] = 0
+        s_tilde[m1:m2] = -np.abs(s_tilde[m1:m2])
+        s_tilde[m2:] = np.sum(np.abs(s_tilde[m1:m2])) / (m2-m1)
+        L = s_tilde[m1:m2]
+#         s_max = np.hstack([s_tilde[m2:m3], s_tilde[m3:]*2])
+#         print('######')
+#         print(np.linalg.norm(s_max))
+        
+        ## debug (what's the difference from the above line???) -- forgot to do copy.deepcopy, so modified s_tilde
+        print(np.linalg.norm(s_tilde))
+        s_max = copy.deepcopy(s_tilde[m2:])#+0.001 ## perturb
+        s_max[m3-m2:] = s_max[m3-m2:]*2 # s_max[m3:] = s_max[m3:]*2 (different, and smaller number of relaxed constraints, but not necessarily larger infimal displacement)
+        print('######')
+        print(np.linalg.norm(s_max))
+        print(np.linalg.norm(s_tilde))
 
-        # Flow cost = \sum_j h_j*x_j^2 for 0 <= x_j <= x_max.
-        h_vec = np.full((n,), 0.5)
-        H = sparse.diags(h_vec)
-        x_max = np.full((n,), 1)
-
-        # Source generators.
-        m_free = 10  # Number of generators free to vary.
-        m_off = 5    # Number of generators that are off (s_i = 0).
-        m_pin = 5    # Number of generators that are pinned to max (s_i = s_max).
-        m_gen = m_off + m_pin + m_free
-        s_max_pin = np.full((m_pin,), 1)
-
-        # Source loads.
-        m_load = m - m_gen   # Number of loads (s_i = L_i < 0)
-        m_fixed = m_off + m_pin + m_load
-        loads = np.full((m_load,), -1)
-
-        # Generator cost = \sum_i d_i*(s_i - c_i)^2 for 0 <= s_i <= s_max.
-        c_vec = np.full((m_free,), 0.5)
-        d_vec = np.full((m_free,), 0.5)
-        D = sparse.diags(d_vec)
-        s_max_free = np.full((m_free,), 1)
-
-        def calc_obj(x, s):
-            s_free, s_off, s_pin, s_load = np.split(s, [m_free, m_free + m_off, m_free + m_off + m_pin])
-            if not (np.all(x >= 0) and np.all(x <= x_max) and np.all(s_free >= 0) and np.all(s_free <= s_max_free) and \
-                    np.allclose(s_off, 0) and np.allclose(s_pin, s_max_pin) and np.allclose(s_load, loads)):
-                return np.inf
-            return np.sum(np.multiply(h_vec, x**2)) + np.sum(np.multiply(d_vec, (s_free - c_vec)**2))
-
-        # Solve with CVXPY
-        x = Variable(n)
-        s_free = Variable(m_free)
-        s_off = Variable(m_off)
-        s_pin = Variable(m_pin)
-        s_load = Variable(m_load)
-        s = hstack([s_free, s_off, s_pin, s_load])
-
-        obj = quad_form(s_free - c_vec, D) + quad_form(x, H)
-        constr = [R*x + s == 0, x >= 0, x <= x_max, s_free >= 0, s_free <= s_max_free,
-                  s_off == 0, s_pin == s_max_pin, s_load == loads]
-        prob = Problem(Minimize(obj), constr)
-        prob.solve()
-        cvxpy_obj = prob.value
-        cvxpy_x = x.value
-        cvxpy_s = s.value
+        res = sparse.linalg.lsqr(B, -s_tilde, atol=1e-16, btol=1e-16)
+        x_tilde = res[0]
+        n1 = int(n/2)
+        x_max = np.abs(x_tilde)#+0.001 ## perturb
+        x_max[n1:] = x_max[n1:]*2
+        
+        ## debug
+        print(res)
+        print()
+        print(np.max(L))
+        print()
+        
+        # Generate cost coefficients
+        c = np.random.rand(n)
+        d = np.random.rand(m)
+        
+#         # Solve by CVXPY
+#         x = Variable(n)
+#         s = Variable(m)
+#         C = sparse.diags(c)
+#         D = sparse.diags(d)
+#         obj = quad_form(x, C) + quad_form(s, D)
+#         constr = [-x_max<=x, x<=x_max, s[:m1]==0, s[m1:m2]==L, 0<=s[m2:], s[m2:]<=s_max, B*x+s==0]
+#         prob = Problem(Minimize(obj), constr)
+#         prob.solve(solver='SCS', verbose=True) #'OSQP'
+#         cvxpy_x = x.value
+#         cvxpy_s = s.value
 
         # Convert problem to standard form.
-        # f_1(x) = \sum_j h_j*x_j^2 + I(0 <= x_j <= x_max),
-        # f_2(s) = \sum_i d_i*(s_i^(free) - c_i)^2 + I(0 <= s_i^(free) <= s_max).
-        # A_1 = [R; 0], A_2 = [I; E], b = [0; g], where E*s = [s^(off); s^(pin); s^(load)] and g = [0; s_max; L].
-        prox_list = [lambda v, t: np.maximum(np.minimum(v/(1 + 2*t*h_vec), x_max), 0),
-                     lambda u, t: np.concatenate(
-                         [np.maximum(np.minimum((u[:m_free] + 
-                                                 2*t*c_vec*d_vec)/(1 + 2*t*d_vec), s_max_free), 0), u[m_free:]])]
-        E = sparse.hstack([sparse.csr_matrix((m_fixed,m_free)), sparse.eye(m_fixed)])
-        g = np.concatenate([np.zeros(m_off), s_max_pin, loads])
-        A_list = [sparse.vstack([R, sparse.csr_matrix((m_fixed,n))]), 
-                  sparse.vstack([sparse.eye(m), E])]
-        b = np.concatenate([np.zeros(m), g])
-
+        # f_1(x) = \sum_j c_j*x_j^2 + I(-x_max <= x_j <= x_max),
+        # f_2(s) = \sum_i d_i*s_i^(source)^2 + I(0 <= s_i^(source) <= s_max) 
+        #          + \sum_{i'} I(s_{i'}^{transfer}=0) + \sum_{i''}
+        #          + \sum_{i"} I(s_{i"}^{sink}=L_{i"}).
+        # A = [B, I], b = 0
+        z = np.zeros(m1)
+        prox_list = [prox_sat(c, x_max), lambda v, t: np.hstack([z, L, prox_sat_pos(d[m2:], s_max)(v[m2:],t)])]
+        A_list = [B, sparse.eye(m)]
+        b = np.zeros(m)
+        
         # Solve with DRS.
-        drs_result = a2dr(prox_list, A_list, b, anderson=False)
-        drs_x = drs_result["x_vals"][0]
-        drs_s = drs_result["x_vals"][1]
-        drs_obj = calc_obj(drs_x, drs_s)
-        self.assertAlmostEqual(cvxpy_obj, drs_obj)
-        self.assertItemsAlmostEqual(cvxpy_x, drs_x)
-        self.assertItemsAlmostEqual(cvxpy_s, drs_s)
-
+        drs_result = a2dr(prox_list, A_list, b, anderson=False, precond=True, max_iter=self.MAX_ITER)
+        print('DRS finished.')
+        
         # Solve with A2DR.
-        a2dr_result = a2dr(prox_list, A_list, b, anderson=True)
-        a2dr_x = a2dr_result["x_vals"][0]
-        a2dr_s = a2dr_result["x_vals"][1]
-        a2dr_obj = calc_obj(a2dr_x, a2dr_s)
-        self.assertAlmostEqual(cvxpy_obj, a2dr_obj)
-        self.assertItemsAlmostEqual(cvxpy_x, a2dr_x)
-        self.assertItemsAlmostEqual(cvxpy_s, a2dr_s)
-        self.compare_primal_dual(drs_result, a2dr_result)
-
+        a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER)
+        print('A2DR finished.')
+        self.compare_total(drs_result, a2dr_result)
+        
+#         # Check solution correctness
+#         a2dr_x = a2dr_result['x_vals'][0]
+#         a2dr_s = a2dr_result['x_vals'][1]
+#         cvxpy_obj_raw = np.sum(c*cvxpy_x**2) + np.sum(d*cvxpy_s**2)
+#         a2dr_obj = np.sum(c*a2dr_x**2) + np.sum(d*a2dr_s**2)
+#         cvxpy_constr_vio = [np.maximum(np.abs(cvxpy_x) - x_max, 0), 
+#                             cvxpy_s[:m1], 
+#                             np.abs(cvxpy_s[m1:m2]-L), 
+#                             np.maximum(-cvxpy_s[m2:],0),
+#                             np.maximum(cvxpy_s[m2:]-s_max,0),
+#                             B.dot(cvxpy_x)+cvxpy_s]
+#         cvxpy_constr_vio_val = np.linalg.norm(np.hstack(cvxpy_constr_vio))
+#         a2dr_constr_vio = [np.maximum(np.abs(a2dr_x) - x_max, 0), 
+#                             a2dr_s[:m1], 
+#                             np.abs(a2dr_s[m1:m2]-L), 
+#                             np.maximum(-a2dr_s[m2:],0),
+#                             np.maximum(a2dr_s[m2:]-s_max,0),
+#                             B.dot(a2dr_x)+a2dr_s]
+#         a2dr_constr_vio_val = np.linalg.norm(np.hstack(a2dr_constr_vio))
+#         print('objective cvxpy raw = {}, objective a2dr = {}'.format(cvxpy_obj_raw, a2dr_obj))
+#         print('constraint violation cvxpy = {}, constraint violation a2dr = {}'.format(
+#             cvxpy_constr_vio_val, a2dr_constr_vio_val))
 
     def test_multi_task_logistic(self):
         # minimize \sum_{ik} log(1 + exp(-Y_{ik}*Z_{ik})) + \alpha*||\theta||_{2,1} + \beta*||\theta||_*
