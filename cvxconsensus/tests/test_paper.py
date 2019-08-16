@@ -390,8 +390,9 @@ class TestPaper(BaseTest):
 
     def test_commodity_flow(self):
         # Problem data.
-        m = 5000 #3000#600#5000    # Number of sources.
-        n = 10000 #5000#2000#10000   # Number of flows.
+        # larger examples (8000, 15000; 5000, 15000, 5000, 10000) need perturbation (e.g., 0.001), otherwise easily infeasible
+        m = 4000 #3000 #8000 #10000 #6000 #5000 #3000 #8000 #5000 #5000 #3000#600#5000    # Number of sources.
+        n = 7000 #7000 #12000 #12000 #12000 #7000 #5000 #15000 #15000 #10000 #5000#2000#10000   # Number of flows.
 
         # Construct a random incidence matrix.
         B = sparse.lil_matrix((m,n))
@@ -414,18 +415,8 @@ class TestPaper(BaseTest):
         m1, m2, m3 = int(m/3), int(m/3*2), int(m/6*5)
         s_tilde[:m1] = 0
         s_tilde[m1:m2] = -np.abs(s_tilde[m1:m2])
-        s_tilde[m2:] = np.sum(np.abs(s_tilde[m1:m2])) / (m2-m1)
+        s_tilde[m2:] = np.sum(np.abs(s_tilde[m1:m2])) / (m-m2)#(m2-m1)
         L = s_tilde[m1:m2]
-        
-        ## unperturbed version (stuck completely even if run for 2000 iterations)
-#         s_max = np.hstack([s_tilde[m2:m3], s_tilde[m3:]*2])
-#         res = sparse.linalg.lsqr(B, -s_tilde, atol=1e-16, btol=1e-16)
-#         x_tilde = res[0]
-#         n1 = int(n/2)
-#         x_max = np.abs(x_tilde)
-#         x_max[n1:] = x_max[n1:]*2
-        
-        ## perturbed version (finally converges after 2000 iterations)
         s_max = np.hstack([s_tilde[m2:m3]+0.001, (s_tilde[m3:]+0.001)*2])
         res = sparse.linalg.lsqr(B, -s_tilde, atol=1e-16, btol=1e-16)
         x_tilde = res[0]
