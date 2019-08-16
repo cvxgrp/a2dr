@@ -4,6 +4,7 @@ import numpy.linalg as LA
 import copy
 import time
 import scipy.sparse.linalg
+import matplotlib.pyplot as plt
 
 from cvxpy import *
 from scipy import sparse
@@ -126,7 +127,7 @@ class TestPaper(BaseTest):
         self.eps_abs = 1e-6
         self.MAX_ITER = 1000
 
-    def test_nnls(self):
+    def test_nnls(self, figname):
         # minimize ||y - X\beta||_2^2 subject to \beta >= 0.
 
         # Problem data.
@@ -153,7 +154,7 @@ class TestPaper(BaseTest):
         a2dr_beta = a2dr_result["x_vals"][-1]
         print('nonzero entries proportion = {}'.format(np.sum(a2dr_beta > 0)*1.0/len(a2dr_beta)))
         print('Finish A2DR.')
-        self.compare_total(drs_result, a2dr_result)
+        self.compare_total(drs_result, a2dr_result, figname)
         
         # Check solution correctness.
         print('run time of A2DR = {}'.format(t1-t0))
@@ -161,7 +162,7 @@ class TestPaper(BaseTest):
         print('objective value of A2DR = {}'.format(np.linalg.norm(X.dot(a2dr_beta)-y)))
 
 
-    def test_nnls_reg(self):
+    def test_nnls_reg(self, figname):
         # minimize ||y - X\beta||_2^2 subject to \beta >= 0.
 
         # Problem data.
@@ -189,9 +190,10 @@ class TestPaper(BaseTest):
         a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER) 
         print('Finish A2DR adaptive regularization.')
         
-        self.compare_total_all([a2dr_noreg_result, a2dr_consreg_result, a2dr_result], ['no-reg', 'constant-reg', 'ada-reg'])
+        self.compare_total_all([a2dr_noreg_result, a2dr_consreg_result, a2dr_result], 
+                               ['no-reg', 'constant-reg', 'ada-reg'], figname)
 
-    def test_sparse_inv_covariance(self, n, alpha_ratio):
+    def test_sparse_inv_covariance(self, n, alpha_ratio, figname):
         # minimize -log(det(S)) + trace(S*Y) + \alpha*||S||_1 subject to S is symmetric PSD.
 
         # Problem data.
@@ -225,12 +227,12 @@ class TestPaper(BaseTest):
         a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER) 
         #lam_accel=0 seems to work well sometimes, although oscillating very much
         a2dr_S = a2dr_result["x_vals"][-1].reshape((n,n), order='C')
-        self.compare_total(drs_result, a2dr_result)
+        self.compare_total(drs_result, a2dr_result, figname)
         print('Finished A2DR.')
         print('recovered sparsity = {}'.format(np.sum(a2dr_S!=0)*1.0/a2dr_S.shape[0]**2))
 
         
-    def test_l1_trend_filtering(self):
+    def test_l1_trend_filtering(self, figname):
         # minimize (1/2)||y - x||_2^2 + \alpha*||Dx||_1,
         # where (Dx)_{t-1} = x_{t-1} - 2*x_t + x_{t+1} for t = 2,...,n-1.
         # Reference: https://web.stanford.edu/~boyd/papers/l1_trend_filter.html
@@ -260,12 +262,12 @@ class TestPaper(BaseTest):
 
         # Solve with A2DR.
         a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER)
-        self.compare_total(drs_result, a2dr_result)
+        self.compare_total(drs_result, a2dr_result, figname)
         print('Finished A2DR.')
 
         
         
-    def test_optimal_control(self):
+    def test_optimal_control(self, figname):
         # Problem data/
         m = 80
         n = 150
@@ -319,7 +321,7 @@ class TestPaper(BaseTest):
 
         # Solve with A2DR.
         a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER)
-        self.compare_total(drs_result, a2dr_result)
+        self.compare_total(drs_result, a2dr_result, figname)
         print('Finished A2DR.')
         
         # check solution correctness
@@ -345,7 +347,7 @@ class TestPaper(BaseTest):
                                                                                            a2dr_obj))
 
         
-    def test_coupled_qp(self):
+    def test_coupled_qp(self, figname):
         # Problem data.
         K = 8 # number of blocks
         p = 50 # number of coupling constraints
@@ -375,7 +377,7 @@ class TestPaper(BaseTest):
         # Solve with A2DR.
         a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER)
         print('A2DR finished.')
-        self.compare_total(drs_result, a2dr_result)
+        self.compare_total(drs_result, a2dr_result, figname)
         
         # Check solution correctness.
         a2dr_x = a2dr_result['x_vals']
@@ -388,11 +390,10 @@ class TestPaper(BaseTest):
         print('objective value of A2DR = {}'.format(a2dr_obj))
         print('constraint violation of A2DR = {}'.format(a2dr_constr_vio_val))
 
-    def test_commodity_flow(self):
+    def test_commodity_flow(self, figname):
         # Problem data.
-        # larger examples (8000, 15000; 5000, 15000, 5000, 10000) need perturbation (e.g., 0.001), otherwise easily infeasible
-        m = 4000 #3000 #8000 #10000 #6000 #5000 #3000 #8000 #5000 #5000 #3000#600#5000    # Number of sources.
-        n = 7000 #7000 #12000 #12000 #12000 #7000 #5000 #15000 #15000 #10000 #5000#2000#10000   # Number of flows.
+        m = 4000  # Number of sources.
+        n = 7000  # Number of flows.
 
         # Construct a random incidence matrix.
         B = sparse.lil_matrix((m,n))
@@ -415,7 +416,7 @@ class TestPaper(BaseTest):
         m1, m2, m3 = int(m/3), int(m/3*2), int(m/6*5)
         s_tilde[:m1] = 0
         s_tilde[m1:m2] = -np.abs(s_tilde[m1:m2])
-        s_tilde[m2:] = np.sum(np.abs(s_tilde[m1:m2])) / (m-m2)#(m2-m1)
+        s_tilde[m2:] = np.sum(np.abs(s_tilde[m1:m2])) / (m-m2)
         L = s_tilde[m1:m2]
         s_max = np.hstack([s_tilde[m2:m3]+0.001, (s_tilde[m3:]+0.001)*2])
         res = sparse.linalg.lsqr(B, -s_tilde, atol=1e-16, btol=1e-16)
@@ -424,24 +425,21 @@ class TestPaper(BaseTest):
         x_max = np.abs(x_tilde)+0.001
         x_max[n1:] = x_max[n1:]*2
         
-        ## debug
-        print(res)
-        
         # Generate cost coefficients
         c = np.random.rand(n)
         d = np.random.rand(m)
         
-#         # Solve by CVXPY
-#         x = Variable(n)
-#         s = Variable(m)
-#         C = sparse.diags(c)
-#         D = sparse.diags(d)
-#         obj = quad_form(x, C) + quad_form(s, D)
-#         constr = [-x_max<=x, x<=x_max, s[:m1]==0, s[m1:m2]==L, 0<=s[m2:], s[m2:]<=s_max, B*x+s==0]
-#         prob = Problem(Minimize(obj), constr)
-#         prob.solve(solver='SCS', verbose=True) #'OSQP'
-#         cvxpy_x = x.value
-#         cvxpy_s = s.value
+        # Solve by CVXPY
+        x = Variable(n)
+        s = Variable(m)
+        C = sparse.diags(c)
+        D = sparse.diags(d)
+        obj = quad_form(x, C) + quad_form(s, D)
+        constr = [-x_max<=x, x<=x_max, s[:m1]==0, s[m1:m2]==L, 0<=s[m2:], s[m2:]<=s_max, B*x+s==0]
+        prob = Problem(Minimize(obj), constr)
+        prob.solve(solver='SCS', verbose=True) #'OSQP'
+        cvxpy_x = x.value
+        cvxpy_s = s.value
 
         # Convert problem to standard form.
         # f_1(x) = \sum_j c_j*x_j^2 + I(-x_max <= x_j <= x_max),
@@ -461,32 +459,32 @@ class TestPaper(BaseTest):
         # Solve with A2DR.
         a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER*2)
         print('A2DR finished.')
-        self.compare_total(drs_result, a2dr_result)
+        self.compare_total(drs_result, a2dr_result, figname)
         
-#         # Check solution correctness
-#         a2dr_x = a2dr_result['x_vals'][0]
-#         a2dr_s = a2dr_result['x_vals'][1]
-#         cvxpy_obj_raw = np.sum(c*cvxpy_x**2) + np.sum(d*cvxpy_s**2)
-#         a2dr_obj = np.sum(c*a2dr_x**2) + np.sum(d*a2dr_s**2)
-#         cvxpy_constr_vio = [np.maximum(np.abs(cvxpy_x) - x_max, 0), 
-#                             cvxpy_s[:m1], 
-#                             np.abs(cvxpy_s[m1:m2]-L), 
-#                             np.maximum(-cvxpy_s[m2:],0),
-#                             np.maximum(cvxpy_s[m2:]-s_max,0),
-#                             B.dot(cvxpy_x)+cvxpy_s]
-#         cvxpy_constr_vio_val = np.linalg.norm(np.hstack(cvxpy_constr_vio))
-#         a2dr_constr_vio = [np.maximum(np.abs(a2dr_x) - x_max, 0), 
-#                             a2dr_s[:m1], 
-#                             np.abs(a2dr_s[m1:m2]-L), 
-#                             np.maximum(-a2dr_s[m2:],0),
-#                             np.maximum(a2dr_s[m2:]-s_max,0),
-#                             B.dot(a2dr_x)+a2dr_s]
-#         a2dr_constr_vio_val = np.linalg.norm(np.hstack(a2dr_constr_vio))
-#         print('objective cvxpy raw = {}, objective a2dr = {}'.format(cvxpy_obj_raw, a2dr_obj))
-#         print('constraint violation cvxpy = {}, constraint violation a2dr = {}'.format(
-#             cvxpy_constr_vio_val, a2dr_constr_vio_val))
+        # Check solution correctness
+        a2dr_x = a2dr_result['x_vals'][0]
+        a2dr_s = a2dr_result['x_vals'][1]
+        cvxpy_obj_raw = np.sum(c*cvxpy_x**2) + np.sum(d*cvxpy_s**2)
+        a2dr_obj = np.sum(c*a2dr_x**2) + np.sum(d*a2dr_s**2)
+        cvxpy_constr_vio = [np.maximum(np.abs(cvxpy_x) - x_max, 0), 
+                            cvxpy_s[:m1], 
+                            np.abs(cvxpy_s[m1:m2]-L), 
+                            np.maximum(-cvxpy_s[m2:],0),
+                            np.maximum(cvxpy_s[m2:]-s_max,0),
+                            B.dot(cvxpy_x)+cvxpy_s]
+        cvxpy_constr_vio_val = np.linalg.norm(np.hstack(cvxpy_constr_vio))
+        a2dr_constr_vio = [np.maximum(np.abs(a2dr_x) - x_max, 0), 
+                            a2dr_s[:m1], 
+                            np.abs(a2dr_s[m1:m2]-L), 
+                            np.maximum(-a2dr_s[m2:],0),
+                            np.maximum(a2dr_s[m2:]-s_max,0),
+                            B.dot(a2dr_x)+a2dr_s]
+        a2dr_constr_vio_val = np.linalg.norm(np.hstack(a2dr_constr_vio))
+        print('objective cvxpy raw = {}, objective a2dr = {}'.format(cvxpy_obj_raw, a2dr_obj))
+        print('constraint violation cvxpy = {}, constraint violation a2dr = {}'.format(
+            cvxpy_constr_vio_val, a2dr_constr_vio_val))
 
-    def test_multi_task_logistic(self):
+    def test_multi_task_logistic(self, figname):
         # minimize \sum_{ik} log(1 + exp(-Y_{ik}*Z_{ik})) + \alpha*||\theta||_{2,1} + \beta*||\theta||_*
         # subject to Z = X\theta, ||.||_{2,1} = group lasso, ||.||_* = nuclear norm.
 
@@ -530,4 +528,4 @@ class TestPaper(BaseTest):
         a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER)
         a2dr_theta = a2dr_result["x_vals"][-1].reshape((p,K), order='F')
         print('A2DR finished.')
-        self.compare_total(drs_result, a2dr_result)
+        self.compare_total(drs_result, a2dr_result, figname)
