@@ -6,8 +6,17 @@ import scipy.linalg as sLA
 from scipy.stats.mstats import gmean
 
 def precondition(p_list, A_list, b, tol = 1e-3, max_iter = 1000):
+    print('### Preconditioning starts ...')
     n_list = [A.shape[1] for A in A_list]
-    A = csr_matrix(sparse.hstack(A_list)) # enforce csr format for better matrix operation efficiency
+    sparse_check = [sparse.issparse(A) for A in A_list]
+    # enforce csr format for better matrix operation efficiency
+    if np.sum(sparse_check) == 0: # all dense
+        A = csr_matrix(np.hstack(A_list))
+    elif np.prod(sparse_check) == 1: # all sparse
+        A = csr_matrix(sparse.hstack(A_list))
+    else:
+        A_list_csr = [csr_matrix(A) for A in A_list]
+        A = csr_matrix(sparse.hstack(A_list))
     d, e, A_hat, k = mat_equil(A, n_list, tol, max_iter)
 
     split_idx = np.cumsum(n_list)
