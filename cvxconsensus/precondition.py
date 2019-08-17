@@ -1,18 +1,20 @@
 import numpy as np
 from scipy import sparse
-from scipy.sparse import block_diag, issparse, csr_matrix, diags
+from scipy.sparse import block_diag, issparse, csr_matrix, csc_matrix, diags
 from scipy.sparse.linalg import norm
 import scipy.linalg as sLA
 from scipy.stats.mstats import gmean
 
 def precondition(p_list, A_list, b, tol = 1e-3, max_iter = 1000):
     n_list = [A.shape[1] for A in A_list]
-    A = csr_matrix(sparse.hstack(A_list)) # enforce csr format for better efficiency
+    A = csr_matrix(sparse.hstack(A_list)) # enforce csr format for better matrix operation efficiency
     d, e, A_hat, k = mat_equil(A, n_list, tol, max_iter)
 
     split_idx = np.cumsum(n_list)
-    A_eq_list = np.split(A_hat.todense(), split_idx, axis=1)[:-1]
-    A_eq_list = [csr_matrix(A_eq_list[i]) for i in range(len(A_eq_list))]
+    split_idx = np.hstack([0, split_idx])
+    A_hat = csc_matrix(A_hat) # faster column slicing
+    A_eq_list = [A_hat[:,split_idx[i]:split_idx[i+1]] for i in range(len(n_list))]
+    A_eq_list = [csr_matrix(A_eq_list[i]) for i in range(len(A_eq_list))] # change back to csr format
     def proto(i, p_list, e):
         return lambda v, t: p_list[i](e[i]*v, t*e[i]**2)/e[i]
     p_eq_list = list(map(lambda i: proto(i,p_list,e), range(len(p_list))))
