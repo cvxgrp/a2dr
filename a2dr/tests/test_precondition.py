@@ -131,12 +131,12 @@ class TestPrecondition(BaseTest):
 		y_split = np.split(y, N)
 		p_list = [prox_sum_squares(X_sub, y_sub) for X_sub, y_sub in zip(X_split, y_split)]
 		p_list += [lambda u, rho: np.maximum(u, 0)]   # Projection onto non-negative orthant.
-		v_init = (N + 1) * [np.random.randn(n)]
+		# v_init = (N + 1) * [np.random.randn(n)]
 		A_list = np.hsplit(np.eye(N*n), N) + [-np.vstack(N*(np.eye(n),))]
 		b = np.zeros(N*n)
 
 		# Solve with A2DR.
-		a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, \
+		a2dr_result = a2dr(p_list, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, \
 						   eps_rel=self.eps_rel, anderson=True, precond=False)
 		a2dr_beta = a2dr_result["x_vals"][-1]
 		a2dr_obj = np.sum((y - X.dot(a2dr_beta))**2)
@@ -148,7 +148,7 @@ class TestPrecondition(BaseTest):
 							semilogy=True)
 
 		# Solve with preconditioned A2DR.
-		cond_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, \
+		cond_result = a2dr(p_list, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, \
 						   eps_rel=self.eps_rel, anderson=True, precond=True)
 		cond_beta = cond_result["x_vals"][-1]
 		cond_obj = np.sum((y - X.dot(cond_beta))**2)

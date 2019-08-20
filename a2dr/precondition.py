@@ -57,7 +57,7 @@ def mat_equil(A, n_list, tol, max_iter):
     
     # Form the size m-by-N matrix A_block, whose (i,j)-th entry is \sum_{k=n_1+...+n_{j-1}}}^{n_1+...+n_j} A_{ik}^2
     gamma = (m + N)/m/N * np.sqrt(np.finfo(float).eps)
-    A2 = A.power(2) 
+    A2 = A.power(2) if issparse(A) else np.power(A,2)
     ave_list = [np.ones([n_i,1]) for n_i in n_list]
     A_block = A2.dot(block_diag(ave_list))
     A_block_T = A_block.transpose()

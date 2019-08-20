@@ -150,12 +150,14 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, *args, **kwargs):
         v_init = [np.zeros(A.shape[1]) for A in A_list]
         # v_init = [sp.csc_matrix((A.shape[1],1)) for A in A_list]
     if len(v_init) != N:
-        raise ValueError("v_init must None or contain exactly {} entries".format(N))
+        raise ValueError("v_init must be None or contain exactly {} entries".format(N))
     for i in range(N):
         if A_list[i].shape[0] != b.shape[0]:
             raise ValueError("Dimension mismatch: nrow(A_i) != nrow(b)")
         elif A_list[i].shape[1] != v_init[i].shape[0]:
             raise ValueError("Dimension mismatch: ncol(A_i) != nrow(v_i)")
+        if not sp.issparse(A_list[i]):
+            A_list[i] = sp.csr_matrix(A_list[i])
             
     # variable size list
     n_list = [A_list[i].shape[1] for i in range(N)]
@@ -165,10 +167,11 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, *args, **kwargs):
     if precond:
         p_list, A_list, b, e_pre = precondition(p_list, A_list, b)
         t_init = 1/gmean(e_pre)**2/10
-        print('after preconditioning, t_init changed to {}'.format(t_init))
+        print('After preconditioning, t_init changed to {}'.format(t_init))
 
     # Store constraint matrix for projection step.
     # A = np.hstack(A_list)
+    # A_list = [sp.csr_matrix(Ai) if not sp.issparse(Ai) else Ai for Ai in A_list]
     A = sp.csr_matrix(sp.hstack(A_list))
     if A.count_nonzero() <= NNZ_RATIO*np.prod(A.shape):   # If sparse, define linear operator.
         AATx_fun = lambda x: A.dot(A.T.dot(x))
@@ -185,8 +188,7 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, *args, **kwargs):
         procs += [Process(target=a2dr_worker, args=(remote, p_list[i], v_init[i], A_list[i], \
                                                     t_init, anderson, m_accel) + args)]
         procs[-1].start()
-        
-    
+
     # Initialize AA-II variables.
     if anderson:   # TODO: Store and update these efficiently as arrays.
         n_sum = np.sum([np.prod(v.shape) for v in v_init])

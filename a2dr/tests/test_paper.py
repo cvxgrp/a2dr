@@ -161,7 +161,6 @@ class TestPaper(BaseTest):
         print('constraint violation of A2DR = {}'.format(np.min(a2dr_beta)))
         print('objective value of A2DR = {}'.format(np.linalg.norm(X.dot(a2dr_beta)-y)))
 
-
     def test_nnls_reg(self, figname):
         # minimize ||y - X\beta||_2^2 subject to \beta >= 0.
 
@@ -209,7 +208,6 @@ class TestPaper(BaseTest):
         np.fill_diagonal(mask, 0)
         alpha_max = np.max(np.abs(Q)[mask])
         alpha = alpha_ratio*alpha_max #0.001 for n=100, 0.01 for n=50
-        
 
         # Convert problem to standard form.
         # f_1(S) = -log(det(S)) on symmetric PSD matrices, f_2(S) = trace(S*Q), f_3(S) = \alpha*||S||_1.
@@ -240,7 +238,6 @@ class TestPaper(BaseTest):
         n = int(2*10**4)
         y = np.random.randn(n)
         alpha = 0.01*np.linalg.norm(y, np.inf)
-        
 
         # Form second difference matrix.
         D = sparse.lil_matrix(sparse.eye(n))
