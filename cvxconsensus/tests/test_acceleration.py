@@ -55,7 +55,7 @@ class TestAcceleration(BaseTest):
 		
 		# Solve with consensus S-DRS.
 		obj_sdrs = probs.solve(method = "consensus", rho_init = 1.0, max_iter = self.MAX_ITER, \
-							   warm_start = False, eps_stop = self.eps_stop)
+							   warm_start = False, eps_stop = self.eps_stop, anderson = False)
 		res_sdrs = probs.residuals
 		
 		# Solve with consensus S-DRS using AA-II.
@@ -109,7 +109,8 @@ class TestAcceleration(BaseTest):
 		
 		# Solve with consensus S-DRS.
 		obj_sdrs = probs.solve(method = "consensus", rho_init = alpha, max_iter = self.MAX_ITER, \
-							   warm_start = False, eps_stop = self.eps_stop, eps_abs = self.eps_abs)
+							   warm_start = False, eps_stop = self.eps_stop, eps_abs = self.eps_abs, \
+							   anderson = False)
 		res_sdrs = probs.residuals
 		
 		# Solve with consensus ADMM using Anderson acceleration.
@@ -160,7 +161,8 @@ class TestAcceleration(BaseTest):
 		
 		# Solve with consensus ADMM.
 		obj_sdrs = probs.solve(method = "consensus", rho_init = rho, max_iter = self.MAX_ITER, \
-							   warm_start = False, eps_stop = self.eps_stop, eps_abs = self.eps_abs)
+							   warm_start = False, eps_stop = self.eps_stop, eps_abs = self.eps_abs, \
+							   anderson = False)
 		res_sdrs = probs.residuals
 		
 		# Solve combined problem.

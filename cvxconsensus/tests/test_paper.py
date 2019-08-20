@@ -187,7 +187,7 @@ class TestPaper(BaseTest):
         print('Finish A2DR constant regularization.')
         
         # Solve with adaptive regularization.
-        a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER) 
+        a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, ada_reg=True, max_iter=self.MAX_ITER) 
         print('Finish A2DR adaptive regularization.')
         
         self.compare_total_all([a2dr_noreg_result, a2dr_consreg_result, a2dr_result], 
@@ -231,7 +231,6 @@ class TestPaper(BaseTest):
         print('Finished A2DR.')
         print('recovered sparsity = {}'.format(np.sum(a2dr_S!=0)*1.0/a2dr_S.shape[0]**2))
 
-        
     def test_l1_trend_filtering(self, figname):
         # minimize (1/2)||y - x||_2^2 + \alpha*||Dx||_1,
         # where (Dx)_{t-1} = x_{t-1} - 2*x_t + x_{t+1} for t = 2,...,n-1.
@@ -265,8 +264,6 @@ class TestPaper(BaseTest):
         self.compare_total(drs_result, a2dr_result, figname)
         print('Finished A2DR.')
 
-        
-        
     def test_optimal_control(self, figname):
         # Problem data/
         m = 80
@@ -453,11 +450,11 @@ class TestPaper(BaseTest):
         b = np.zeros(m)
         
         # Solve with DRS.
-        drs_result = a2dr(prox_list, A_list, b, anderson=False, precond=True, max_iter=self.MAX_ITER*2)
+        drs_result = a2dr(prox_list, A_list, b, anderson=False, precond=True, max_iter=2*self.MAX_ITER)
         print('DRS finished.')
         
         # Solve with A2DR.
-        a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER*2)
+        a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=2*self.MAX_ITER)
         print('A2DR finished.')
         self.compare_total(drs_result, a2dr_result, figname)
         

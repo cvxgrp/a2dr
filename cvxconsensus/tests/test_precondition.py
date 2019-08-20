@@ -137,7 +137,7 @@ class TestPrecondition(BaseTest):
 
 		# Solve with A2DR.
 		a2dr_result = a2dr(p_list, v_init, A_list, b, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, \
-						   eps_rel=self.eps_rel, anderson=True)
+						   eps_rel=self.eps_rel, anderson=True, precond=False)
 		a2dr_beta = a2dr_result["x_vals"][-1]
 		a2dr_obj = np.sum((y - X.dot(a2dr_beta))**2)
 		print("A2DR Objective:", a2dr_obj)

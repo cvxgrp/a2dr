@@ -109,7 +109,8 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, *args, **kwargs):
     # AA-II parameters.
     anderson = kwargs.pop("anderson", False)
     m_accel = int(kwargs.pop("m_accel", 10))    # Maximum past iterations to keep (>= 0).
-    lam_accel = kwargs.pop("lam_accel", 1e-8) #1e-10   # AA-II regularization weight.
+    lam_accel = kwargs.pop("lam_accel", 1e-8) # 1e-10   # AA-II regularization weight.
+    aa_method = kwargs.pop("aa_method", "lstsq")   # Algorithm for solving AA LS problem.
 
     # Safeguarding parameters.
     D_safe = kwargs.pop("D_safe", 1e6)
@@ -129,6 +130,8 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, *args, **kwargs):
         raise ValueError("m_accel must be a positive integer.")
     if lam_accel < 0:
         raise ValueError("lam_accel must be a non-negative scalar.")
+    if not aa_method in ["lstsq", "lsqr"]:
+        raise ValueError("aa_method must be either 'lstsq' or 'lsqr'.")
     if D_safe < 0:
         raise ValueError("D_safe must be a non-negative scalar.")
     if eps_safe < 0:
@@ -266,7 +269,7 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, *args, **kwargs):
                     reg = lam_accel * (LA.norm(Y_mat)**2 + LA.norm(S_mat)**2)  # AA-II regularization.
                 else:
                     reg = lam_accel
-                alpha = aa_weights(Y_mat, g_new, reg, rcond=None)
+                alpha = aa_weights(Y_mat, g_new, reg, type=aa_method, rcond=None)
                 for pipe in pipes:
                     pipe.send(alpha)
               

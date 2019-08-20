@@ -60,7 +60,8 @@ def main():
 	
 	# Solve with consensus S-DRS.
 	obj_sdrs = probs.solve(method = "consensus", rho_init = rho, max_iter = max_iter, \
-						   warm_start = False, eps_stop = eps_tol, eps_abs = eps_abs)
+						   warm_start = False, eps_stop = eps_tol, eps_abs = eps_abs,
+						   anderson = False)
 	res_sdrs = probs.residuals
 	print("S-DRS Objective:", obj_sdrs)
 
