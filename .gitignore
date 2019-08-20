@@ -10,3 +10,6 @@
 # Pycharm folders.
 /venv
 /.idea
+
+# Python notebooks.
+/examples/notebooks/.ipynb_checkpoints
