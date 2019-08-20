@@ -1,28 +1,28 @@
 """
 Copyright 2018 Anqi Fu
 
-This file is part of CVXConsensus.
+This file is part of A2DR.
 
-CVXConsensus is free software: you can redistribute it and/or modify
+A2DR is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
 
-CVXConsensus is distributed in the hope that it will be useful,
+A2DR is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
+along with A2DR. If not, see <http://www.gnu.org/licenses/>.
 """
 
 import numpy as np
 import scipy as sp
 import matplotlib.pyplot as plt
-from cvxconsensus import a2dr
-from cvxconsensus.precondition import mat_equil
-from cvxconsensus.tests.base_test import BaseTest
+from a2dr import a2dr
+from a2dr.precondition import mat_equil
+from a2dr.tests.base_test import BaseTest
 
 def prox_sum_squares(X, y, type = "lsqr"):
     n = X.shape[1]

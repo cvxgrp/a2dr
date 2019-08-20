@@ -1,6 +1,6 @@
 import numpy as np
 from cvxpy import *
-from cvxconsensus import *
+from a2dr import *
 
 def main():
 	# Solve the following consensus problem using ADMM:

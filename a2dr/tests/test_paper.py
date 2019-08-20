@@ -11,9 +11,9 @@ from scipy import sparse
 from scipy.optimize import nnls
 from sklearn.datasets import make_sparse_spd_matrix
 
-from cvxconsensus import a2dr
-from cvxconsensus.proximal.prox_operators import prox_logistic
-from cvxconsensus.tests.base_test import BaseTest
+from a2dr import a2dr
+from a2dr.proximal.prox_operators import prox_logistic
+from a2dr.tests.base_test import BaseTest
 
 def prox_norm1(alpha = 1.0):
     return lambda v, t: (v - t*alpha).maximum(0) - (-v - t*alpha).maximum(0) if sparse.issparse(v) else \

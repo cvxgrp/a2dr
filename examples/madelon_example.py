@@ -1,7 +1,7 @@
 import os
 import numpy as np
 from cvxpy import *
-from cvxconsensus import *
+from a2dr import *
 import matplotlib.pyplot as plt
 
 EXAMPLE_DIR = os.path.dirname(os.path.abspath(__file__))

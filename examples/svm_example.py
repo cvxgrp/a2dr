@@ -1,6 +1,6 @@
 import numpy as np
 from cvxpy import *
-from cvxconsensus import *
+from a2dr import *
 
 NUM_PROCS = 4
 SPLIT_SIZE = 250

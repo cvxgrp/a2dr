@@ -1,6 +1,6 @@
 import numpy as np
 from cvxpy import *
-from cvxconsensus import *
+from a2dr import *
 
 # Adapted from EE364B, Exercise 5.1: Distributed method for bi-commodity network flow problem.
 # MatLAB code: bicommodity.m, bicommodity_data.m

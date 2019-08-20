@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from cvxpy import *
-from cvxconsensus import *
+from a2dr import *
 
 # References:
 # EE364B Exercises, Chapter 12, Question 12.1 (MPC for output tracking).

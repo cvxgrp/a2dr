@@ -2,7 +2,7 @@ import numpy as np
 import scipy as sp
 import matplotlib.pyplot as plt
 from cvxpy import *
-from cvxconsensus import *
+from a2dr import *
 
 # Solve the following consensus problem:
 # Minimize -log_det(S) + trace(S*Y) + norm(S,1) + norm(S,"fro")

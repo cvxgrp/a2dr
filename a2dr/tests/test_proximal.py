@@ -1,26 +1,26 @@
 """
 Copyright 2018 Anqi Fu
 
-This file is part of CVXConsensus.
+This file is part of A2DR.
 
-CVXConsensus is free software: you can redistribute it and/or modify
+A2DR is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
 
-CVXConsensus is distributed in the hope that it will be useful,
+A2DR is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
+along with A2DR. If not, see <http://www.gnu.org/licenses/>.
 """
 
 import scipy as sp
 from cvxpy.atoms import *
-from cvxconsensus.proximal.prox_operators import *
-from cvxconsensus.tests.base_test import BaseTest
+from a2dr.proximal.prox_operators import *
+from a2dr.tests.base_test import BaseTest
 
 class TestProximal(BaseTest):
     """Unit tests for simple proximal operators"""
@@ -65,7 +65,7 @@ class TestProximal(BaseTest):
         self.compare_prox_func(max(self.x), self.x, self.v, self.rho)
 
     def test_prox_matrix(self):
-        self.compare_prox_func(normNuc(self.Y), self.Y, self.B, self.rho)
+        self.compare_prox_func(normNuc(self.Y), self.Y, self.B, self.rho, places = 3)
         self.compare_prox_func(norm(self.Y, "fro"), self.Y, self.B, self.rho)
         self.compare_prox_func(sum(abs(self.Y)), self.Y, self.B, self.rho, places = 4)
         self.compare_prox_func(trace(self.Y), self.Y, self.B, self.rho)
@@ -90,7 +90,7 @@ class TestProximal(BaseTest):
 
         Y_to_A = {self.Y.id: self.B}
         Y_to_rho = {self.Y.id: self.rho}
-        self.compare_prox_oper(Problem(Minimize(normNuc(self.Y))), Y_to_A, Y_to_rho)
+        self.compare_prox_oper(Problem(Minimize(normNuc(self.Y))), Y_to_A, Y_to_rho, places = 3)
         self.compare_prox_oper(Problem(Minimize(norm(self.Y, "fro"))), Y_to_A, Y_to_rho)
         self.compare_prox_oper(Problem(Minimize(sum(abs(self.Y)))), Y_to_A, Y_to_rho)
         self.compare_prox_oper(Problem(Minimize(trace(self.Y))), Y_to_A, Y_to_rho)

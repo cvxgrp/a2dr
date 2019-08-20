@@ -1,6 +1,6 @@
 import numpy as np
 from cvxpy import *
-from cvxconsensus import *
+from a2dr import *
 
 # Reference:
 # P. Yin, S. Diamond, B. Lin, and S. Boyd. "Network Optimization for Unified Packet and Circuit Switched Networks."

@@ -1,20 +1,20 @@
 """
 Copyright 2018 Anqi Fu
 
-This file is part of CVXConsensus.
+This file is part of A2DR.
 
-CVXConsensus is free software: you can redistribute it and/or modify
+A2DR is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
 
-CVXConsensus is distributed in the hope that it will be useful,
+A2DR is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with CVXConsensus. If not, see <http://www.gnu.org/licenses/>.
+along with A2DR. If not, see <http://www.gnu.org/licenses/>.
 """
 
 from scipy.sparse import csc_matrix
@@ -26,9 +26,9 @@ import cvxpy.settings as s
 from cvxpy.problems.problem import Problem
 from cvxpy.expressions.constants import Parameter
 from cvxpy.atoms import sum_squares
-from cvxconsensus.acceleration import aa_weights_alt
-from cvxconsensus.proximal.prox_operators import ProxOperator
-from cvxconsensus.utilities import *
+from a2dr.acceleration import aa_weights_alt
+from a2dr.proximal.prox_operators import ProxOperator
+from a2dr.utilities import *
 
 def prox_step(prob, rho_init):
 	"""Formulates the proximal operator for a given objective, constraints, and step size.

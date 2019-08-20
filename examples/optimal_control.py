@@ -1,6 +1,6 @@
 import numpy as np
 from cvxpy import *
-from cvxconsensus import *
+from a2dr import *
 
 # Reference:
 # B. O'Donoghue, G. Stathopoulos, and S. Boyd. "A Splitting Method for Optimal Control."

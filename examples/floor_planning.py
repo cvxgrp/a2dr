@@ -3,7 +3,7 @@ import math
 import uuid
 import numpy as np
 from cvxpy import *
-from cvxconsensus import *
+from a2dr import *
 from collections import defaultdict
 
 # Adapted from https://github.com/cvxgrp/cvxpy/blob/master/examples/floor_packing.py
