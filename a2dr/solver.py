@@ -221,7 +221,7 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
     safeguard = True
     r_primal = np.zeros(max_iter)
     r_dual = np.zeros(max_iter)
-    r_best = -np.inf
+    r_best = np.inf
 
     # Warm start terms.
     dk = np.zeros(A.shape[1])
