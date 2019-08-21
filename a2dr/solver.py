@@ -25,8 +25,6 @@ from multiprocessing import Process, Pipe
 from a2dr.precondition import precondition
 from a2dr.acceleration import aa_weights
 
-NNZ_RATIO = 0.1   # Maximum number of nonzeros to be considered sparse.
-
 def a2dr_worker(pipe, prox, v_init, A, t, anderson, m_accel):
     # Initialize AA-II parameters.
     if anderson:   # TODO: Store and update these efficiently as arrays.
@@ -86,16 +84,10 @@ def a2dr_worker(pipe, prox, v_init, A, t, anderson, m_accel):
             # Update v^(k+1) = v^(k) + x^(k+1) - x^(k+1/2).
             v_new = v_vec + x_new - x_half
 
-        # Send A*x^(k+1/2) and x^(k+1/2) - v^(k) for computing residuals.
-        # pipe.send((A.dot(x_half), x_half - v_vec))
         # Send x^(k+1/2) along with A*x^(k+1/2) and x^(k+1/2) - v^(k) for computing residuals.
         pipe.send((x_half, A.dot(x_half), x_half - v_vec))
         v_vec = v_new
 
-        # Send x^(k+1/2) if A2DR terminated.
-        # finished = pipe.recv()
-        # if finished:
-        #    pipe.send(x_half)
 
 def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *args, **kwargs):
     # Problem parameters.
@@ -104,12 +96,12 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
     eps_abs = kwargs.pop("eps_abs", 1e-6)   # Absolute stopping tolerance.
     eps_rel = kwargs.pop("eps_rel", 1e-8)   # Relative stopping tolerance.
     precond = kwargs.pop("precond", False)  # Precondition A and b?
-    ada_reg = kwargs.pop("ada_reg", True) # Adaptive regularization?
+    ada_reg = kwargs.pop("ada_reg", True)   # Adaptive regularization?
 
     # AA-II parameters.
     anderson = kwargs.pop("anderson", False)
-    m_accel = int(kwargs.pop("m_accel", 10))    # Maximum past iterations to keep (>= 0).
-    lam_accel = kwargs.pop("lam_accel", 1e-8) # 1e-10   # AA-II regularization weight.
+    m_accel = int(kwargs.pop("m_accel", 10))       # Maximum past iterations to keep (>= 0).
+    lam_accel = kwargs.pop("lam_accel", 1e-8)      # AA-II regularization weight.
     aa_method = kwargs.pop("aa_method", "lstsq")   # Algorithm for solving AA LS problem.
 
     # Safeguarding parameters.
@@ -188,14 +180,7 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
         print('After preconditioning, t_init changed to {}'.format(t_init))
 
     # Store constraint matrix for projection step.
-    # A = np.hstack(A_list)
-    # A_list = [sp.csr_matrix(Ai) if not sp.issparse(Ai) else Ai for Ai in A_list]
     A = sp.csr_matrix(sp.hstack(A_list))
-    if A.count_nonzero() <= NNZ_RATIO*np.prod(A.shape):   # If sparse, define linear operator.
-        AATx_fun = lambda x: A.dot(A.T.dot(x))
-        AAT = sp.linalg.LinearOperator((A.shape[0], A.shape[0]), matvec=AATx_fun, rmatvec=AATx_fun)
-    else:
-        AAT = A.dot(A.T)   # If dense, calculate directly and cache.
 
     # Set up the workers.
     pipes = []
@@ -303,7 +288,6 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
         # Compute l2-norm of primal and dual residuals.
         r_update = [pipe.recv() for pipe in pipes]
         x_halves, Ax_halves, xv_diffs = map(list, zip(*r_update))
-        # Ax_halves, xv_diffs = map(list, zip(*r_update))
         r_primal_vec = sum(Ax_halves) - b
         r_primal[k] = LA.norm(r_primal_vec, ord=2)
 
@@ -323,13 +307,7 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
         # Stop when residual norm falls below tolerance.
         k = k + 1
         finished = k >= max_iter or (r_all <= eps_abs + eps_rel * r_all_0)
-        # finished = k >= max_iter or (r_primal[k-1] <= eps_abs + eps_rel * r_primal[0] and \
-        #                              r_dual[k-1] <= eps_abs + eps_rel * r_dual[0])
-        # for pipe in pipes:
-        #    pipe.send(finished)
 
-    # Gather and return x_i^(k+1/2) from nodes.
-    # x_final = [pipe.recv() for pipe in pipes]
     # Unscale and return x_i^(k+1/2).
     [p.terminate() for p in procs]
     if precond and has_constr:
