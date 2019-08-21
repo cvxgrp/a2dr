@@ -89,13 +89,15 @@ def a2dr_worker(pipe, prox, v_init, A, t, anderson, m_accel):
             v_new = v_vec + x_new - x_half
 
         # Send A*x^(k+1/2) and x^(k+1/2) - v^(k) for computing residuals.
-        pipe.send((A.dot(x_half), x_half - v_vec))
+        # pipe.send((A.dot(x_half), x_half - v_vec))
+        # Send x^(k+1/2) along with A*x^(k+1/2) and x^(k+1/2) - v^(k) for computing residuals.
+        pipe.send((x_half, A.dot(x_half), x_half - v_vec))
         v_vec = v_new
 
-        # Send x_i^(k+1/2) if A2DR terminated.
-        finished = pipe.recv()
-        if finished:
-            pipe.send(x_half)
+        # Send x^(k+1/2) if A2DR terminated.
+        # finished = pipe.recv()
+        # if finished:
+        #    pipe.send(x_half)
 
 def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, *args, **kwargs):
     # Problem parameters.
@@ -203,6 +205,7 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, *args, **kwargs):
     safeguard = True
     r_primal = np.zeros(max_iter)
     r_dual = np.zeros(max_iter)
+    r_best = -np.inf
 
     # Warm start terms.
     dk = np.zeros(A.shape[1])
@@ -283,7 +286,8 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, *args, **kwargs):
 
         # Compute l2-norm of primal and dual residuals.
         r_update = [pipe.recv() for pipe in pipes]
-        Ax_halves, xv_diffs = map(list, zip(*r_update))
+        x_halves, Ax_halves, xv_diffs = map(list, zip(*r_update))
+        # Ax_halves, xv_diffs = map(list, zip(*r_update))
         r_primal_vec = sum(Ax_halves) - b
         r_primal[k] = LA.norm(r_primal_vec, ord=2)
 
@@ -293,21 +297,24 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, *args, **kwargs):
         r_dual_vec = A.T.dot(sol) - subgrad
         r_dual[k] = LA.norm(r_dual_vec, ord=2)
 
-        # TODO: Save x_i^(k+1/2) if residual norm is smallest so far.
+        # Save x_i^(k+1/2) if residual norm is smallest so far.
         r_all = LA.norm(np.concatenate([r_primal_vec, r_dual_vec]), ord=2)
         if k == 0:   # Store ||r^0||_2 for stopping criterion.
             r_all_0 = r_all
+        if k == 0 or r_all < r_best:
+            x_final = x_halves
 
-        # Stop if residual norm falls below tolerance.
+        # Stop when residual norm falls below tolerance.
         k = k + 1
         finished = k >= max_iter or (r_all <= eps_abs + eps_rel * r_all_0)
         # finished = k >= max_iter or (r_primal[k-1] <= eps_abs + eps_rel * r_primal[0] and \
         #                              r_dual[k-1] <= eps_abs + eps_rel * r_dual[0])
-        for pipe in pipes:
-            pipe.send(finished)
+        # for pipe in pipes:
+        #    pipe.send(finished)
 
     # Gather and return x_i^(k+1/2) from nodes.
-    x_final = [pipe.recv() for pipe in pipes]
+    # x_final = [pipe.recv() for pipe in pipes]
+    # Unscale and return x_i^(k+1/2).
     [p.terminate() for p in procs]
     if precond:
         x_final = [ei*x for x, ei in zip(x_final, e_pre)]
