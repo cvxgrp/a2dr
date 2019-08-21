@@ -7,12 +7,15 @@ from scipy.stats.mstats import gmean
 
 def precondition(p_list, A_list, b, tol = 1e-3, max_iter = 1000):
     print('### Preconditioning starts ...')
+    if all([Ai.size == 0 for Ai in A_list]):
+        return p_list, A_list, b, np.ones(len(A_list))
+
     n_list = [A.shape[1] for A in A_list]
     sparse_check = [sparse.issparse(A) for A in A_list]
-    # enforce csr format for better matrix operation efficiency
-    if np.sum(sparse_check) == 0: # all dense
+    # Enforce csr format for better matrix operation efficiency.
+    if np.sum(sparse_check) == 0:      # all dense
         A = csr_matrix(np.hstack(A_list))
-    elif np.prod(sparse_check) == 1: # all sparse
+    elif np.prod(sparse_check) == 1:   # all sparse
         A = csr_matrix(sparse.hstack(A_list))
     else:
         A_list_csr = [csr_matrix(A) for A in A_list]
@@ -21,7 +24,7 @@ def precondition(p_list, A_list, b, tol = 1e-3, max_iter = 1000):
 
     split_idx = np.cumsum(n_list)
     split_idx = np.hstack([0, split_idx])
-    A_hat = csc_matrix(A_hat) # faster column slicing
+    A_hat = csc_matrix(A_hat)   # faster column slicing
     A_eq_list = [A_hat[:,split_idx[i]:split_idx[i+1]] for i in range(len(n_list))]
     A_eq_list = [csr_matrix(A_eq_list[i]) for i in range(len(A_eq_list))] # change back to csr format
     def proto(i, p_list, e):

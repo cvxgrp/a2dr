@@ -123,7 +123,7 @@ class TestPaper(BaseTest):
 
     def setUp(self):
         np.random.seed(1)
-        self.eps_rel = 1e-8 #specify these in all examples?
+        self.eps_rel = 1e-8   # specify these in all examples?
         self.eps_abs = 1e-6
         self.MAX_ITER = 1000
 

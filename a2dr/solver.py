@@ -20,10 +20,8 @@ import numpy as np
 import numpy.linalg as LA
 import scipy.sparse as sp
 from scipy.stats.mstats import gmean
-from scipy.stats import hmean
 from time import time
 from multiprocessing import Process, Pipe
-from a2dr.prox_point import prox_point
 from a2dr.precondition import precondition
 from a2dr.acceleration import aa_weights
 
@@ -99,7 +97,7 @@ def a2dr_worker(pipe, prox, v_init, A, t, anderson, m_accel):
         # if finished:
         #    pipe.send(x_half)
 
-def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, *args, **kwargs):
+def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *args, **kwargs):
     # Problem parameters.
     max_iter = kwargs.pop("max_iter", 1000)
     t_init = kwargs.pop("t_init", 10)  # Step size.
@@ -143,8 +141,20 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, *args, **kwargs):
 
     # DRS parameters.
     N = len(p_list)   # Number of subproblems.
+    has_constr = len(A_list) != 0
     if len(A_list) == 0:
-        return prox_point(p_list, v_init, *args, **kwargs)
+        if b.size != 0:
+            raise ValueError("Dimension mismatch: nrow(A_i) != nrow(b)")
+        if n_list is not None:
+            if len(n_list) != N:
+                raise ValueError("n_list must have exactly {} entries".format(N))
+            A_list = [sp.csr_matrix((0, ni)) for ni in n_list]
+        elif v_init is not None:
+            if len(v_init) != N:
+                raise ValueError("v_init must be None or contain exactly {} entries".format(N))
+            A_list = [sp.csr_matrix((0, vi.shape[0])) for vi in v_init]
+        else:
+            raise ValueError("n_list or v_init must be defined if A_list and b are empty")
     if len(A_list) != N:
         raise ValueError("A_list must be empty or contain exactly {} entries".format(N))
     if v_init is None:
@@ -153,20 +163,26 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, *args, **kwargs):
         # v_init = [sp.csc_matrix((A.shape[1],1)) for A in A_list]
     if len(v_init) != N:
         raise ValueError("v_init must be None or contain exactly {} entries".format(N))
+
+    # Variable size list.
+    if n_list is None:
+        n_list = [A_list[i].shape[1] for i in range(N)]
+    if len(n_list) != N:
+        raise ValueError("n_list must be None or contain exactly {} entries".format(N))
+    n_list_cumsum = np.insert(np.cumsum(n_list), 0, 0)
+
     for i in range(N):
         if A_list[i].shape[0] != b.shape[0]:
             raise ValueError("Dimension mismatch: nrow(A_i) != nrow(b)")
         elif A_list[i].shape[1] != v_init[i].shape[0]:
             raise ValueError("Dimension mismatch: ncol(A_i) != nrow(v_i)")
+        elif A_list[i].shape[1] != n_list[i]:
+            raise ValueError("Dimension mismatch: ncol(A_i) != n_i")
         if not sp.issparse(A_list[i]):
             A_list[i] = sp.csr_matrix(A_list[i])
-            
-    # variable size list
-    n_list = [A_list[i].shape[1] for i in range(N)]
-    n_list_cumsum = np.insert(np.cumsum(n_list), 0, 0)
 
     # Precondition data.
-    if precond:
+    if precond and has_constr:
         p_list, A_list, b, e_pre = precondition(p_list, A_list, b)
         t_init = 1/gmean(e_pre)**2/10
         print('After preconditioning, t_init changed to {}'.format(t_init))
@@ -316,7 +332,7 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, *args, **kwargs):
     # x_final = [pipe.recv() for pipe in pipes]
     # Unscale and return x_i^(k+1/2).
     [p.terminate() for p in procs]
-    if precond:
+    if precond and has_constr:
         x_final = [ei*x for x, ei in zip(x_final, e_pre)]
     end = time()
     return {"x_vals": x_final, "primal": np.array(r_primal[:k]), "dual": np.array(r_dual[:k]), \

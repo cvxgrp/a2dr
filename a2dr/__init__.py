@@ -18,4 +18,4 @@ along with A2DR. If not, see <http://www.gnu.org/licenses/>.
 """
 
 from a2dr.solver import a2dr
-from a2dr.prox_point import prox_point
+from a2dr.proximal.prox_point import prox_point

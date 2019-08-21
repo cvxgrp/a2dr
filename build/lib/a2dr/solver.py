@@ -19,7 +19,6 @@ along with A2DR. If not, see <http://www.gnu.org/licenses/>.
 import numpy as np
 from time import time
 from multiprocessing import Process, Pipe
-from a2dr.prox_point import prox_point
 from a2dr.precondition import precondition
 from a2dr.acceleration import aa_weights
 
