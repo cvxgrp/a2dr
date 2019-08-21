@@ -284,16 +284,25 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, *args, **kwargs):
         # Compute l2-norm of primal and dual residuals.
         r_update = [pipe.recv() for pipe in pipes]
         Ax_halves, xv_diffs = map(list, zip(*r_update))
-        r_primal[k] = LA.norm(sum(Ax_halves) - b, ord=2)
+        r_primal_vec = sum(Ax_halves) - b
+        r_primal[k] = LA.norm(r_primal_vec, ord=2)
+
         subgrad = np.concatenate(xv_diffs)/t_init
         # sol = LA.lstsq(A.T, subgrad, rcond=None)[0]
         sol = sp.linalg.lsqr(A.T, subgrad, atol=1e-10, btol=1e-10, x0=sol)[0]
-        r_dual[k] = LA.norm(A.T.dot(sol) - subgrad, ord=2)
+        r_dual_vec = A.T.dot(sol) - subgrad
+        r_dual[k] = LA.norm(r_dual_vec, ord=2)
 
-        # Stop if residual norms fall below tolerance.
+        # TODO: Save x_i^(k+1/2) if residual norm is smallest so far.
+        r_all = LA.norm(np.concatenate([r_primal_vec, r_dual_vec]), ord=2)
+        if k == 0:   # Store ||r^0||_2 for stopping criterion.
+            r_all_0 = r_all
+
+        # Stop if residual norm falls below tolerance.
         k = k + 1
-        finished = k >= max_iter or (r_primal[k-1] <= eps_abs + eps_rel * r_primal[0] and \
-                                     r_dual[k-1] <= eps_abs + eps_rel * r_dual[0])
+        finished = k >= max_iter or (r_all <= eps_abs + eps_rel * r_all_0)
+        # finished = k >= max_iter or (r_primal[k-1] <= eps_abs + eps_rel * r_primal[0] and \
+        #                              r_dual[k-1] <= eps_abs + eps_rel * r_dual[0])
         for pipe in pipes:
             pipe.send(finished)
 
