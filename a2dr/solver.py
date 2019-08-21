@@ -95,11 +95,11 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
     t_init = kwargs.pop("t_init", 10)  # Step size.
     eps_abs = kwargs.pop("eps_abs", 1e-6)   # Absolute stopping tolerance.
     eps_rel = kwargs.pop("eps_rel", 1e-8)   # Relative stopping tolerance.
-    precond = kwargs.pop("precond", False)  # Precondition A and b?
+    precond = kwargs.pop("precond", True)  # Precondition A and b?
     ada_reg = kwargs.pop("ada_reg", True)   # Adaptive regularization?
 
     # AA-II parameters.
-    anderson = kwargs.pop("anderson", False)
+    anderson = kwargs.pop("anderson", True)
     m_accel = int(kwargs.pop("m_accel", 10))       # Maximum past iterations to keep (>= 0).
     lam_accel = kwargs.pop("lam_accel", 1e-8)      # AA-II regularization weight.
     aa_method = kwargs.pop("aa_method", "lstsq")   # Algorithm for solving AA LS problem.
