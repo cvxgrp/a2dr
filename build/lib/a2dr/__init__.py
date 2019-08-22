@@ -17,3 +17,4 @@ You should have received a copy of the GNU General Public License
 along with A2DR. If not, see <http://www.gnu.org/licenses/>.
 """
 
+from a2dr.solver import a2dr

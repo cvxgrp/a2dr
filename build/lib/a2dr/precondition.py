@@ -1,14 +1,35 @@
 import numpy as np
-from scipy.linalg import block_diag
+from scipy import sparse
+from scipy.sparse import block_diag, issparse, csr_matrix, csc_matrix, diags
+from scipy.sparse.linalg import norm
+import scipy.linalg as sLA
+from scipy.stats.mstats import gmean
 
-def precondition(p_list, A_list, b, tol = 1e-6, max_iter = 1000):
+def precondition(p_list, A_list, b, tol = 1e-3, max_iter = 1000):
+    print('### Preconditioning starts ...')
+    if all([Ai.size == 0 for Ai in A_list]):
+        return p_list, A_list, b, np.ones(len(A_list))
+
     n_list = [A.shape[1] for A in A_list]
-    A = np.hstack(A_list)
+    sparse_check = [sparse.issparse(A) for A in A_list]
+    # Enforce csr format for better matrix operation efficiency.
+    if np.sum(sparse_check) == 0:      # all dense
+        A = csr_matrix(np.hstack(A_list))
+    elif np.prod(sparse_check) == 1:   # all sparse
+        A = csr_matrix(sparse.hstack(A_list))
+    else:
+        A_list_csr = [csr_matrix(A) for A in A_list]
+        A = csr_matrix(sparse.hstack(A_list))
     d, e, A_hat, k = mat_equil(A, n_list, tol, max_iter)
 
     split_idx = np.cumsum(n_list)
-    A_eq_list = np.split(A_hat, split_idx, axis=1)[:-1]
-    p_eq_list = [lambda v, rho: prox(ei*v, rho/ei**2)/ei for prox, ei in zip(p_list, e)]
+    split_idx = np.hstack([0, split_idx])
+    A_hat = csc_matrix(A_hat)   # faster column slicing
+    A_eq_list = [A_hat[:,split_idx[i]:split_idx[i+1]] for i in range(len(n_list))]
+    A_eq_list = [csr_matrix(A_eq_list[i]) for i in range(len(A_eq_list))] # change back to csr format
+    def proto(i, p_list, e):
+        return lambda v, t: p_list[i](e[i]*v, t*e[i]**2)/e[i]
+    p_eq_list = list(map(lambda i: proto(i,p_list,e), range(len(p_list))))
     return p_eq_list, A_eq_list, d*b, e
 
 def mat_equil(A, n_list, tol, max_iter):
@@ -39,33 +60,38 @@ def mat_equil(A, n_list, tol, max_iter):
     
     # Form the size m-by-N matrix A_block, whose (i,j)-th entry is \sum_{k=n_1+...+n_{j-1}}}^{n_1+...+n_j} A_{ik}^2
     gamma = (m + N)/m/N * np.sqrt(np.finfo(float).eps)
-    A2 = A ** 2 
+    A2 = A.power(2) if issparse(A) else np.power(A,2)
     ave_list = [np.ones([n_i,1]) for n_i in n_list]
-    A_block = A2.dot(block_diag(*ave_list))
+    A_block = A2.dot(block_diag(ave_list))
     A_block_T = A_block.transpose()
+    print('Block matrix shape = {}'.format(A_block.shape))
+    print('gamma={}'.format(gamma))
     
     # Apply regularized Sinkhorn-Knopp on A_block
     for k in range(max_iter):
         d1 = N / (A_block.dot(e) + N * gamma * em)
-        e1 = m / (A_block_T.dot(d) + m * gamma * eN)
+        e1 = m / (A_block_T.dot(d1) + m * gamma * eN)
         err_d = np.linalg.norm(d1 - d)
         err_e = np.linalg.norm(e1 - e)
         d = d1
         e = e1
-        if err_d <= tol and err_e <= tol:
+        print('k={}, err_d={}, err_e={}'.format(k, err_d/np.sqrt(m), err_e/np.sqrt(N)))
+        if err_d/np.sqrt(m) <= tol and err_e/np.sqrt(N) <= tol:
             break
     
     d = np.sqrt(d)
     e = np.sqrt(e)
-    I_list = [np.eye(n_list[i]) * e[i] for i in range(N)]
-    E = block_diag(*I_list)
-    D = np.diag(d)
-    B = D.dot(A.dot(E))
+    I_list = [sparse.eye(n_list[i]) * e[i] for i in range(N)]
+    E = csr_matrix(block_diag(I_list))
+    D = csr_matrix(diags(d))
+    print('generate D, E')
+    B = D.dot(csr_matrix(A).dot(E))
+    print('compute scaled matrix')
     
     # Rescale to have \|DAE\|_2 close to 1
-    scale = np.linalg.norm(B, 'fro') / np.sqrt(np.min([m,N]))
-    d_mean = np.mean(d)
-    e_mean = np.mean(e)
+    scale = norm(B, 'fro') / np.sqrt(np.min([m,N]))
+    d_mean = gmean(d)
+    e_mean = gmean(e)
     q = np.log(d_mean / e_mean * scale) / 2 / np.log(scale)
     d = d * (scale ** (-q))
     e = e * (scale ** (q-1))
