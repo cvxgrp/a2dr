@@ -14,3 +14,7 @@ venv
 
 # Python notebooks.
 examples/notebooks/.ipynb_checkpoints
+
+# Others
+.cache/
+.DS_Store
