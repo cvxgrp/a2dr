@@ -1,5 +1,5 @@
 """
-Copyright 2018 Anqi Fu
+Copyright 2019 Anqi Fu, Junzi Zhang
 
 This file is part of A2DR.
 

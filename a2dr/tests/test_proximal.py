@@ -1,5 +1,5 @@
 """
-Copyright 2018 Anqi Fu
+Copyright 2019 Anqi Fu, Junzi Zhang
 
 This file is part of A2DR.
 
@@ -64,21 +64,21 @@ class TestProximal(BaseTest):
         self.compare_prox_func(pnorm(self.x, 2), self.x, self.v, self.rho)
         self.compare_prox_func(max(self.x), self.x, self.v, self.rho)
 
-    def test_prox_matrix(self):
-        self.compare_prox_func(normNuc(self.Y), self.Y, self.B, self.rho, places = 3)
-        self.compare_prox_func(norm(self.Y, "fro"), self.Y, self.B, self.rho)
-        self.compare_prox_func(sum(abs(self.Y)), self.Y, self.B, self.rho, places = 4)
-        self.compare_prox_func(trace(self.Y), self.Y, self.B, self.rho)
-        # self.compare_prox_func(sigma_max(self.Y), self.Y, self.A, self.rho)
+#     def test_prox_matrix(self):
+#         self.compare_prox_func(normNuc(self.Y), self.Y, self.B, self.rho, places = 3)
+#         self.compare_prox_func(norm(self.Y, "fro"), self.Y, self.B, self.rho)
+#         self.compare_prox_func(sum(abs(self.Y)), self.Y, self.B, self.rho, places = 4)
+#         self.compare_prox_func(trace(self.Y), self.Y, self.B, self.rho)
+#         # self.compare_prox_func(sigma_max(self.Y), self.Y, self.A, self.rho)
 
-        B = np.random.randn(self.Y.shape[1],self.Y.shape[1])
-        self.compare_prox_func(trace(self.Y * B), self.Y, self.B, self.rho)
+#         B = np.random.randn(self.Y.shape[1],self.Y.shape[1])
+#         self.compare_prox_func(trace(self.Y * B), self.Y, self.B, self.rho)
 
-        A_symm = (self.B + self.B.T) / 2.0
-        self.compare_prox_func(Constant(0), self.Y, A_symm, self.rho, [self.Y >> 0, self.Y == self.Y.T], places = 3)
+#         A_symm = (self.B + self.B.T) / 2.0
+#         self.compare_prox_func(Constant(0), self.Y, A_symm, self.rho, [self.Y >> 0, self.Y == self.Y.T], places = 3)
 
-        A_spd = self.B.dot(self.B.T)
-        self.compare_prox_func(-log_det(self.Y), self.Y, A_spd, self.rho, places = 3)
+#         A_spd = self.B.dot(self.B.T)
+#         self.compare_prox_func(-log_det(self.Y), self.Y, A_spd, self.rho, places = 3)
 
     def test_prox_operator(self):
         x_to_u = {self.x.id: self.v}

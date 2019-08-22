@@ -1,5 +1,5 @@
 """
-Copyright 2018 Anqi Fu
+Copyright 2019 Anqi Fu, Junzi Zhang
 
 This file is part of A2DR.
 
@@ -92,7 +92,7 @@ def a2dr_worker(pipe, prox, v_init, A, t, anderson, m_accel):
 def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *args, **kwargs):
     # Problem parameters.
     max_iter = kwargs.pop("max_iter", 1000)
-    t_init = kwargs.pop("t_init", 10)  # Step size.
+    t_init = kwargs.pop("t_init", 1/10)  # Step size.
     eps_abs = kwargs.pop("eps_abs", 1e-6)   # Absolute stopping tolerance.
     eps_rel = kwargs.pop("eps_rel", 1e-8)   # Relative stopping tolerance.
     precond = kwargs.pop("precond", True)  # Precondition A and b?
