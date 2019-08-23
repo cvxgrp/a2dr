@@ -20,11 +20,14 @@ along with A2DR. If not, see <http://www.gnu.org/licenses/>.
 import cvxpy
 import warnings
 import numpy as np
+import numpy.linalg as LA
 import scipy as sp
 from scipy.optimize import minimize
 from scipy.special import expit
+from scipy import sparse
+import scipy.sparse.linalg
 
-from cvxpy import Constant, Variable, Parameter, Problem, Minimize
+from cvxpy import *
 from cvxpy.atoms.affine.unary_operators import NegExpression
 from cvxpy.atoms.affine.binary_operators import MulExpression, multiply
 from cvxpy.atoms.affine.add_expr import AddExpression
@@ -205,6 +208,104 @@ def prox_logistic(u, rho, x0 = None, y = None):
     if not res.success:
         warnings.warn(res.message)
     return res.x[0] if res.x.size == 1 else res.x
+
+def prox_norm1(alpha = 1.0):
+    return lambda v, t: (v - t*alpha).maximum(0) - (-v - t*alpha).maximum(0) if sparse.issparse(v) else \
+                        np.maximum(v - t*alpha,0) - np.maximum(-v - t*alpha,0)
+
+def prox_norm2(alpha = 1.0):
+    def prox_norm2_inner(v, t):
+        if np.linalg.norm(v) == 0:
+            return np.zeros(len(v))
+        elif sparse.issparse(v):
+            return (1 - t*alpha*1.0/(sparse.linalg.norm(v,'fro'))).maximum(0) * v
+        else: 
+            return np.maximum(1 - t*alpha*1.0/(LA.norm(v,2)),0) * v 
+            
+    return lambda v, t: prox_norm2_inner(v, t)
+
+def prox_norm_inf(bound):
+    if bound < 0:
+        raise ValueError("bound must be a non-negative scalar.")
+    return lambda v, t: v.minimum(bound).maximum(-bound) if sparse.issparse(v) else \
+                        np.maximum(np.minimum(v, bound), -bound)
+
+def prox_nuc_norm(alpha = 1.0, order = 'C'):
+    def prox(Q, t):
+        U, s, Vt = np.linalg.svd(Q, full_matrices=False)
+        s_new = np.maximum(s - t*alpha, 0)
+        Q_new = U.dot(np.diag(s_new)).dot(Vt)
+        return Q_new.ravel(order=order)
+    return prox
+
+def prox_group_lasso(alpha = 1.0):
+    prox_inner = prox_norm2(alpha)
+    return lambda Q, t: np.concatenate([prox_inner(Q[:,j], t) for j in range(Q.shape[1])])
+
+def prox_quad_form(Q):
+    if sparse.issparse(Q):
+        if not np.all(LA.eigvals(Q.todense()) >= 0):
+            raise Exception("Q must be a positive semidefinite matrix.")
+        return lambda v, t: sparse.linalg.lsqr(Q + (1/t)*sparse.eye(v.shape[0]), v/t, atol=1e-16, btol=1e-16)[0]
+    else:
+        if not np.all(LA.eigvals(Q) >= 0):
+            raise Exception("Q must be a positive semidefinite matrix.")
+        return lambda v, t: LA.lstsq(Q + (1/t)*np.eye(v.shape[0]), v/t, rcond=None)[0]
+    
+def prox_square(v, t):
+    return v/(1.0+2*t)
+
+def prox_sat(c, x_max):
+    def sat(u, b):
+        return np.maximum(np.minimum(u, b), -b)
+    return lambda v, t: sat(v/(1.0+2*t*c), x_max)
+
+def prox_sat_pos(c, x_max):
+    def sat_pos(u, b):
+        return np.maximum(np.minimum(u, b), 0)
+    return lambda v, t: sat_pos(v/(1.0+2*t*c), x_max)
+
+    
+def prox_sum_squares(X, y, type = "lsqr"):
+    n = X.shape[1]
+    if type == "lsqr":
+        X = sparse.csr_matrix(X)
+        def prox(v, t):
+            A = sparse.vstack([X, 1/np.sqrt(2*t)*sparse.eye(n)])
+            b = np.concatenate([y, 1/np.sqrt(2*t)*v])
+            return sparse.linalg.lsqr(A, b, atol=1e-16, btol=1e-16)[0]
+    elif type == "lstsq":
+        def prox(v, t):
+            A = np.vstack([X, 1/np.sqrt(2*t)*np.eye(n)])
+            b = np.concatenate([y, 1/np.sqrt(2*t)*v])
+            return LA.lstsq(A, b, rcond=None)[0]
+    else:
+        raise ValueError("Algorithm type not supported:", type)
+    return prox
+
+def prox_qp(Q, q, F, g):
+    # check warmstart/parameter mode -- make sure the problem reduction is only done once
+    n = Q.shape[0]
+    I = np.eye(n)
+    v_par = Parameter(n)
+    t_par = Parameter(nonneg=True)
+    x = Variable(n)
+    obj = quad_form(x, Q) + sum_squares(x)/2/t_par + (q-v_par/t_par)*x
+    constr = [F * x <= g]
+    prob = Problem(Minimize(obj), constr)
+    def prox_qp1(v, t):
+        v_par.value, t_par.value = v, t
+        prob.solve()
+        return x.value
+    return prox_qp1
+
+def prox_neg_log_det_aff(Q, S, t, order = 'C'):
+    Q_symm = (Q + Q.T) / 2.0
+    Q_symm_S = Q_symm - t*S
+    s, u = LA.eigh(Q_symm_S)
+    s_new = (s + np.sqrt(s**2 + 4.0*t))/2
+    Q_new = u.dot(np.diag(s_new)).dot(u.T)
+    return Q_new.ravel(order=order)
 
 def prox_func_vector(f, constr = []):
     """Returns the proximal operator for simple functions evaluated at u with scaling factor rho.

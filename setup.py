@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(name='a2dr',
       version='0.1',
@@ -7,7 +7,7 @@ setup(name='a2dr',
       author='Anqi Fu, Junzi Zhang, Stephen Boyd',
       author_email='anqif@stanford.edu',
       license='Apache License, Version 2.0',
-      packages=['a2dr'],
+      packages=find_packages(),
       install_requires=['matplotlib',
 		       'multiprocess',
 		       'cvxpy >= 1.0',
