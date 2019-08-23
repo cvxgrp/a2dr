@@ -398,7 +398,7 @@ def prox_func_matrix(f, constr = []):
                     if not (np.allclose(A, A_symm)):
                         raise Exception("Proximal operator for negative log-determinant only operates on symmetric matrices.")
                     w, v = np.linalg.eig(A_symm)
-                    w_new = np.maximum(w, 0)
+                    w_new = prox_diag(w, rho)
                     return v.dot(np.diag(w_new)).dot(v.T)
             else:
                 prox = prox_inner

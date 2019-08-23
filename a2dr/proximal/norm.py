@@ -29,11 +29,10 @@ def prox_norm_inf(v, t):
 	# TODO: Sparse handling.
 	return v - t * proj_l1(v/t)
 
-def prox_norm_nuc(B, t, order='C'):
+def prox_norm_nuc(B, t):
 	U, s, Vt = np.linalg.svd(B, full_matrices=False)
 	s_new = np.maximum(s - t, 0)
-	B_new = U.dot(np.diag(s_new)).dot(Vt)
-	return B_new.ravel(order=order)
+	return U.dot(np.diag(s_new)).dot(Vt)
 
 def prox_group_lasso(B, t):
 	# TODO: Sparse handling.
