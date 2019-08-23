@@ -85,5 +85,5 @@ class TestPaper(BaseTest):
 if __name__ == '__main__':
     tests = TestPaper()
     tests.setUp()
-    tests.test_sparse_inv_covariance(1000, 0.0001)
+    tests.test_sparse_inv_covariance(100, 0.001)
 
