@@ -265,7 +265,6 @@ def prox_sat_pos(c, x_max):
         return np.maximum(np.minimum(u, b), 0)
     return lambda v, t: sat_pos(v/(1.0+2*t*c), x_max)
 
-    
 def prox_sum_squares(X, y, type = "lsqr"):
     n = X.shape[1]
     if type == "lsqr":

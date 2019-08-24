@@ -1,6 +1,5 @@
 import numpy as np
 import numpy.linalg as LA
-from scipy import sparse
 from a2dr.proximal.projection import proj_simplex
 
 def prox_neg_log_det(B, t):
