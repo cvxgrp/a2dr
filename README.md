@@ -75,7 +75,7 @@ The arguments `p_list`, `A_list` and `b` correspond to the problem data.
 which takes as input a vector v and parameter t > 0 and outputs the proximal operator of f_i evaluated at (v,t).
 * `A_list` is the list of A_i. The lists `p_list` and `A_list` must be given in the same order i = 1,...,N.
 * `b` is the vector b. 
-Notice that `A_list` and `b` are optional, and when omitted, the solver recognizes the problem as one without linear constraints. Also notice that in such cases, `A_list` and `b` has to be omitted together, and either `v_init` or `n_list` has to be provided to declare the dimension of each x_i. 
+Notice that `A_list` and `b` are optional, and when omitted, the solver recognizes the problem as one without linear constraints. Also notice that in such cases, `A_list` and `b` have to be omitted together, and either `v_init` or `n_list` has to be provided to declare the dimension of each x_i. 
 
 For information on the other optional hyper-parameters, please refer to our [companion paper](http://stanford.edu/~boyd/papers/a2dr.html) (Algorithm 2) and the [source code comments of the function **a2dr** in solver.py](https://github.com/cvxgrp/a2dr/tree/master/a2dr).
 
@@ -99,9 +99,7 @@ We showcase the usage of the solver function **a2dr** as well as the the tool pa
 ```python
 # Non-negative least squares (see our companion paper for more details)
 import numpy as np
-import scipy as sp
 import numpy.linalg
-import matplotlib.pyplot as plt
 from scipy import sparse
 from a2dr import a2dr
 from a2dr.proximal.prox_operators import *
