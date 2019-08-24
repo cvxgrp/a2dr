@@ -135,6 +135,7 @@ If you wish to cite `a2dr`, please use the following:
     journal      = {http://stanford.edu/~boyd/papers/a2dr.html},
     year         = {2019},
 }
+
 @misc{a2dr_code,
     author       = {Fu, A. and Zhang, J. and Boyd, S.},
     title        = {{a2dr}: Andersona accelerated Douglas-Rachford splitting, version 0.1},
