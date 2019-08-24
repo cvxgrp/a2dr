@@ -41,7 +41,7 @@ class TestPaper(BaseTest):
         np.random.seed(1)
         self.eps_rel = 1e-8   # specify these in all examples?
         self.eps_abs = 1e-6
-        self.MAX_ITER = 6000
+        self.MAX_ITER = 1000
 
     def test_nnls(self, figname):
         # minimize ||y - X\beta||_2^2 subject to \beta >= 0.

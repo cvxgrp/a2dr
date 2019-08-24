@@ -303,14 +303,11 @@ def prox_neg_log_det_aff(Q, S, t, order = 'C'):
     Q_symm = (Q + Q.T) / 2.0
     Q_symm_S = Q_symm - t*S
     s, u = LA.eigh(Q_symm_S)
-    
-    #s_new = (s + np.sqrt(s**2 + 4.0*t))/2
     id_pos = (s >= 0)
     id_neg = (s < 0)
     s_new = np.zeros(len(s))
     s_new[id_pos] = (s[id_pos] + np.sqrt(s[id_pos]**2 + 4.0*t))/2
     s_new[id_neg] = 2.0*t/(np.sqrt(s[id_neg]**2 + 4.0*t) - s[id_neg])
-    
     Q_new = u.dot(np.diag(s_new)).dot(u.T)
     return Q_new.ravel(order=order)
 

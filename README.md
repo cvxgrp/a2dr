@@ -5,7 +5,7 @@
 It is an implementation of type-II Anderson accelerated Douglas-Rachford splitting, based on our paper [A. Fu, J. Zhang, and S. Boyd (2019)](http://www.stanford.edu/~boyd/papers/a2dr.html).
 
 ### Installation
-`a2dr` supports both Python 2 and Python 3. But we recommend the users to use Python 3 environments if possible since the solver tests have been mostly done using Python 3. To install `a2dr`, please follow the steps below:
+To install `a2dr`, please follow the steps below:
 
 1. Clone the [`a2dr` git repository](https://github.com/cvxgrp/a2dr).
 2. Navigate to the top-level of the cloned directory and run:
@@ -21,11 +21,15 @@ nosetests a2dr
 ```
 
 The requirements are:
-* [NumPy](https://github.com/numpy/numpy)
-* [SciPy](https://github.com/scipy/scipy)
-* [SCS](https://github.com/bodono/scs-python)
+* [Matplotlib >= 3.0.3](https://github.com/matplotlib/matplotlib)
+* [CVXPY >= 1.0](https://github.com/cvxgrp/cvxpy)
+* [NumPy >= 1.14](https://github.com/numpy/numpy)
+* [SciPy >= 1.2.1](https://github.com/scipy/scipy)
+* [scikit-sparse >= 0.1](https://github.com/scikit-sparse/scikit-sparse)
+* [nose](https://nose.readthedocs.io/en/latest/)
+* [setuptools](https://github.com/pypa/setuptools)
 * Python 3.x
-nose
-setuptools
+
+Please file an issue on Github if you want Python 2 support.
 
 
