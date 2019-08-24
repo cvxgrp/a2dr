@@ -125,14 +125,6 @@ class TestPaper(BaseTest):
         np.fill_diagonal(mask, 0)
         alpha_max = np.max(np.abs(Q)[mask])
         alpha = alpha_ratio*alpha_max #0.001 for n=100, 0.01 for n=50
-        
-#         ## Solve with CVXPY.
-#         S = Variable((n,n), PSD=True)
-#         obj = -log_det(S) + trace(S*Q) + alpha*norm1(S)
-#         prob = Problem(Minimize(obj))
-#         prob.solve(eps=self.eps_abs,verbose=True)
-#         cvxpy_obj = prob.value
-#         cvxpy_S = S.value
 
         # Convert problem to standard form.
         # f_1(S) = -log(det(S)) + trace(S*Q) on symmetric PSD matrices, f_2(S) = \alpha*||S||_1.
@@ -154,20 +146,6 @@ class TestPaper(BaseTest):
         print('Finished A2DR.')
         print('recovered sparsity = {}'.format(np.sum(a2dr_S!=0)*1.0/a2dr_S.shape[0]**2))
         
-        a2dr_obj = -LA.slogdet(a2dr_S)[1] + np.sum(np.diag(a2dr_S.dot(Q))) + alpha*np.sum(np.abs(a2dr_S))
-        a2dr_S_2 = a2dr_result["x_vals"][0].reshape((n,n), order='C')
-        a2dr_obj_2 = -LA.slogdet(a2dr_S_2)[1] + np.sum(np.diag(a2dr_S_2.dot(Q))) + alpha*np.sum(np.abs(a2dr_S_2))
-        print('recovered sparsity 2 = {}'.format(np.sum(a2dr_S_2!=0)*1.0/a2dr_S_2.shape[0]**2))
-        #print(cvxpy_obj, a2dr_obj, a2dr_obj_2)
-        print(a2dr_obj, a2dr_obj_2)
-        print(a2dr_result['primal'])
-        print(a2dr_result['dual'])
-        
-        
-#         a2dr_S_ave = (a2dr_result["x_vals"][0] + a2dr_result["x_vals"][1])/2
-#         print(prox_list[0](a2dr_S_ave, 24.9999999))
-#         print(prox_list[1](a2dr_S_ave, 24.9999999))
-#         print(np.linalg.norm(prox_list[0](a2dr_S_ave, 24.9999999) - prox_list[1](a2dr_S_ave, 24.9999999)))
 
     def test_l1_trend_filtering(self, figname):
         # minimize (1/2)||y - x||_2^2 + \alpha*||Dx||_1,

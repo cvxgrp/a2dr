@@ -50,9 +50,9 @@ class TestPaper(BaseTest):
         # subject to Z = X\theta, ||.||_{2,1} = group lasso, ||.||_* = nuclear norm.
 
         # Problem data.
-        K = 10 # Number of tasks.
-        p = 500 # Number of features.
-        m = 300 # Number of samples.
+        K = 3 # Number of tasks.
+        p = 80 # Number of features.
+        m = 100 # Number of samples.
         alpha = 0.1
         beta = 0.1
 

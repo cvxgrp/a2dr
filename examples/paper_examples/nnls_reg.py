@@ -49,7 +49,7 @@ class TestPaper(BaseTest):
         # minimize ||y - X\beta||_2^2 subject to \beta >= 0.
 
         # Problem data.
-        m, n = 300, 500
+        m, n = 300, 200
         density = 0.001
         X = sparse.random(m, n, density=density, data_rvs=np.random.randn)
         y = np.random.randn(m)

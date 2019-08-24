@@ -5,7 +5,8 @@
 It is an implementation of type-II Anderson accelerated Douglas-Rachford splitting, based on our paper [A. Fu, J. Zhang, and S. Boyd (2019)](http://www.stanford.edu/~boyd/papers/a2dr.html).
 
 ### Installation
-To install `a2dr`, please follow the steps below:
+To install `a2dr`, first make sure that you have [setuptools](https://github.com/pypa/setuptools)
+and [nose](https://nose.readthedocs.io/en/latest/) installed. Then follow the steps below:
 
 1. Clone the [`a2dr` git repository](https://github.com/cvxgrp/a2dr).
 2. Navigate to the top-level of the cloned directory and run:
@@ -21,13 +22,10 @@ nosetests a2dr
 ```
 
 The requirements are:
-* [Matplotlib >= 3.0.3](https://github.com/matplotlib/matplotlib)
-* [CVXPY >= 1.0](https://github.com/cvxgrp/cvxpy)
-* [NumPy >= 1.14](https://github.com/numpy/numpy)
-* [SciPy >= 1.2.1](https://github.com/scipy/scipy)
-* [scikit-sparse >= 0.1](https://github.com/scikit-sparse/scikit-sparse)
-* [nose](https://nose.readthedocs.io/en/latest/)
-* [setuptools](https://github.com/pypa/setuptools)
+* [Matplotlib](https://github.com/matplotlib/matplotlib)
+* [CVXPY](https://github.com/cvxgrp/cvxpy)
+* [NumPy](https://github.com/numpy/numpy)
+* [SciPy](https://github.com/scipy/scipy)
 * Python 3.x
 
 Please file an issue on Github if you want Python 2 support.

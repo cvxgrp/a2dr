@@ -85,10 +85,9 @@ def a2dr_worker(pipe, prox, v_init, A, t, anderson, m_accel):
             v_new = v_vec + x_new - x_half
 
         # Send x^(k+1/2) along with A*x^(k+1/2) and x^(k+1/2) - v^(k) for computing residuals.
-        
-        #pipe.send((x_half, A.dot(x_half), x_half - v_vec))
         Ax_half = A.dot(x_half)
-        pipe.send((x_half, Ax_half, x_half - v_vec))
+        xv_diff = x_half - v_vec
+        pipe.send((x_half, Ax_half, xv_diff))
         
         v_vec = v_new
 

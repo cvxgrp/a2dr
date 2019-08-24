@@ -47,10 +47,10 @@ class TestPaper(BaseTest):
 
     def test_coupled_qp(self):
         # Problem data.
-        K = 8 # number of blocks
-        p = 50 # number of coupling constraints
-        nk = 300 # variable dimension of each subproblem QP
-        mk = 200 # constrain dimension of each subproblem QP
+        K = 4 # number of blocks
+        p = 10 # number of coupling constraints
+        nk = 50 # variable dimension of each subproblem QP
+        mk = 100 # constrain dimension of each subproblem QP
         A_list = [np.random.randn(p, nk) for k in range(K)]
         F_list = [np.random.randn(mk, nk) for k in range(K)]
         q_list = [np.random.randn(nk) for k in range(K)]

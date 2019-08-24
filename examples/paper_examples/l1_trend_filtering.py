@@ -51,7 +51,7 @@ class TestPaper(BaseTest):
         # Reference: https://web.stanford.edu/~boyd/papers/l1_trend_filter.html
 
         # Problem data.
-        n = 10**5
+        n = 1000
         y = np.random.randn(n)
         alpha = 0.01*np.linalg.norm(y, np.inf)
 

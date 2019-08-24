@@ -47,9 +47,9 @@ class TestPaper(BaseTest):
 
     def test_optimal_control(self):
         # Problem data/
-        m = 80
-        n = 150
-        K = 20
+        m = 20
+        n = 40
+        K = 5
         A = np.random.randn(n,n)
         B = np.random.randn(n,m)
         c = np.random.randn(n)
@@ -86,7 +86,7 @@ class TestPaper(BaseTest):
         constr += [x[k+1] == A*x[k] + B*u[k] + c for k in range(K-1)]
         constr += [x[K-1] == x_term]
         prob = Problem(Minimize(obj), constr)
-        prob.solve(solver='SCS', verbose=True) 
+        prob.solve(solver='SCS', eps=self.eps_abs, verbose=True) 
         # OSQP fails for m=50, n=100, K=30, and also for m=100, n=200, K=30
         # SCS also fails to converge
         cvxpy_obj = prob.value

@@ -47,8 +47,8 @@ class TestPaper(BaseTest):
 
     def test_commodity_flow(self):
         # Problem data.
-        m = 4000  # Number of sources.
-        n = 7000  # Number of flows.
+        m = 300  # Number of sources.
+        n = 800  # Number of flows.
 
         # Construct a random incidence matrix.
         B = sparse.lil_matrix((m,n))
@@ -92,7 +92,7 @@ class TestPaper(BaseTest):
         obj = quad_form(x, C) + quad_form(s, D)
         constr = [-x_max<=x, x<=x_max, s[:m1]==0, s[m1:m2]==L, 0<=s[m2:], s[m2:]<=s_max, B*x+s==0]
         prob = Problem(Minimize(obj), constr)
-        prob.solve(solver='SCS', verbose=True) #'OSQP'
+        prob.solve(solver='SCS', eps=self.eps_abs, verbose=True) #'OSQP'
         cvxpy_x = x.value
         cvxpy_s = s.value
 

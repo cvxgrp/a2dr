@@ -43,7 +43,7 @@ class TestPaper(BaseTest):
         np.random.seed(1)
         self.eps_rel = 1e-8   # specify these in all examples?
         self.eps_abs = 1e-6
-        self.MAX_ITER = 60 #1000
+        self.MAX_ITER = 1000
 
     def test_sparse_inv_covariance(self, n, alpha_ratio):
         # minimize -log(det(S)) + trace(S*Y) + \alpha*||S||_1 subject to S is symmetric PSD.
@@ -85,5 +85,5 @@ class TestPaper(BaseTest):
 if __name__ == '__main__':
     tests = TestPaper()
     tests.setUp()
-    tests.test_sparse_inv_covariance(350, 1)
+    tests.test_sparse_inv_covariance(80, 0.001)
 
