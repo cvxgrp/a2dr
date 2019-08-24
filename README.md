@@ -30,4 +30,67 @@ The requirements are:
 
 Please file an issue on Github if you want Python 2 support.
 
+### Problem
+`a2dr` solves problems of the following form:
+```
+minimize         f_1(x_1) + ... + f_N(x_N)
+subject to       A_1x_1 + ... + A_Nx_N = b.
+```
+where f_i (i=1,...,N) are only accessible through their proximal operators.
 
+### Usage
+After installing `a2dr`, you can import `a2dr` using 
+```python
+import a2dr
+```
+This module exposes a function **a2dr** (the solver), which can be used via `a2dr.a2dr`, or directly imported using
+```python
+from a2dr import a2dr
+```
+The function **a2dr** is called with the command 
+```python
+x_vals, primal, dual, num_iters, solve_time = a2dr(p_list, 
+                                                   A_list=[], 
+                                                   b=np.array([]),
+                                                   v_init=None, 
+                                                   n_list=None
+                                                   max_iter=1000,
+                                                   t_init=1/10,
+                                                   eps_abs=1e-6,
+                                                   eps_rel=1e-8,
+                                                   precond=True,
+                                                   ada_reg=True,
+                                                   anderson=True,
+                                                   m_accel=10,
+                                                   lam_accel=1e-8,
+                                                   aa_method='lstsq',
+                                                   D_safe=1e6,
+                                                   eps_safe=1e-6,
+                                                   M_safe=10)
+```
+
+#### Paremeters:
+The arguments `p_list`, `A_list` and `b` correspond to the problem data.
+* `p_list` is the list of proximal operators of f_i. Each element of `p_list` is a Python function,
+which takes as input a vector v and parameter t > 0 and outputs the proximal operator of f_i evaluated at (v,t).
+* `A_list` is the list of A_i. The lists `p_list` and `A_list` must be given in the same order i = 1,...,N.
+* `b` is the vector b. 
+Notice that `A_list` and `b` are optional, and when omitted, the solver recognizes the problem as one without linear constraints. For information on the other optional hyper-parameters, please refer to our [companion paper](http://stanford.edu/~boyd/papers/a2dr.html) (Algorithm 2) and the [source code comments of the function `a2dr` in solver.py](https://github.com/cvxgrp/a2dr/tree/master/a2dr).
+
+#### Returns:
+* The output `x_vals` is a list of $x_1^{k+1/2},\ldots,x_N^{k+1/2}$ from the iteration with the smallest residuals.
+* `primal` and `dual` are arrays containing the primal and dual residual norms for the entire iteration process, respectively. 
+* The value `num_iters` is the total number of iterations, and `solve_time` is the algorithm runtime.
+
+#### Other tools
+The moduel `a2dr` also comes with several additional tools that facilitates the transformation of the problems into the required input format described above as well as tests and visualization. In particular, it come with a package for proximal operators, which can be imported via
+```python
+import a2dr.proximal
+```
+It also comes with some tests and visualization tools, which can be imported via
+```python
+import a2dr.tests
+```
+
+#### Example
+We showcase the usage of the solver function **a2dr** as well as the the tool packages `a2dr.proximal` and `a2dr.tests` with the following example. More examples can be found in the [examples/](examples/) directory. 
