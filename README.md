@@ -131,14 +131,14 @@ If you wish to cite `a2dr`, please use the following:
 ```
 @article{a2dr,
     author       = {Fu, A. and Zhang, J. and Boyd, S.},
-    title        = {Andersona Accelerated Douglas-Rachford Splitting},
+    title        = {Anderson Accelerated Douglas-Rachford Splitting},
     journal      = {http://stanford.edu/~boyd/papers/a2dr.html},
     year         = {2019},
 }
 
 @misc{a2dr_code,
     author       = {Fu, A. and Zhang, J. and Boyd, S.},
-    title        = {{a2dr}: Andersona accelerated Douglas-Rachford splitting, version 0.1},
+    title        = {{a2dr}: Anderson accelerated Douglas-Rachford splitting, version 0.1},
     howpublished = {\url{https://github.com/cvxgrp/a2dr}},
     year         = 2019
 }
