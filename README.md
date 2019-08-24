@@ -53,7 +53,7 @@ x_vals, primal, dual, num_iters, solve_time = a2dr(p_list,
                                                    A_list=[], 
                                                    b=np.array([]),
                                                    v_init=None, 
-                                                   n_list=None
+                                                   n_list=None,
                                                    max_iter=1000,
                                                    t_init=1/10,
                                                    eps_abs=1e-6,
@@ -75,7 +75,9 @@ The arguments `p_list`, `A_list` and `b` correspond to the problem data.
 which takes as input a vector v and parameter t > 0 and outputs the proximal operator of f_i evaluated at (v,t).
 * `A_list` is the list of A_i. The lists `p_list` and `A_list` must be given in the same order i = 1,...,N.
 * `b` is the vector b. 
-Notice that `A_list` and `b` are optional, and when omitted, the solver recognizes the problem as one without linear constraints. For information on the other optional hyper-parameters, please refer to our [companion paper](http://stanford.edu/~boyd/papers/a2dr.html) (Algorithm 2) and the [source code comments of the function **a2dr** in solver.py](https://github.com/cvxgrp/a2dr/tree/master/a2dr).
+Notice that `A_list` and `b` are optional, and when omitted, the solver recognizes the problem as one without linear constraints. Also notice that in such cases, `A_list` and `b` has to be omitted together, and either `v_init` or `n_list` has to be provided to declare the dimension of each x_i. 
+
+For information on the other optional hyper-parameters, please refer to our [companion paper](http://stanford.edu/~boyd/papers/a2dr.html) (Algorithm 2) and the [source code comments of the function **a2dr** in solver.py](https://github.com/cvxgrp/a2dr/tree/master/a2dr).
 
 #### Returns:
 * The output `x_vals` is a list of x_1,...,x_N from the iteration with the smallest residuals.
@@ -83,7 +85,7 @@ Notice that `A_list` and `b` are optional, and when omitted, the solver recogniz
 * The value `num_iters` is the total number of iterations, and `solve_time` is the algorithm runtime.
 
 #### Other tools
-The moduel `a2dr` also comes with several additional tools that facilitates the transformation of the problems into the required input format described above as well as tests and visualization. In particular, it come with a package for proximal operators, which can be imported via
+The module `a2dr` also comes with several additional tools that facilitates the transformation of the problems into the required input format described above as well as tests and visualization. In particular, it come with a package for proximal operators, which can be imported via
 ```python
 import a2dr.proximal
 ```
