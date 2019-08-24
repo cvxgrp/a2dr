@@ -75,10 +75,10 @@ The arguments `p_list`, `A_list` and `b` correspond to the problem data.
 which takes as input a vector v and parameter t > 0 and outputs the proximal operator of f_i evaluated at (v,t).
 * `A_list` is the list of A_i. The lists `p_list` and `A_list` must be given in the same order i = 1,...,N.
 * `b` is the vector b. 
-Notice that `A_list` and `b` are optional, and when omitted, the solver recognizes the problem as one without linear constraints. For information on the other optional hyper-parameters, please refer to our [companion paper](http://stanford.edu/~boyd/papers/a2dr.html) (Algorithm 2) and the [source code comments of the function `a2dr` in solver.py](https://github.com/cvxgrp/a2dr/tree/master/a2dr).
+Notice that `A_list` and `b` are optional, and when omitted, the solver recognizes the problem as one without linear constraints. For information on the other optional hyper-parameters, please refer to our [companion paper](http://stanford.edu/~boyd/papers/a2dr.html) (Algorithm 2) and the [source code comments of the function **a2dr** in solver.py](https://github.com/cvxgrp/a2dr/tree/master/a2dr).
 
 #### Returns:
-* The output `x_vals` is a list of $x_1^{k+1/2},\ldots,x_N^{k+1/2}$ from the iteration with the smallest residuals.
+* The output `x_vals` is a list of x_1,...,x_N from the iteration with the smallest residuals.
 * `primal` and `dual` are arrays containing the primal and dual residual norms for the entire iteration process, respectively. 
 * The value `num_iters` is the total number of iterations, and `solve_time` is the algorithm runtime.
 
@@ -94,3 +94,34 @@ import a2dr.tests
 
 #### Example
 We showcase the usage of the solver function **a2dr** as well as the the tool packages `a2dr.proximal` and `a2dr.tests` with the following example. More examples can be found in the [examples/](examples/) directory. 
+```python
+# Non-negative least squares (see our companion paper for more details)
+import numpy as np
+import scipy as sp
+import numpy.linalg
+import matplotlib.pyplot as plt
+from scipy import sparse
+from a2dr import a2dr
+from a2dr.proximal.prox_operators import *
+from a2dr.tests.base_test import BaseTest
+
+# Problem data.
+np.random.seed(1)
+m, n = 150, 300 
+density = 0.001
+X = sparse.random(m, n, density=density, data_rvs=np.random.randn)
+y = np.random.randn(m)
+
+# Convert problem to standard form.
+prox_list = [prox_sum_squares(X, y), 
+             lambda v, t: v.maximum(0) if sparse.issparse(v) else np.maximum(v,0)]
+A_list = [sparse.eye(n), -sparse.eye(n)]
+b = np.zeros(n)
+
+# Solve with DRS.
+drs_result = a2dr(prox_list, A_list, b, anderson=False)
+# Solve with A2DR.
+a2dr_result = a2dr(prox_list, A_list, b, anderson=True)
+bt = BaseTest()
+bt.compare_total(drs_result, a2dr_result)
+```
