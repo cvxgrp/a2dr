@@ -125,3 +125,20 @@ a2dr_result = a2dr(prox_list, A_list, b, anderson=True)
 bt = BaseTest()
 bt.compare_total(drs_result, a2dr_result)
 ```
+
+### Citing
+If you wish to cite `a2dr`, please use the following:
+```
+@article{a2dr,
+    author       = {Fu, A. and Zhang, J. and Boyd, S.},
+    title        = {Andersona Accelerated Douglas-Rachford Splitting},
+    journal      = {http://stanford.edu/~boyd/papers/a2dr.html},
+    year         = {2019},
+}
+@misc{a2dr_code,
+    author       = {Fu, A. and Zhang, J. and Boyd, S.},
+    title        = {{a2dr}: Andersona accelerated Douglas-Rachford splitting, version 0.1},
+    howpublished = {\url{https://github.com/cvxgrp/a2dr}},
+    year         = 2019
+}
+```
