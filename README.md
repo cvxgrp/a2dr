@@ -113,8 +113,7 @@ X = sparse.random(m, n, density=density, data_rvs=np.random.randn)
 y = np.random.randn(m)
 
 # Convert problem to standard form.
-prox_list = [prox_sum_squares(X, y), 
-             lambda v, t: v.maximum(0) if sparse.issparse(v) else np.maximum(v,0)]
+prox_list = [prox_sum_squares(X, y), lambda v, t: np.maximum(v,0)]
 A_list = [sparse.eye(n), -sparse.eye(n)]
 b = np.zeros(n)
 

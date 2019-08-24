@@ -57,7 +57,7 @@ class TestPaper(BaseTest):
         # Convert problem to standard form.
         # f_1(\beta_1) = ||y - X\beta_1||_2^2, f_2(\beta_2) = I(\beta_2 >= 0).
         # A_1 = I_n, A_2 = -I_n, b = 0.
-        prox_list = [prox_sum_squares(X, y), lambda v, t: v.maximum(0) if sparse.issparse(v) else np.maximum(v,0)]
+        prox_list = [prox_sum_squares(X, y), lambda v, t: np.maximum(v,0)]
         A_list = [sparse.eye(n), -sparse.eye(n)]
         b = np.zeros(n)
         
