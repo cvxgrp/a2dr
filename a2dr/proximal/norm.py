@@ -24,6 +24,21 @@ def prox_norm_inf(v, t = 1, *args, **kwargs):
     """
     return prox_scale(prox_norm_inf_base, *args, **kwargs)(v, t)
 
+def prox_norm_nuc(B, t = 1, *args, **kwargs):
+    """Proximal operator of :math:`tf(aB-b) + cB + d\\|B\\|_F^2`, where :math:`f(B) = \\|B\\|_*`
+    for scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term, and d = quad_term.
+    We must have t > 0, a = non-zero, and d > 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
+    """
+    return prox_scale(prox_norm_nuc_base, *args, **kwargs)(B, t)
+
+def prox_group_lasso(B, t = 1, *args, **kwargs):
+    """Proximal operator of :math:`tf(aB-b) + cB + d\\|B\\|_F^2`, where :math:`f(B) = \\|B\\|_{2,1}` is the
+    group lasso of :math:`B`, for scalar t > 0, and the optional arguments are a = scale, b = offset,
+    c = lin_term, and d = quad_term. We must have t > 0, a = non-zero, and d > 0. By default, t = 1, a = 1,
+    b = 0, c = 0, and d = 0.
+    """
+    return prox_scale(prox_group_lasso_base, *args, **kwargs)(B, t)
+
 def prox_norm1_base(v, t):
 	"""Proximal operator of :math:`f(x) = \\|x\\|_1`.
 	"""
@@ -57,11 +72,16 @@ def prox_norm_inf_base(v, t):
 	# TODO: Sparse handling.
 	return v - t * proj_l1(v/t)
 
-def prox_norm_nuc(B, t):
+def prox_norm_nuc_base(B, t):
+	"""Proximal operator of :math:`f(B) = \\|B\\|_*`, the nuclear norm of :math:`B`.
+	"""
 	U, s, Vt = np.linalg.svd(B, full_matrices=False)
 	s_new = np.maximum(s - t, 0)
 	return U.dot(np.diag(s_new)).dot(Vt)
 
-def prox_group_lasso(B, t):
+def prox_group_lasso_base(B, t):
+	"""Proximal operator of :math:`f(B) = \\|B\\|_{2,1} = \sum_j \\|B_j\\|_2`, the group lasso of :math:`B`,
+	where :math:`B_j` is the j-th column of :math:`B`.
+	"""
 	# TODO: Sparse handling.
 	return np.concatenate([prox_norm2(B[:,j], t) for j in range(B.shape[1])])

@@ -17,27 +17,9 @@ You should have received a copy of the GNU General Public License
 along with A2DR. If not, see <http://www.gnu.org/licenses/>.
 """
 
-from a2dr.proximal.constraint import prox_box_constr
-from a2dr.proximal.constraint import prox_psd_cone
-
-from a2dr.proximal.elementwise import prox_abs
-from a2dr.proximal.elementwise import prox_entr
-from a2dr.proximal.elementwise import prox_exp
-from a2dr.proximal.elementwise import prox_huber
-
-from a2dr.proximal.matrix import prox_neg_log_det
-from a2dr.proximal.matrix import prox_sigma_max
-from a2dr.proximal.matrix import prox_trace
-
-from a2dr.proximal.misc import prox_logistic
-from a2dr.proximal.misc import prox_max
-
-from a2dr.proximal.norm import prox_group_lasso
-from a2dr.proximal.norm import prox_norm1
-from a2dr.proximal.norm import prox_norm2
-from a2dr.proximal.norm import prox_norm_inf
-from a2dr.proximal.norm import prox_norm_nuc
-
-from a2dr.proximal.quadratic import prox_quad_form
-from a2dr.proximal.quadratic import prox_sum_squares
-from a2dr.proximal.quadratic import prox_sum_squares_affine
+from a2dr.proximal.constraint import prox_box_constr, prox_psd_cone
+from a2dr.proximal.elementwise import prox_abs, prox_entr, prox_exp, prox_huber
+from a2dr.proximal.matrix import prox_neg_log_det, prox_sigma_max, prox_trace
+from a2dr.proximal.misc import prox_logistic, prox_max
+from a2dr.proximal.norm import prox_norm1, prox_norm2, prox_norm_inf, prox_norm_nuc, prox_group_lasso
+from a2dr.proximal.quadratic import prox_quad_form, prox_sum_squares, prox_sum_squares_affine

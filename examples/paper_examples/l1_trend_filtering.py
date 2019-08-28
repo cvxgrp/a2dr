@@ -33,7 +33,7 @@ from scipy.optimize import nnls
 from sklearn.datasets import make_sparse_spd_matrix
 
 from a2dr import a2dr
-from a2dr.proximal.prox_operators import *
+from a2dr.proximal import *
 from a2dr.tests.base_test import BaseTest
 
 class TestPaper(BaseTest):
@@ -64,7 +64,9 @@ class TestPaper(BaseTest):
         # Convert problem to standard form.
         # f_1(x_1) = (1/2)||y - x_1||_2^2, f_2(x_2) = \alpha*||x_2||_1.
         # A_1 = D, A_2 = -I_{n-2}, b = 0.
-        prox_list = [lambda v, t: (t*y + v)/(t + 1.0), prox_norm1(alpha)]
+        # prox_list = [lambda v, t: (t*y + v)/(t + 1.0), prox_norm1(alpha)]
+        prox_list = [lambda v, t: (t*y + v)/(t + 1.0),
+                     lambda v, t: prox_norm1(v, alpha*t)]
         A_list = [D, -sparse.eye(n-2)]
         b = np.zeros(n-2)
 
