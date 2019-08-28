@@ -7,6 +7,7 @@ build/
 
 # Python egg metadata, regenerated from source files by setuptools.
 *.egg-info
+.eggs/
 
 # Pycharm folders.
 venv
