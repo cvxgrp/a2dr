@@ -8,7 +8,7 @@ def prox_max(v, t):
 	return v - t*proj_simplex(v/t)
 
 def prox_logistic(v, t, x0 = None, y = None):
-    """Returns the proximal operator for f(x) = \sum_i log(1 + exp(-y_i*x_i)), where y is a given vector quantity,
+    """Proximal operator for :math:`f(x) = \sum_i log(1 + exp(-y_i*x_i))`, where y is a given vector quantity,
        solved using the Newton-CG method from scipy.optimize.minimize. The function defaults to y_i = -1 for all i,
        so that f(x) = \sum_i log(1 + e^x_i).
     """
