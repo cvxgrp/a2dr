@@ -87,11 +87,11 @@ class TestPrecondition(BaseTest):
         p_eq_list, A_eq_list, db, e = precondition(prox_list, A_list, b)
         A_eq = csr_matrix(sparse.hstack(A_eq_list))
         
-        print('[Sanity Check]')
-        print('\|A\|_2 = {}, \|DAE\|_2 = {}'.format(sparse.linalg.norm(A), sparse.linalg.norm(A_eq)))
-        print('min(|A|) = {}, max(|A|) = {}, mean(|A|) = {}'.format(np.min(np.abs(A)), 
+        print(r'[Sanity Check]')
+        print(r'\|A\|_2 = {}, \|DAE\|_2 = {}'.format(sparse.linalg.norm(A), sparse.linalg.norm(A_eq)))
+        print(r'min(|A|) = {}, max(|A|) = {}, mean(|A|) = {}'.format(np.min(np.abs(A)), 
                                                                     np.max(np.abs(A)), sparse.csr_matrix.mean(np.abs(A))))
-        print('min(|DAE|) = {}, max(|DAE|) = {}, mean(|DAE|) = {}'.format(np.min(np.abs(A_eq)), 
+        print(r'min(|DAE|) = {}, max(|DAE|) = {}, mean(|DAE|) = {}'.format(np.min(np.abs(A_eq)), 
                                                                     np.max(np.abs(A_eq)), sparse.csr_matrix.mean(np.abs(A_eq))))
 
     def test_nnls(self):

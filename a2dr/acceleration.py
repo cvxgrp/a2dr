@@ -22,19 +22,19 @@ import scipy.sparse as sp
 
 def aa_weights(Y, g, reg = 0, type = "lstsq", *args, **kwargs):
 	""" Solve the constrained least-squares problem
-		Minimize sum_squares(\sum_{j=0}^m w_j * G^(k-m+j))
-			subject to \sum_{j=0}^m w_j = 1.
-		with respect to w \in \reals^{m+1}.
+		Minimize sum_squares(\\sum_{j=0}^m w_j * G^(k-m+j))
+			subject to \\sum_{j=0}^m w_j = 1.
+		with respect to w \\in \\reals^{m+1}.
 
 	This can be transformed via a change of variables
 		w_0 = c_0, w_j = c_j - c_{j-1} for j = 1,...,m-1, and w_m = 1 - c_{m-1}
 	into the unconstrained problem
 		Minimize sum_squares(g - Y*c)
-	with respect to c \in \reals^m, where g_i = G^(i) and Y_k = [y_{k-m},...,y_{k-1}]
+	with respect to c \\in \\reals^m, where g_i = G^(i) and Y_k = [y_{k-m},...,y_{k-1}]
 	for y_i = g_{i+1} - g_i.
 
 	We add a regularization term for stability, so the final problem we solve is
-		Minimize sum_squares(g - Y*c) + \lambda*sum_squares(c)
+		Minimize sum_squares(g - Y*c) + \\lambda*sum_squares(c)
 	and return w as defined above.
 	"""
 	if type == "lstsq":

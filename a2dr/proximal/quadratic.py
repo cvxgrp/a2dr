@@ -5,8 +5,8 @@ import scipy.sparse.linalg as spLA
 from a2dr.proximal.composition import prox_scale
 
 def prox_quad_form(v, t = 1, Q = None, *args, **kwargs):
-    """Proximal operator of :math:`tf(ax-b) + c^Tx + d\|x\|_2^2`, where :math:`f(x) = x^TQx` for symmetric
-    :math:`Q \succeq 0`, scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term,
+    """Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f(x) = x^TQx` for symmetric
+    :math:`Q \\succeq 0`, scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term,
     and d = quad_term. We must have t > 0, a = non-zero, and d > 0. By default, t = 1, a = 1, b = 0, c = 0,
     and d = 0.
     """
@@ -24,14 +24,14 @@ def prox_quad_form(v, t = 1, Q = None, *args, **kwargs):
     return prox_scale(prox_quad_form_base, Q, *args, **kwargs)(v, t)
 
 def prox_sum_squares(v, t = 1, *args, **kwargs):
-    """Proximal operator of :math:`tf(ax-b) + c^Tx + d\|x\|_2^2`, where :math:`f(x) = \sum_i x_i^2`
+    """Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f(x) = \\sum_i x_i^2`
     for scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term, and d = quad_term.
     We must have t > 0, a = non-zero, and d > 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
     """
     return prox_scale(prox_sum_squares_base, *args, **kwargs)(v, t)
 
 def prox_sum_squares_affine(v, t = 1, F = None, g = None, method = "lsqr", *args, **kwargs):
-    """Proximal operator of :math:`tf(ax-b) + c^Tx + d\|x\|_2^2`, where :math:`f(x) = \|Fx - g\|_2^2`
+    """Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f(x) = \\|Fx - g\\|_2^2`
         for matrix F, vector g, scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term,
         and d = quad_term. We must have t > 0, a = non-zero, and d > 0. By default, t = 1, a = 1, b = 0, c = 0,
         and d = 0.
@@ -49,7 +49,7 @@ def prox_sum_squares_affine(v, t = 1, F = None, g = None, method = "lsqr", *args
     return prox_scale(prox_sum_squares_affine_base, F, g, method, *args, **kwargs)(v, t)
 
 def prox_quad_form_base(v, t, Q):
-    """Proximal operator of :math:`f(x) = x^TQx`, where :math:`Q \succeq 0` is a symmetric positive semidefinite matrix.
+    """Proximal operator of :math:`f(x) = x^TQx`, where :math:`Q \\succeq 0` is a symmetric positive semidefinite matrix.
     """
     if sparse.issparse(Q):
         # Q_min_eigval = spLA.eigsh(Q, k=1, which="SA", return_eigenvectors=False)[0]
@@ -62,12 +62,12 @@ def prox_quad_form_base(v, t, Q):
         return LA.lstsq(Q + (1/t)*np.eye(v.shape[0]), v/t, rcond=None)[0]
 
 def prox_sum_squares_base(v, t):
-    """Proximal operator of :math:`f(x) = \sum_i x_i^2`.
+    """Proximal operator of :math:`f(x) = \\sum_i x_i^2`.
     """
     return v / (1.0 + 2*t)
 
 def prox_sum_squares_affine_base(v, t, F, g, method = "lsqr"):
-    """Proximal operator of :math:`f(x) = \|Fx - g\|_2^2`, where F is a matrix and g is a vector.
+    """Proximal operator of :math:`f(x) = \\|Fx - g\\|_2^2`, where F is a matrix and g is a vector.
     """
     # if F.shape[0] != g.shape[0]:
     #    raise ValueError("Dimension mismatch: nrow(F) != nrow(g)")

@@ -4,28 +4,28 @@ from scipy.special import lambertw
 from a2dr.proximal.composition import prox_scale
 
 def prox_abs(v, t = 1, *args, **kwargs):
-    """Proximal operator of :math:`tf(ax-b) + c^Tx + d\|x\|_2^2`, where :math:`f(x) = |x|` applied elementwise
+    """Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f(x) = |x|` applied elementwise
     for scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term, and d = quad_term.
     We must have t > 0, a = non-zero, and d > 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
     """
     return prox_scale(prox_abs_base, *args, **kwargs)(v, t)
 
 def prox_entr(v, t = 1, *args, **kwargs):
-    """Proximal operator of :math:`tf(ax-b) + c^Tx + d\|x\|_2^2`, where :math:`f(x) = -x\log(x)` applied elementwise
+    """Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f(x) = -x\\log(x)` applied elementwise
     for scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term, and d = quad_term.
     We must have t > 0, a = non-zero, and d > 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
     """
     return prox_scale(prox_entr_base, *args, **kwargs)(v, t)
 
 def prox_exp(v, t = 1, *args, **kwargs):
-    """Proximal operator of :math:`tf(ax-b) + c^Tx + d\|x\|_2^2`, where :math:`f(x) = \exp(x)` applied elementwise
+    """Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f(x) = \\exp(x)` applied elementwise
     for scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term, and d = quad_term.
     We must have t > 0, a = non-zero, and d > 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
     """
     return prox_scale(prox_exp_base, *args, **kwargs)(v, t)
 
 def prox_huber(v, t = 1, M = 1, *args, **kwargs):
-    """Proximal operator of :math:`tf(ax-b) + c^Tx + d\|x\|_2^2`, where
+    """Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where
     .. math::
         f(x) =
             \\begin{cases}
@@ -50,12 +50,12 @@ def prox_abs_base(v, t):
 	return max_elemwise(v - 1/t, 0) + min_elemwise(v + 1/t, 0)
 
 def prox_entr_base(v, t):
-	"""Proximal operator of :math:`f(x) = -x\log(x)`.
+	"""Proximal operator of :math:`f(x) = -x\\log(x)`.
 	"""
 	return lambertw(t*v - 1) * np.log(t) / t
 
 def prox_exp_base(v, t):
-	"""Proximal operator of :math:`f(x) = \exp(x)` for scalar t > 0.
+	"""Proximal operator of :math:`f(x) = \\exp(x)` for scalar t > 0.
 	"""
 	return v - lambertw(np.exp(v - np.log(t)))
 
