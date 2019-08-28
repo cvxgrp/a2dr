@@ -43,3 +43,12 @@ class TestProximal(BaseTest):
         x_a2dr = prox_sum_squares(self.v, self.t, scale=2, offset=offset, lin_term=lin_term, quad_term=1)
         x_cvxpy = self.prox_cvxpy(sum_squares, self.v, self.t, scale=2, offset=offset, lin_term=lin_term, quad_term=1)
         self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places=4)
+
+    def test_huber(self):
+        x_a2dr = prox_huber(self.v, M = 2)
+        x_cvxpy = self.prox_cvxpy(lambda x: sum(huber(x, M = 2)), self.v)
+        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
+
+        x_a2dr = prox_huber(self.v, self.t, M = 2, scale = 0.5)
+        x_cvxpy = self.prox_cvxpy(lambda x: sum(huber(x, M = 2)), self.v, self.t, scale = 0.5)
+        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)

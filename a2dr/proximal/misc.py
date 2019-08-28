@@ -3,20 +3,32 @@ import warnings
 from scipy.special import expit
 from scipy.optimize import minimize
 from a2dr.proximal.projection import proj_simplex
+from a2dr.proximal.composition import prox_scale
 
-def prox_max(v, t):
-	return v - t*proj_simplex(v/t)
+def prox_logistic(v, t = 1, x0 = None, y = None, *args, **kwargs):
+    """Proximal operator of :math:`tf(ax-b) + c^Tx + d\|x\|_2^2`, where :math:`f(x) = \max_i x_i`
+    for scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term, and d = quad_term.
+    We must have t > 0, a = non-zero, and d > 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
+    """
+    if x0 is None:
+        # x0 = np.random.randn(*v.shape)
+        x0 = v
+    if y is None:
+        y = -np.ones(v.shape)
+    return prox_scale(prox_logistic_base, x0, y, *args, **kwargs)(v, t)
 
-def prox_logistic(v, t, x0 = None, y = None):
+def prox_max(v, t = 1, *args, **kwargs):
+    """Proximal operator of :math:`tf(ax-b) + c^Tx + d\|x\|_2^2`, where :math:`f(x) = \max_i x_i`
+    for scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term, and d = quad_term.
+    We must have t > 0, a = non-zero, and d > 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
+    """
+    return prox_scale(prox_max_base, *args, **kwargs)(v, t)
+
+def prox_logistic_base(v, t, x0, y):
     """Proximal operator for :math:`f(x) = \sum_i log(1 + exp(-y_i*x_i))`, where y is a given vector quantity,
        solved using the Newton-CG method from scipy.optimize.minimize. The function defaults to y_i = -1 for all i,
        so that f(x) = \sum_i log(1 + e^x_i).
     """
-    if x0 is None:
-        x0 = v   # np.random.randn(*v.shape)
-    if y is None:
-        y = -np.ones(v.shape)
-
     # g(x) = \sum_i log(1 + exp(-y_i*x_i)) + 1/(2*t)*||x - v||_2^2
     def fun(x, y, v, t):
         # expit(x) = 1/(1 + exp(-x))
@@ -35,3 +47,8 @@ def prox_logistic(v, t, x0 = None, y = None):
     if not res.success:
         warnings.warn(res.message)
     return res.x[0] if res.x.size == 1 else res.x
+
+def prox_max_base(v, t):
+    """Proximal operator of :math:`f(x) = \max_i x_i`.
+    """
+    return v - t*proj_simplex(v/t)

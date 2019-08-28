@@ -36,7 +36,7 @@ def prox_huber(v, t = 1, M = 1, *args, **kwargs):
     and d = quad_term. We must have M > 0, t > 0, a = non-zero, and d > 0. By default, t = 1, a = 1, b = 0, c = 0,
     and d = 0.
     """
-    return prox_scale(lambda u, s: prox_huber_base(u, s, M), *args, **kwargs)(v, t)
+    return prox_scale(prox_huber_base, M, *args, **kwargs)(v, t)
 
 def prox_abs_base(v, t):
 	"""Proximal operator of :math:`f(x) = |x|`.

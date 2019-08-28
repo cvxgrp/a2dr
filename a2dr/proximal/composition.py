@@ -14,5 +14,5 @@ def prox_scale(prox, *args, **kwargs):
     def prox_new(v, t):
         v_new = scale*(v - lin_term)/(2*quad_term + 1) - offset
         t_new = t*scale**2/(2*quad_term + 1)
-        return (prox(v_new, t_new) + offset)/scale
+        return (prox(v_new, t_new, *args, **kwargs) + offset)/scale
     return prox_new
