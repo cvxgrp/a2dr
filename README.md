@@ -102,7 +102,7 @@ import numpy as np
 import numpy.linalg
 from scipy import sparse
 from a2dr import a2dr
-from a2dr.proximal.prox_operators import *
+from a2dr.proximal import *
 from a2dr.tests.base_test import BaseTest
 
 # Problem data.
@@ -113,7 +113,8 @@ X = sparse.random(m, n, density=density, data_rvs=np.random.randn)
 y = np.random.randn(m)
 
 # Convert problem to standard form.
-prox_list = [prox_sum_squares(X, y), lambda v, t: np.maximum(v,0)]
+prox_list = [lambda v, t: prox_sum_squares_affine(v, t, F=X, g=y), 
+             prox_nonneg_constr]
 A_list = [sparse.eye(n), -sparse.eye(n)]
 b = np.zeros(n)
 
@@ -123,6 +124,7 @@ drs_result = a2dr(prox_list, A_list, b, anderson=False)
 a2dr_result = a2dr(prox_list, A_list, b, anderson=True)
 bt = BaseTest()
 bt.compare_total(drs_result, a2dr_result)
+
 ```
 
 ### Citing

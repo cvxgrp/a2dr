@@ -9,7 +9,7 @@ def prox_scale(prox, *args, **kwargs):
     :param prox: Function handle of a proximal operator that takes as input a vector/matrix :math:`v` and a scalar
     :math:`t > 0`, and outputs
     .. math::
-        `prox_{tf}(v) = \min_x f(x) + \\frac{1}{2t}\\|x - v\\|_F^2}`,
+        `prox_{tf}(v) = \\min_x f(x) + \\frac{1}{2t}\\|x - v\\|_F^2}`,
     the proximal operator of :math:`tf` evaluated at :math:`v`, where :math:`f` is an arbitrary function.
     :param scale: Scaling term :math:`a \\neq 0`. Defaults to 1.
     :param offset: Offset term :math:`b`. Defaults to 0.

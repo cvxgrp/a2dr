@@ -63,10 +63,10 @@ class TestPaper(BaseTest):
         alpha = alpha_ratio*alpha_max #0.001 for n=100, 0.01 for n=50
 
         # Convert problem to standard form.
-        # f_1(S) = -log(det(S)) on symmetric PSD matrices, f_2(S) = trace(S*Q), f_3(S) = \alpha*||S||_1.
-        # A_1 = [I; 0], A_2 = [-I; I], A_3 = [0; -I], b = 0.
-        prox_list = [lambda v, t: prox_neg_log_det_aff(v.reshape((n,n), order='C'), Q, t, order='C'),
-                     prox_norm1(alpha)]
+        # f_1(S) = -log(det(S)) + trace(S*Q) on symmetric PSD matrices, f_2(S) = \alpha*||S||_1.
+        # A_1 = I, A_2 = -I, b = 0.
+        prox_list = [lambda v, t: prox_neg_log_det(v.reshape((n,n), order='C'), t, lin_term=t*Q).ravel(order='C'), 
+                     lambda v, t: prox_norm1(v, t*alpha)]
         A_list = [sparse.eye(n*n), -sparse.eye(n*n)]
         b = np.zeros(n*n)
 

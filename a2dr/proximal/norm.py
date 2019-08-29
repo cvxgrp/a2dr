@@ -54,17 +54,18 @@ def prox_norm2_base(v, t):
 	if sparse.issparse(v):
 		norm = sparse.linalg.norm
 		zeros = sparse.csr_matrix
-		max_elemwise = lambda x, y: x.maximum(y)
 	else:
 		norm = np.linalg.norm
 		zeros = np.zeros
-		max_elemwise = np.maximum
 
-	v_norm = norm(v,'fro')
+	if len(v.shape) == 2:
+		v_norm = norm(v,'fro')
+	elif len(v.shape) == 1:
+		v_norm = norm(v,2)
 	if v_norm == 0:
 		return zeros(v.shape)
 	else:
-		return max_elemwise(1 - t*1.0/v_norm, 0) * v
+		return np.maximum(1 - t*1.0/v_norm, 0) * v
 
 def prox_norm_inf_base(v, t):
 	"""Proximal operator of :math:`f(x) = \\|x\\|_{\\infty}`.
@@ -80,8 +81,11 @@ def prox_norm_nuc_base(B, t):
 	return U.dot(np.diag(s_new)).dot(Vt)
 
 def prox_group_lasso_base(B, t):
-	"""Proximal operator of :math:`f(B) = \\|B\\|_{2,1} = \sum_j \\|B_j\\|_2`, the group lasso of :math:`B`,
+	"""Proximal operator of :math:`f(B) = \\|B\\|_{2,1} = \\sum_j \\|B_j\\|_2`, the group lasso of :math:`B`,
 	where :math:`B_j` is the j-th column of :math:`B`.
 	"""
 	# TODO: Sparse handling.
-	return np.concatenate([prox_norm2(B[:,j], t) for j in range(B.shape[1])])
+	if sparse.issparse(B):
+		return sparse.hstack([prox_norm2(B[:,j], t) for j in range(B.shape[1])])
+	else:
+		return np.vstack([prox_norm2(B[:,j], t) for j in range(B.shape[1])]).T

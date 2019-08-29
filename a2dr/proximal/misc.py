@@ -6,7 +6,8 @@ from a2dr.proximal.projection import proj_simplex
 from a2dr.proximal.composition import prox_scale
 
 def prox_logistic(v, t = 1, x0 = None, y = None, *args, **kwargs):
-    """Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f(x) = \\max_i x_i`
+    """Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where 
+    :math:`f(x) = \\sum_i \\log(1 + \\exp(-y_i*x_i))`
     for scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term, and d = quad_term.
     We must have t > 0, a = non-zero, and d >= 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
     """

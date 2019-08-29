@@ -72,10 +72,10 @@ class TestPaper(BaseTest):
         # f_2(\theta) = \alpha*||\theta||_{2,1}, 
         # f_3(\tilde \theta) = \beta*||\tilde \theta||_*.
         # A_1 = [I; 0], A_2 = [-X; I], A_3 = [0; -I], b = 0.
-        prox_list = [lambda v, t: prox_logistic(v, 1.0/t, y = Y.ravel(order='F')),   
+        prox_list = [lambda v, t: prox_logistic(v, t, y = Y.ravel(order='F')),   
                      # TODO: Calculate in parallel for k = 1,...K.
-                     lambda v, t: prox_group_lasso(alpha)(v.reshape((p,K), order='F'), t),
-                     lambda v, t: prox_norm_nuc(beta, order='F')(v.reshape((p,K), order='F'), t)]
+                     lambda v, t: prox_group_lasso(v.reshape((p,K), order='F'), t*alpha).ravel(order='F'),
+                     lambda v, t: prox_norm_nuc(v.reshape((p,K), order='F'), t*beta).ravel(order='F')]
         A_list = [sparse.vstack([sparse.eye(m*K), sparse.csr_matrix((p*K,m*K))]),
                   sparse.vstack([-sparse.block_diag(K*[X]), sparse.eye(p*K)]),
                   sparse.vstack([sparse.csr_matrix((m*K,p*K)), -sparse.eye(p*K)])]
