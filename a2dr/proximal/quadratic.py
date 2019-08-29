@@ -7,7 +7,7 @@ from a2dr.proximal.composition import prox_scale
 def prox_quad_form(v, t = 1, Q = None, *args, **kwargs):
     """Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f(x) = x^TQx` for symmetric
     :math:`Q \\succeq 0`, scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term,
-    and d = quad_term. We must have t > 0, a = non-zero, and d > 0. By default, t = 1, a = 1, b = 0, c = 0,
+    and d = quad_term. We must have t > 0, a = non-zero, and d >= 0. By default, t = 1, a = 1, b = 0, c = 0,
     and d = 0.
     """
     if Q is None or Q.shape[0] != Q.shape[1]:
@@ -26,14 +26,14 @@ def prox_quad_form(v, t = 1, Q = None, *args, **kwargs):
 def prox_sum_squares(v, t = 1, *args, **kwargs):
     """Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f(x) = \\sum_i x_i^2`
     for scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term, and d = quad_term.
-    We must have t > 0, a = non-zero, and d > 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
+    We must have t > 0, a = non-zero, and d >= 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
     """
     return prox_scale(prox_sum_squares_base, *args, **kwargs)(v, t)
 
 def prox_sum_squares_affine(v, t = 1, F = None, g = None, method = "lsqr", *args, **kwargs):
     """Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f(x) = \\|Fx - g\\|_2^2`
         for matrix F, vector g, scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term,
-        and d = quad_term. We must have t > 0, a = non-zero, and d > 0. By default, t = 1, a = 1, b = 0, c = 0,
+        and d = quad_term. We must have t > 0, a = non-zero, and d >= 0. By default, t = 1, a = 1, b = 0, c = 0,
         and d = 0.
         """
     if F is None:

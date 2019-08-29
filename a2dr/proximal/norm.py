@@ -6,35 +6,35 @@ from a2dr.proximal.composition import prox_scale
 def prox_norm1(v, t = 1, *args, **kwargs):
     """Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f(x) = \\|x\\|_1`
     for scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term, and d = quad_term.
-    We must have t > 0, a = non-zero, and d > 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
+    We must have t > 0, a = non-zero, and d >= 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
     """
     return prox_scale(prox_norm1_base, *args, **kwargs)(v, t)
 
 def prox_norm2(v, t = 1, *args, **kwargs):
     """Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f(x) = \\|x\\|_2`
     for scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term, and d = quad_term.
-    We must have t > 0, a = non-zero, and d > 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
+    We must have t > 0, a = non-zero, and d >= 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
     """
     return prox_scale(prox_norm2_base, *args, **kwargs)(v, t)
 
 def prox_norm_inf(v, t = 1, *args, **kwargs):
     """Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f(x) = \\|x\\|_{\\infty}`
     for scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term, and d = quad_term.
-    We must have t > 0, a = non-zero, and d > 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
+    We must have t > 0, a = non-zero, and d >= 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
     """
     return prox_scale(prox_norm_inf_base, *args, **kwargs)(v, t)
 
 def prox_norm_nuc(B, t = 1, *args, **kwargs):
     """Proximal operator of :math:`tf(aB-b) + cB + d\\|B\\|_F^2`, where :math:`f(B) = \\|B\\|_*`
     for scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term, and d = quad_term.
-    We must have t > 0, a = non-zero, and d > 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
+    We must have t > 0, a = non-zero, and d >= 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
     """
     return prox_scale(prox_norm_nuc_base, *args, **kwargs)(B, t)
 
 def prox_group_lasso(B, t = 1, *args, **kwargs):
     """Proximal operator of :math:`tf(aB-b) + cB + d\\|B\\|_F^2`, where :math:`f(B) = \\|B\\|_{2,1}` is the
     group lasso of :math:`B`, for scalar t > 0, and the optional arguments are a = scale, b = offset,
-    c = lin_term, and d = quad_term. We must have t > 0, a = non-zero, and d > 0. By default, t = 1, a = 1,
+    c = lin_term, and d = quad_term. We must have t > 0, a = non-zero, and d >= 0. By default, t = 1, a = 1,
     b = 0, c = 0, and d = 0.
     """
     return prox_scale(prox_group_lasso_base, *args, **kwargs)(B, t)

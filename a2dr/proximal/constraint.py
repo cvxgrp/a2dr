@@ -6,7 +6,7 @@ from a2dr.proximal.composition import prox_scale
 def prox_box_constr(v, t = 1, v_lo = -np.inf, v_hi = np.inf, *args, **kwargs):
 	"""Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f` is the set indicator that
 	:math:`\\underline x \\leq x \\leq \\overline x`. The scalar t > 0, and the optional arguments are a = scale,
-	b = offset, c = lin_term, and d = quad_term. We must have t > 0, a = non-zero, and d > 0. By default, t = 1,
+	b = offset, c = lin_term, and d = quad_term. We must have t > 0, a = non-zero, and d >= 0. By default, t = 1,
 	a = 1, b = 0, c = 0, and d = 0.
 	"""
 	return prox_scale(prox_box_constr_base, v_lo, v_hi, *args, **kwargs)(v, t)
@@ -14,21 +14,21 @@ def prox_box_constr(v, t = 1, v_lo = -np.inf, v_hi = np.inf, *args, **kwargs):
 def prox_nonneg_constr(v, t = 1, *args, **kwargs):
 	"""Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f` is the set indicator that
 	:math:`x \\geq 0`. The scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term, and
-	d = quad_term. We must have t > 0, a = non-zero, and d > 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
+	d = quad_term. We must have t > 0, a = non-zero, and d >= 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
 	"""
 	return prox_scale(prox_nonneg_constr_base, *args, **kwargs)(v, t)
 
 def prox_nonpos_constr(v, t = 1, *args, **kwargs):
 	"""Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f` is the set indicator that
 	:math:`x \\leq 0`. The scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term, and
-	d = quad_term. We must have t > 0, a = non-zero, and d > 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
+	d = quad_term. We must have t > 0, a = non-zero, and d >= 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
 	"""
 	return prox_scale(prox_nonpos_constr_base, *args, **kwargs)(v, t)
 
 def prox_psd_cone(B, t = 1, *args, **kwargs):
 	"""Proximal operator of :math:`tf(aB-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f` is the set indicator that
 	:math:`B \\succeq 0` for :math:`B` a symmetric matrix. The scalar t > 0, and the optional arguments are
-	a = scale, b = offset, c = lin_term, and d = quad_term. We must have t > 0, a = non-zero, and d > 0. By default,
+	a = scale, b = offset, c = lin_term, and d = quad_term. We must have t > 0, a = non-zero, and d >= 0. By default,
 	t = 1, a = 1, b = 0, c = 0, and d = 0.
 	"""
 	if B.shape[0] != B.shape[1]:
