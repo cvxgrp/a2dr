@@ -33,7 +33,7 @@ from scipy.optimize import nnls
 from sklearn.datasets import make_sparse_spd_matrix
 
 from a2dr import a2dr
-from a2dr.proximal.prox_operators import *
+from a2dr.proximal import *
 from a2dr.tests.base_test import BaseTest
 
 class TestPaper(BaseTest):
@@ -103,7 +103,11 @@ class TestPaper(BaseTest):
         #          + \sum_{i"} I(s_{i"}^{sink}=L_{i"}).
         # A = [B, I], b = 0
         z = np.zeros(m1)
-        prox_list = [prox_sat(c, x_max), lambda v, t: np.hstack([z, L, prox_sat_pos(d[m2:], s_max)(v[m2:],t)])]
+        # prox_list = [prox_sat(c, x_max), lambda v, t: np.hstack([z, L, prox_sat_pos(d[m2:], s_max)(v[m2:],t)])]
+        def prox_sat(v, t, c, v_lo = -np.inf, v_hi = np.inf):
+            return prox_box_constr(prox_sum_squares(v, t*c), t, v_lo, v_hi)
+        prox_list = [lambda v, t: prox_sat(v, t, c, -x_max, x_max),
+                     lambda v, t: np.hstack([z, L, prox_sat(v[m2:], t, d[m2:], 0, s_max)])]
         A_list = [B, sparse.eye(m)]
         b = np.zeros(m)
         
