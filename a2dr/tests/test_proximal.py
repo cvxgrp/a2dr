@@ -10,6 +10,7 @@ class TestProximal(BaseTest):
         self.t = 5*np.abs(np.random.randn()) + 1e-6
         self.v = np.random.randn(100)
         self.B = np.random.randn(10,10)
+        self.B_symm = (self.B + self.B.T) / 2.0
 
     def prox_cvxpy(self, fun, v, t = 1, scale = 1, offset = 0, lin_term = 0, quad_term = 0):
         x_var = Variable(v.shape)
@@ -38,10 +39,15 @@ class TestProximal(BaseTest):
         x_cvxpy = self.prox_cvxpy(sum_squares, self.v, self.t, scale = 2, offset = 0.5, lin_term = 1.5, quad_term = 2.5)
         self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
 
+        # f(x) = (1/2)*||x - offset||_2^2
         offset = np.random.randn(*self.v.shape)
+        x_a2dr = prox_sum_squares(self.v, t = 0.5*self.t, offset = offset)
+        x_cvxpy = self.prox_cvxpy(sum_squares, self.v, t = 0.5*self.t, offset = offset)
+        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
+
         lin_term = np.random.randn(*self.v.shape)
-        x_a2dr = prox_sum_squares(self.v, self.t, scale = 2, offset = offset, lin_term = lin_term, quad_term = 2.5)
-        x_cvxpy = self.prox_cvxpy(sum_squares, self.v, self.t, scale = 2, offset = offset, lin_term = lin_term, quad_term = 2.5)
+        x_a2dr = prox_sum_squares(self.v, self.t, scale = 0.5, offset = offset, lin_term = lin_term, quad_term = 2.5)
+        x_cvxpy = self.prox_cvxpy(sum_squares, self.v, self.t, scale = 0.5, offset = offset, lin_term = lin_term, quad_term = 2.5)
         self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
 
     def test_huber(self):
@@ -53,11 +59,54 @@ class TestProximal(BaseTest):
         x_cvxpy = self.prox_cvxpy(lambda x: sum(huber(x, M = 2)), self.v, self.t, scale = 0.5)
         self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
 
+    def test_norm1(self):
+        x_a2dr = prox_norm1(self.v)
+        x_cvxpy = self.prox_cvxpy(norm1, self.v)
+        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
+
+        # f(x) = (1/2)*||x||_1
+        x_a2dr = prox_norm1(self.v, t = 0.5*self.t)
+        x_cvxpy = self.prox_cvxpy(norm1, self.v, t = 0.5*self.t)
+        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
+
+        x_a2dr = prox_norm1(self.v, self.t, scale = 2, offset = 0.5, lin_term = 1.5, quad_term = 1.75)
+        x_cvxpy = self.prox_cvxpy(norm1, self.v, self.t, scale = 2, offset = 0.5, lin_term = 1.5, quad_term = 1.75)
+        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
+
+        offset = np.random.randn(*self.v.shape)
+        lin_term = np.random.randn(*self.v.shape)
+        x_a2dr = prox_norm1(self.v, self.t, scale = 0.5, offset = offset, lin_term = lin_term, quad_term = 2.5)
+        x_cvxpy = self.prox_cvxpy(norm1, self.v, self.t, scale = 0.5, offset = offset, lin_term = lin_term, quad_term = 2.5)
+        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
+
     def test_norm_nuc(self):
         B_a2dr = prox_norm_nuc(self.B)
         B_cvxpy = self.prox_cvxpy(normNuc, self.B)
-        self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 4)
+        self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 3)
+
+        # f(B) = (1/2)*||B||_*
+        B_a2dr = prox_norm_nuc(self.B, t = 0.5*self.t)
+        B_cvxpy = self.prox_cvxpy(normNuc, self.B, t = 0.5*self.t)
+        self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 3)
 
         B_a2dr = prox_norm_nuc(self.B, self.t, scale = 2, offset = 0.5, lin_term = 1.5, quad_term = 1.75)
         B_cvxpy = self.prox_cvxpy(normNuc, self.B, self.t, scale = 2, offset = 0.5, lin_term = 1.5, quad_term = 1.75)
-        self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 4)
+        self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 3)
+
+    def test_neg_log_det(self):
+        # f(B) = -log det(B)
+        B_a2dr = prox_neg_log_det(self.B_symm)
+        B_cvxpy = self.prox_cvxpy(lambda X: -log_det(X), self.B_symm)
+        self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 3)
+
+        B_a2dr = prox_neg_log_det(self.B_symm, self.t)
+        B_cvxpy = self.prox_cvxpy(lambda X: -log_det(X), self.B_symm, self.t)
+        self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 3)
+
+        B_a2dr = prox_neg_log_det(self.B_symm, scale = 2, offset = 0.5)
+        B_cvxpy = self.prox_cvxpy(lambda X: -log_det(X), self.B_symm, scale = 2, offset = 0.5)
+        self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 3)
+
+        B_a2dr = prox_neg_log_det(self.B_symm, self.t, scale = 2, offset = 0.5, lin_term = 1.5, quad_term = 1.75)
+        B_cvxpy = self.prox_cvxpy(lambda X: -log_det(X), self.B_symm, self.t, scale = 2, offset = 0.5, lin_term = 1.5, quad_term = 1.75)
+        self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 3)
