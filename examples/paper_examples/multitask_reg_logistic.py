@@ -33,7 +33,7 @@ from scipy.optimize import nnls
 from sklearn.datasets import make_sparse_spd_matrix
 
 from a2dr import a2dr
-from a2dr.proximal.prox_operators import *
+from a2dr.proximal import *
 from a2dr.tests.base_test import BaseTest
 
 class TestPaper(BaseTest):
@@ -50,9 +50,9 @@ class TestPaper(BaseTest):
         # subject to Z = X\theta, ||.||_{2,1} = group lasso, ||.||_* = nuclear norm.
 
         # Problem data.
-        K = 3 # Number of tasks.
-        p = 80 # Number of features.
-        m = 100 # Number of samples.
+        K = 3     # Number of tasks.
+        p = 80    # Number of features.
+        m = 100   # Number of samples.
         alpha = 0.1
         beta = 0.1
 
@@ -75,7 +75,7 @@ class TestPaper(BaseTest):
         prox_list = [lambda v, t: prox_logistic(v, 1.0/t, y = Y.ravel(order='F')),   
                      # TODO: Calculate in parallel for k = 1,...K.
                      lambda v, t: prox_group_lasso(alpha)(v.reshape((p,K), order='F'), t),
-                     lambda v, t: prox_nuc_norm(beta, order='F')(v.reshape((p,K), order='F'), t)]
+                     lambda v, t: prox_norm_nuc(beta, order='F')(v.reshape((p,K), order='F'), t)]
         A_list = [sparse.vstack([sparse.eye(m*K), sparse.csr_matrix((p*K,m*K))]),
                   sparse.vstack([-sparse.block_diag(K*[X]), sparse.eye(p*K)]),
                   sparse.vstack([sparse.csr_matrix((m*K,p*K)), -sparse.eye(p*K)])]

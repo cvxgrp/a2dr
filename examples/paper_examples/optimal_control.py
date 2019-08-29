@@ -33,7 +33,7 @@ from scipy.optimize import nnls
 from sklearn.datasets import make_sparse_spd_matrix
 
 from a2dr import a2dr
-from a2dr.proximal.prox_operators import *
+from a2dr.proximal import *
 from a2dr.tests.base_test import BaseTest
 
 class TestPaper(BaseTest):
@@ -65,7 +65,7 @@ class TestPaper(BaseTest):
         # x_term = 0 also happens to be feasible
         
         # Convert problem to standard form.
-        prox_list = [prox_square, prox_sat(1,1)]
+        prox_list = [prox_sum_squares, prox_sat(1,1)]
         A1 = sparse.lil_matrix(((K+1)*n,K*n))
         A1[n:K*n,:(K-1)*n] = -sparse.block_diag((K-1)*[A])
         A1.setdiag(1)

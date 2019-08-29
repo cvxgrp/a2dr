@@ -64,9 +64,9 @@ class TestPaper(BaseTest):
         # Convert problem to standard form.
         # f_1(x_1) = (1/2)||y - x_1||_2^2, f_2(x_2) = \alpha*||x_2||_1.
         # A_1 = D, A_2 = -I_{n-2}, b = 0.
-        # prox_list = [lambda v, t: (t*y + v)/(t + 1.0), prox_norm1(alpha)]
-        prox_list = [lambda v, t: (t*y + v)/(t + 1.0),
-                     lambda v, t: prox_norm1(v, alpha*t)]
+        # prox_list = [lambda v, t: (t*y + v)/(t + 1.0), lambda v, t: prox_norm1(v, alpha*t)]
+        prox_list = [lambda v, t: prox_sum_squares(v, t = 0.5*t, offset = y),
+                     lambda v, t: prox_norm1(v, t = alpha*t)]
         A_list = [D, -sparse.eye(n-2)]
         b = np.zeros(n-2)
 

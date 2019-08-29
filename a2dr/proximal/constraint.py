@@ -52,12 +52,14 @@ def prox_box_constr_base(v, t, v_lo, v_hi):
 def prox_nonneg_constr_base(v, t):
 	"""Proximal operator of the set indicator that :math:`x \\geq 0`.
 	"""
-	return prox_box_constr_base(v, t, 0, np.inf)
+	# return prox_box_constr_base(v, t, 0, np.inf)
+	return v.maximum(0) if sparse.issparse(v) else np.maximum(v,0)
 
 def prox_nonpos_constr_base(v, t):
 	"""Proximal operator of the set indicator that :math:`x \\leq 0`.
 	"""
-	return prox_box_constr_base(v, t, -np.inf, 0)
+	# return prox_box_constr_base(v, t, -np.inf, 0)
+	return v.minimum(0) if sparse.issparse(v) else np.minimum(v,0)
 
 def prox_psd_cone_base(B, t):
 	"""Proximal operator of the set indicator that :math:`B \\succeq 0`, where :math:`B` is a symmetric matrix.

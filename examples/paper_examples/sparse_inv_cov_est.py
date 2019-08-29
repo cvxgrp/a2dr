@@ -33,7 +33,7 @@ from scipy.optimize import nnls
 from sklearn.datasets import make_sparse_spd_matrix
 
 from a2dr import a2dr
-from a2dr.proximal.prox_operators import *
+from a2dr.proximal import *
 from a2dr.tests.base_test import BaseTest
 
 class TestPaper(BaseTest):
