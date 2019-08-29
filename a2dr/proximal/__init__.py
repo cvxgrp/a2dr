@@ -17,8 +17,9 @@ You should have received a copy of the GNU General Public License
 along with A2DR. If not, see <http://www.gnu.org/licenses/>.
 """
 
-from a2dr.proximal.constraint import prox_box_constr, prox_psd_cone
-from a2dr.proximal.elementwise import prox_abs, prox_entr, prox_exp, prox_huber
+from a2dr.proximal.constraint import prox_box_constr, prox_nonneg_constr, prox_nonpos_constr, prox_psd_cone
+from a2dr.proximal.elementwise import prox_abs, prox_constant, prox_entr, prox_exp, prox_huber, prox_identity, \
+    prox_neg, prox_pos, prox_neg_log
 from a2dr.proximal.matrix import prox_neg_log_det, prox_sigma_max, prox_trace
 from a2dr.proximal.misc import prox_logistic, prox_max
 from a2dr.proximal.norm import prox_norm1, prox_norm2, prox_norm_inf, prox_norm_nuc, prox_group_lasso
