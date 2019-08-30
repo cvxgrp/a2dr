@@ -33,7 +33,7 @@ from scipy.optimize import nnls
 from sklearn.datasets import make_sparse_spd_matrix
 
 from a2dr import a2dr
-from a2dr.proximal.prox_operators import *
+from a2dr.proximal import *
 from a2dr.tests.base_test import BaseTest
 
 class TestPaper(BaseTest):
@@ -64,8 +64,8 @@ class TestPaper(BaseTest):
         
         # Convert problem to standard form.
         def tmp(k, Q_list, q_list, F_list, g_list):
-            return prox_qp(Q_list[k], q_list[k], F_list[k], g_list[k])
-            
+            return lambda v, t: prox_qp(v, t, Q_list[k], q_list[k], F_list[k], g_list[k])
+        # Use "map" method to avoid implicit overriding, which would make all the proximal operators the same
         prox_list = list(map(lambda k: tmp(k,Q_list,q_list,F_list,g_list), range(K)))
         
         # Solve with DRS.

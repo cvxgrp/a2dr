@@ -31,7 +31,7 @@ from scipy.optimize import nnls
 from sklearn.datasets import make_sparse_spd_matrix
 
 from a2dr import a2dr
-from a2dr.proximal.prox_operators import *
+from a2dr.proximal import *
 from a2dr.tests.base_test import BaseTest
 
 class TestPaper(BaseTest):
@@ -55,7 +55,7 @@ class TestPaper(BaseTest):
         # Convert problem to standard form.
         # f_1(\beta_1) = ||y - X\beta_1||_2^2, f_2(\beta_2) = I(\beta_2 >= 0).
         # A_1 = I_n, A_2 = -I_n, b = 0.
-        prox_list = [prox_sum_squares(X, y), lambda v, t: np.maximum(v,0)]
+        prox_list = [lambda v, t: prox_sum_squares_affine(v, t, X, y), prox_nonneg_constr]
         A_list = [sparse.eye(n), -sparse.eye(n)]
         b = np.zeros(n)
         
@@ -89,7 +89,7 @@ class TestPaper(BaseTest):
         # Convert problem to standard form.
         # f_1(\beta_1) = ||y - X\beta_1||_2^2, f_2(\beta_2) = I(\beta_2 >= 0).
         # A_1 = I_n, A_2 = -I_n, b = 0.
-        prox_list = [prox_sum_squares(X, y), lambda v, t: np.maximum(v,0)]
+        prox_list = [lambda v, t: prox_sum_squares_affine(v, t, X, y), prox_nonneg_constr]
         A_list = [sparse.eye(n), -sparse.eye(n)]
         b = np.zeros(n)
 
@@ -129,8 +129,8 @@ class TestPaper(BaseTest):
         # Convert problem to standard form.
         # f_1(S) = -log(det(S)) + trace(S*Q) on symmetric PSD matrices, f_2(S) = \alpha*||S||_1.
         # A_1 = I, A_2 = -I, b = 0.
-        prox_list = [lambda v, t: prox_neg_log_det_aff(v.reshape((n,n), order='C'), Q, t, order='C'),
-                     prox_norm1(alpha)]
+        prox_list = [lambda v, t: prox_neg_log_det(v.reshape((n,n), order='C'), t, lin_term=t*Q).ravel(order='C'), 
+                     lambda v, t: prox_norm1(v, t*alpha)]
         A_list = [sparse.eye(n*n), -sparse.eye(n*n)]
         b = np.zeros(n*n)
 
@@ -166,7 +166,8 @@ class TestPaper(BaseTest):
         # Convert problem to standard form.
         # f_1(x_1) = (1/2)||y - x_1||_2^2, f_2(x_2) = \alpha*||x_2||_1.
         # A_1 = D, A_2 = -I_{n-2}, b = 0.
-        prox_list = [lambda v, t: (t*y + v)/(t + 1.0), prox_norm1(alpha)]
+        prox_list = [lambda v, t: prox_sum_squares(v, t = 0.5*t, offset = y),
+                     lambda v, t: prox_norm1(v, t = alpha*t)]
         A_list = [D, -sparse.eye(n-2)]
         b = np.zeros(n-2)
 
@@ -199,7 +200,9 @@ class TestPaper(BaseTest):
         # x_term = 0 also happens to be feasible
         
         # Convert problem to standard form.
-        prox_list = [prox_square, prox_sat(1,1)]
+        def prox_sat(v, t, v_lo = -np.inf, v_hi = np.inf):
+            return prox_box_constr(prox_sum_squares(v, t), t, v_lo, v_hi)
+        prox_list = [prox_sum_squares, lambda v, t: prox_sat(v, t, -1, 1)]
         A1 = sparse.lil_matrix(((K+1)*n,K*n))
         A1[n:K*n,:(K-1)*n] = -sparse.block_diag((K-1)*[A])
         A1.setdiag(1)
@@ -278,8 +281,8 @@ class TestPaper(BaseTest):
         
         # Convert problem to standard form.
         def tmp(k, Q_list, q_list, F_list, g_list):
-            return prox_qp(Q_list[k], q_list[k], F_list[k], g_list[k])
-            
+            return lambda v, t: prox_qp(v, t, Q_list[k], q_list[k], F_list[k], g_list[k])
+        # Use "map" method to avoid implicit overriding, which would make all the proximal operators the same
         prox_list = list(map(lambda k: tmp(k,Q_list,q_list,F_list,g_list), range(K)))
         
         # Solve with DRS.
@@ -360,7 +363,10 @@ class TestPaper(BaseTest):
         #          + \sum_{i"} I(s_{i"}^{sink}=L_{i"}).
         # A = [B, I], b = 0
         z = np.zeros(m1)
-        prox_list = [prox_sat(c, x_max), lambda v, t: np.hstack([z, L, prox_sat_pos(d[m2:], s_max)(v[m2:],t)])]
+        def prox_sat(v, t, c, v_lo = -np.inf, v_hi = np.inf):
+            return prox_box_constr(prox_sum_squares(v, t*c), t, v_lo, v_hi)
+        prox_list = [lambda v, t: prox_sat(v, t, c, -x_max, x_max),
+                     lambda v, t: np.hstack([z, L, prox_sat(v[m2:], t, d[m2:], 0, s_max)])]
         A_list = [B, sparse.eye(m)]
         b = np.zeros(m)
         
@@ -423,10 +429,10 @@ class TestPaper(BaseTest):
         # f_2(\theta) = \alpha*||\theta||_{2,1}, 
         # f_3(\tilde \theta) = \beta*||\tilde \theta||_*.
         # A_1 = [I; 0], A_2 = [-X; I], A_3 = [0; -I], b = 0.
-        prox_list = [lambda v, t: prox_logistic(v, 1.0/t, y = Y.ravel(order='F')),   
+        prox_list = [lambda v, t: prox_logistic(v, t, y = Y.ravel(order='F')),   
                      # TODO: Calculate in parallel for k = 1,...K.
-                     lambda v, t: prox_group_lasso(alpha)(v.reshape((p,K), order='F'), t),
-                     lambda v, t: prox_nuc_norm(beta, order='F')(v.reshape((p,K), order='F'), t)]
+                     lambda v, t: prox_group_lasso(v.reshape((p,K), order='F'), t*alpha).ravel(order='F'),
+                     lambda v, t: prox_norm_nuc(v.reshape((p,K), order='F'), t*beta).ravel(order='F')]
         A_list = [sparse.vstack([sparse.eye(m*K), sparse.csr_matrix((p*K,m*K))]),
                   sparse.vstack([-sparse.block_diag(K*[X]), sparse.eye(p*K)]),
                   sparse.vstack([sparse.csr_matrix((m*K,p*K)), -sparse.eye(p*K)])]

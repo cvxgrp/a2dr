@@ -65,7 +65,9 @@ class TestPaper(BaseTest):
         # x_term = 0 also happens to be feasible
         
         # Convert problem to standard form.
-        prox_list = [prox_sum_squares, lambda v, t: prox_box_constr(prox_sum_squares(v,t), t, -1, 1)]
+        def prox_sat(v, t, v_lo = -np.inf, v_hi = np.inf):
+            return prox_box_constr(prox_sum_squares(v, t), t, v_lo, v_hi)
+        prox_list = [prox_sum_squares, lambda v, t: prox_sat(v, t, -1, 1)]
         A1 = sparse.lil_matrix(((K+1)*n,K*n))
         A1[n:K*n,:(K-1)*n] = -sparse.block_diag((K-1)*[A])
         A1.setdiag(1)

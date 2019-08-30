@@ -103,7 +103,6 @@ class TestPaper(BaseTest):
         #          + \sum_{i"} I(s_{i"}^{sink}=L_{i"}).
         # A = [B, I], b = 0
         z = np.zeros(m1)
-        # prox_list = [prox_sat(c, x_max), lambda v, t: np.hstack([z, L, prox_sat_pos(d[m2:], s_max)(v[m2:],t)])]
         def prox_sat(v, t, c, v_lo = -np.inf, v_hi = np.inf):
             return prox_box_constr(prox_sum_squares(v, t*c), t, v_lo, v_hi)
         prox_list = [lambda v, t: prox_sat(v, t, c, -x_max, x_max),

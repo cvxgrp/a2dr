@@ -3,6 +3,7 @@ import numpy.linalg as LA
 from scipy import sparse
 import scipy.sparse.linalg as spLA
 from a2dr.proximal.composition import prox_scale
+from cvxpy import *
 
 def prox_quad_form(v, t = 1, Q = None, *args, **kwargs):
     """Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f(x) = x^TQx` for symmetric
@@ -48,6 +49,31 @@ def prox_sum_squares_affine(v, t = 1, F = None, g = None, method = "lsqr", *args
         raise ValueError("method must be either 'lsqr' or 'lstsq'")
     return prox_scale(prox_sum_squares_affine_base, F, g, method, *args, **kwargs)(v, t)
 
+def prox_qp(v, t = 1, Q = None, q = None, F = None, g = None, *args, **kwargs):
+    """Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f(x) = x^TQx+q^Tx+I{Fx<=g}`
+    for scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term, and d = quad_term.
+    We must have t > 0, a = non-zero, and d >= 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
+    """
+    if Q is None:
+        raise ValueError("Q must be a matrix")
+    if q is None:
+        raise ValueError("q must be a vector")
+    if F is None:
+        raise ValueError("F must be a matrix")
+    if g is None:
+        raise ValueError("g must be a vector")
+    if Q.shape[0] != Q.shape[1]:
+        raise ValueError("Q must be square")
+    if Q.shape[0] != q.shape[0]:
+        raise ValueError("Dimension mismatch: nrow(Q) != nrow(q)")
+    if Q.shape[1] != v.shape[0]:
+        raise ValueError("Dimension mismatch: ncol(Q) != nrow(v)")
+    if F.shape[0] != g.shape[0]:
+        raise ValueError("Dimension mismatch: nrow(F) != nrow(g)")
+    if F.shape[1] != v.shape[0]:
+        raise ValueError("Dimension mismatch: ncol(F) != nrow(v)")
+    return prox_scale(prox_qp_base(Q, q, F, g), *args, **kwargs)(v, t)
+
 def prox_quad_form_base(v, t, Q):
     """Proximal operator of :math:`f(x) = x^TQx`, where :math:`Q \\succeq 0` is a symmetric positive semidefinite matrix.
     """
@@ -86,3 +112,19 @@ def prox_sum_squares_affine_base(v, t, F, g, method = "lsqr"):
         return LA.lstsq(F_stack, g_stack, rcond=None)[0]
     else:
         raise ValueError("Method not supported:", method)
+
+def prox_qp_base(Q, q, F, g):
+    # check warmstart/parameter mode -- make sure the problem reduction is only done once
+    n = Q.shape[0]
+    I = np.eye(n)
+    v_par = Parameter(n)
+    t_par = Parameter(nonneg=True)
+    x = Variable(n)
+    obj = quad_form(x, Q) + sum_squares(x)/2/t_par + (q-v_par/t_par)*x
+    constr = [F * x <= g]
+    prob = Problem(Minimize(obj), constr)
+    def prox_qp1(v, t):
+        v_par.value, t_par.value = v, t
+        prob.solve()
+        return x.value
+    return prox_qp1
