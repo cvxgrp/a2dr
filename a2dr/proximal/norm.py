@@ -58,10 +58,13 @@ def prox_norm2_base(v, t):
 		norm = np.linalg.norm
 		zeros = np.zeros
 
-	if len(v.shape) == 2:
-		v_norm = norm(v,'fro')
+	if np.isscalar(v):
+		v_norm = abs(v)
 	elif len(v.shape) == 1:
 		v_norm = norm(v,2)
+	elif len(v.shape) == 2:
+		v_norm = norm(v,'fro')
+
 	if v_norm == 0:
 		return zeros(v.shape)
 	else:

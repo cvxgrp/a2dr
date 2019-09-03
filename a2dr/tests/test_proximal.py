@@ -12,32 +12,48 @@ class TestProximal(BaseTest):
         self.B = np.random.randn(10,10)
         self.B_symm = (self.B + self.B.T) / 2.0
 
-    def prox_cvxpy(self, fun, v, t = 1, scale = 1, offset = 0, lin_term = 0, quad_term = 0):
-        x_var = Variable(v.shape)
+    def prox_cvxpy(self, fun, v, t = 1, scale = 1, offset = 0, lin_term = 0, quad_term = 0, *args, **kwargs):
+        x_var = Variable() if np.isscalar(v) else Variable(v.shape)
         expr = t * fun(scale * x_var - offset) + sum(lin_term * x_var) + quad_term * sum_squares(x_var)
-        Problem(Minimize(expr + 0.5 * sum_squares(x_var - v))).solve()
+        Problem(Minimize(expr + 0.5 * sum_squares(x_var - v))).solve(*args, **kwargs)
         return x_var.value
 
+    def composition_tests(self, prox, fun, v_init, places = 4, *args, **kwargs):
+        x_a2dr = prox(v_init)
+        x_cvxpy = self.prox_cvxpy(fun, v_init, *args, **kwargs)
+        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = places)
+
+        x_a2dr = prox(v_init, t = self.t)
+        x_cvxpy = self.prox_cvxpy(fun, v_init, self.t, *args, **kwargs)
+        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = places)
+
+        x_a2dr = prox(v_init, scale = -1)
+        x_cvxpy = self.prox_cvxpy(fun, v_init, scale = -1, *args, **kwargs)
+        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = places)
+
+        x_a2dr = prox(v_init, scale = 2, offset = 0.5)
+        x_cvxpy = self.prox_cvxpy(fun, v_init, scale = 2, offset = 0.5, *args, **kwargs)
+        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = places)
+
+        x_a2dr = prox(v_init, t = self.t, scale = 2, offset = 0.5, lin_term = 1.5, quad_term = 2.5)
+        x_cvxpy = self.prox_cvxpy(fun, v_init, t = self.t, scale = 2, offset = 0.5, lin_term = 1.5, quad_term = 2.5,
+                                  *args, **kwargs)
+        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = places)
+
+        if np.isscalar(v_init):
+            offset = np.random.randn()
+            lin_term = np.random.randn()
+        else:
+            offset = np.random.randn(*v_init.shape)
+            lin_term = np.random.randn(*v_init.shape)
+        x_a2dr = prox(v_init, t = self.t, scale = 0.5, offset = offset, lin_term = lin_term, quad_term = 2.5)
+        x_cvxpy = self.prox_cvxpy(fun, v_init, t = self.t, scale = 0.5, offset = offset, lin_term = lin_term,
+                                  quad_term = 2.5, *args, **kwargs)
+        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = places)
+
     def test_sum_squares(self):
-        x_a2dr = prox_sum_squares(self.v)
-        x_cvxpy = self.prox_cvxpy(sum_squares, self.v)
-        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
-
-        x_a2dr = prox_sum_squares(self.v, self.t)
-        x_cvxpy = self.prox_cvxpy(sum_squares, self.v, self.t)
-        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
-
-        x_a2dr = prox_sum_squares(self.v, scale = -1)
-        x_cvxpy = self.prox_cvxpy(sum_squares, self.v, scale = -1)
-        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
-
-        x_a2dr = prox_sum_squares(self.v, scale = 2, offset = 0.5)
-        x_cvxpy = self.prox_cvxpy(sum_squares, self.v, scale = 2, offset = 0.5)
-        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
-
-        x_a2dr = prox_sum_squares(self.v, self.t, scale = 2, offset = 0.5, lin_term = 1.5, quad_term = 2.5)
-        x_cvxpy = self.prox_cvxpy(sum_squares, self.v, self.t, scale = 2, offset = 0.5, lin_term = 1.5, quad_term = 2.5)
-        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
+        # General composition tests.
+        self.composition_tests(prox_sum_squares, sum_squares, self.v, places = 4)
 
         # f(x) = (1/2)*||x - offset||_2^2
         offset = np.random.randn(*self.v.shape)
@@ -45,39 +61,37 @@ class TestProximal(BaseTest):
         x_cvxpy = self.prox_cvxpy(sum_squares, self.v, t = 0.5*self.t, offset = offset)
         self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
 
-        lin_term = np.random.randn(*self.v.shape)
-        x_a2dr = prox_sum_squares(self.v, self.t, scale = 0.5, offset = offset, lin_term = lin_term, quad_term = 2.5)
-        x_cvxpy = self.prox_cvxpy(sum_squares, self.v, self.t, scale = 0.5, offset = offset, lin_term = lin_term, quad_term = 2.5)
-        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
-
     def test_huber(self):
-        x_a2dr = prox_huber(self.v, M = 2)
-        x_cvxpy = self.prox_cvxpy(lambda x: sum(huber(x, M = 2)), self.v)
-        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
-
-        x_a2dr = prox_huber(self.v, self.t, M = 2, scale = 0.5)
-        x_cvxpy = self.prox_cvxpy(lambda x: sum(huber(x, M = 2)), self.v, self.t, scale = 0.5)
-        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
+        for M in [0, 0.5, 1, 2]:
+            # Scalar input.
+            self.composition_tests(lambda v, *args, **kwargs: prox_huber(v, M = M, *args, **kwargs),
+                                   lambda x: huber(x, M = M), np.random.randn(), places = 4)
+            # Vector input.
+            self.composition_tests(lambda v, *args, **kwargs: prox_huber(v, M = M, *args, **kwargs),
+                                   lambda x: sum(huber(x, M = M)), self.v, places = 4)
+            # TODO: Matrix input.
 
     def test_norm1(self):
-        x_a2dr = prox_norm1(self.v)
-        x_cvxpy = self.prox_cvxpy(norm1, self.v)
-        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
+        # General composition tests.
+        self.composition_tests(prox_norm1, norm1, np.random.randn(), places=4)
+        self.composition_tests(prox_norm1, norm1, self.v, places=4)
+        # self.composition_tests(prox_norm1, norm1, self.B, places=4)
 
         # f(x) = (1/2)*||x||_1
-        x_a2dr = prox_norm1(self.v, t = 0.5*self.t)
-        x_cvxpy = self.prox_cvxpy(norm1, self.v, t = 0.5*self.t)
-        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
+        x_a2dr = prox_norm1(self.v, t=0.5 * self.t)
+        x_cvxpy = self.prox_cvxpy(norm1, self.v, t=0.5 * self.t)
+        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places=4)
 
-        x_a2dr = prox_norm1(self.v, self.t, scale = 2, offset = 0.5, lin_term = 1.5, quad_term = 1.75)
-        x_cvxpy = self.prox_cvxpy(norm1, self.v, self.t, scale = 2, offset = 0.5, lin_term = 1.5, quad_term = 1.75)
-        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
+    def test_norm2(self):
+        # General composition tests.
+        self.composition_tests(prox_norm2, norm2, np.random.randn(), places=4)
+        self.composition_tests(prox_norm2, norm2, self.v, places=4, solver="SCS")
+        # self.composition_tests(prox_norm2, norm2, self.B, places=4)
 
-        offset = np.random.randn(*self.v.shape)
-        lin_term = np.random.randn(*self.v.shape)
-        x_a2dr = prox_norm1(self.v, self.t, scale = 0.5, offset = offset, lin_term = lin_term, quad_term = 2.5)
-        x_cvxpy = self.prox_cvxpy(norm1, self.v, self.t, scale = 0.5, offset = offset, lin_term = lin_term, quad_term = 2.5)
-        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
+        # f(x) = (1/2)*||x||_2
+        x_a2dr = prox_norm2(self.v, t=0.5 * self.t)
+        x_cvxpy = self.prox_cvxpy(norm2, self.v, t=0.5 * self.t)
+        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places=4)
 
     def test_norm_nuc(self):
         B_a2dr = prox_norm_nuc(self.B)
