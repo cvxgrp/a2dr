@@ -11,6 +11,7 @@ class TestProximal(BaseTest):
         self.v = np.random.randn(100)
         self.B = np.random.randn(10,10)
         self.B_symm = (self.B + self.B.T) / 2.0
+        self.B_psd = self.B.T.dot(self.B)
 
     def prox_cvxpy(self, fun, v, t = 1, scale = 1, offset = 0, lin_term = 0, quad_term = 0, *args, **kwargs):
         x_var = Variable() if np.isscalar(v) else Variable(v.shape)
@@ -51,16 +52,6 @@ class TestProximal(BaseTest):
                                   quad_term = 2.5, *args, **kwargs)
         self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = places)
 
-    def test_sum_squares(self):
-        # General composition tests.
-        self.composition_tests(prox_sum_squares, sum_squares, self.v, places = 4)
-
-        # f(x) = (1/2)*||x - offset||_2^2
-        offset = np.random.randn(*self.v.shape)
-        x_a2dr = prox_sum_squares(self.v, t = 0.5*self.t, offset = offset)
-        x_cvxpy = self.prox_cvxpy(sum_squares, self.v, t = 0.5*self.t, offset = offset)
-        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
-
     def test_huber(self):
         for M in [0, 0.5, 1, 2]:
             # Scalar input.
@@ -77,10 +68,16 @@ class TestProximal(BaseTest):
         self.composition_tests(prox_norm1, norm1, self.v, places=4)
         # self.composition_tests(prox_norm1, norm1, self.B, places=4)
 
-        # f(x) = (1/2)*||x||_1
-        x_a2dr = prox_norm1(self.v, t=0.5 * self.t)
-        x_cvxpy = self.prox_cvxpy(norm1, self.v, t=0.5 * self.t)
+        # l1 trend filtering: f(x) = \alpha*||x||_1
+        alpha = 0.5 + np.abs(np.random.randn())
+        x_a2dr = prox_norm1(self.v, t=alpha * self.t)
+        x_cvxpy = self.prox_cvxpy(norm1, self.v, t=alpha * self.t)
         self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places=4)
+
+        # Sparse inverse covariance estimation: f(B) = \alpha*||B||_1
+        B_symm_a2dr = prox_norm1(self.B_symm, t=alpha * self.t)
+        B_symm_cvxpy = self.prox_cvxpy(norm1, self.B_symm, t=alpha * self.t)
+        self.assertItemsAlmostEqual(B_symm_a2dr, B_symm_cvxpy, places=4)
 
     def test_norm2(self):
         # General composition tests.
@@ -88,9 +85,22 @@ class TestProximal(BaseTest):
         self.composition_tests(prox_norm2, norm2, self.v, places=4, solver="SCS")
         # self.composition_tests(prox_norm2, norm2, self.B, places=4)
 
-        # f(x) = (1/2)*||x||_2
-        x_a2dr = prox_norm2(self.v, t=0.5 * self.t)
-        x_cvxpy = self.prox_cvxpy(norm2, self.v, t=0.5 * self.t)
+        # f(x) = \alpha*||x||_2
+        alpha = 0.5 + np.abs(np.random.randn())
+        x_a2dr = prox_norm2(self.v, t=alpha * self.t)
+        x_cvxpy = self.prox_cvxpy(norm2, self.v, t=alpha * self.t)
+        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places=4)
+
+    def test_norm_inf(self):
+        # General composition tests.
+        self.composition_tests(prox_norm_inf, norm_inf, np.random.randn(), places=4)
+        self.composition_tests(prox_norm_inf, norm_inf, self.v, places=4)
+        # self.composition_tests(prox_norm_inf, norm_inf, self.B, places=4)
+
+        # f(x) = \alpha*||x||_{\infty}
+        alpha = 0.5 + np.abs(np.random.randn())
+        x_a2dr = prox_norm_inf(self.v, t=alpha * self.t)
+        x_cvxpy = self.prox_cvxpy(norm_inf, self.v, t=alpha * self.t)
         self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places=4)
 
     def test_norm_nuc(self):
@@ -124,3 +134,63 @@ class TestProximal(BaseTest):
         B_a2dr = prox_neg_log_det(self.B_symm, self.t, scale = 2, offset = 0.5, lin_term = 1.5, quad_term = 1.75)
         B_cvxpy = self.prox_cvxpy(lambda X: -log_det(X), self.B_symm, self.t, scale = 2, offset = 0.5, lin_term = 1.5, quad_term = 1.75)
         self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 3)
+
+    def test_sum_squares(self):
+        # General composition tests.
+        self.composition_tests(prox_sum_squares, sum_squares, self.v, places = 4)
+
+        # f(x) = (1/2)*||x - offset||_2^2
+        offset = np.random.randn(*self.v.shape)
+        x_a2dr = prox_sum_squares(self.v, t = 0.5*self.t, offset = offset)
+        x_cvxpy = self.prox_cvxpy(sum_squares, self.v, t = 0.5*self.t, offset = offset)
+        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
+
+    def test_sum_squares_affine(self):
+        # Scalar terms.
+        F = np.random.randn()
+        g = np.random.randn()
+        v = np.random.randn()
+
+        self.composition_tests(lambda v, *args, **kwargs: prox_sum_squares_affine(v, F = F, g = g, method = "lsqr",
+                                    *args, **kwargs), lambda x: sum_squares(F*x - g), v)
+        self.composition_tests(lambda v, *args, **kwargs: prox_sum_squares_affine(v, F = F, g = g, method = "lstsq",
+                                    *args, **kwargs), lambda x: sum_squares(F*x - g), v)
+
+        # Simple sum of squares.
+        n = 100
+        F = np.eye(n)
+        g = np.zeros(n)
+        v = np.random.randn(n)
+
+        self.composition_tests(lambda v, *args, **kwargs: prox_sum_squares_affine(v, F = F, g = g, method = "lsqr",
+                                    *args, **kwargs), lambda x: sum_squares(F*x - g), v)
+        self.composition_tests(lambda v, *args, **kwargs: prox_sum_squares_affine(v, F = F, g = g, method = "lstsq",
+                                    *args, **kwargs), lambda x: sum_squares(F*x - g), v)
+
+        # General composition tests.
+        m = 1000
+        n = 100
+        F = 10 + 5*np.random.randn(m,n)
+        x = 2*np.random.randn(n)
+        g = F.dot(x) + 0.01*np.random.randn(m)
+        v = np.random.randn(n)
+
+        self.composition_tests(lambda v, *args, **kwargs: prox_sum_squares_affine(v, F = F, g = g, method = "lsqr",
+                                    *args, **kwargs), lambda x: sum_squares(F*x - g), v)
+        self.composition_tests(lambda v, *args, **kwargs: prox_sum_squares_affine(v, F = F, g = g, method = "lstsq",
+                                    *args, **kwargs), lambda x: sum_squares(F*x - g), v)
+
+    def test_quad_form(self):
+        # Simple quadratic.
+        v = np.random.randn(1)
+        Q = np.array([[5]])
+        self.composition_tests(lambda v, *args, **kwargs: prox_quad_form(v, Q = Q, *args, **kwargs),
+                               lambda x: quad_form(x, P = Q), v)
+
+        # General composition tests.
+        n = 10
+        v = np.random.randn(n)
+        Q = np.random.randn(n,n)
+        Q = Q.T.dot(Q) + 0.5*np.eye(n)
+        self.composition_tests(lambda v, *args, **kwargs: prox_quad_form(v, Q = Q, *args, **kwargs),
+                               lambda x: quad_form(x, P = Q), v)

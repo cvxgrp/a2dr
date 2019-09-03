@@ -1,9 +1,10 @@
 import numpy as np
 import numpy.linalg as LA
-from scipy import sparse
 import scipy.sparse.linalg as spLA
-from a2dr.proximal.composition import prox_scale
+
 from cvxpy import *
+from scipy import sparse
+from a2dr.proximal.composition import prox_scale
 
 def prox_quad_form(v, t = 1, Q = None, *args, **kwargs):
     """Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f(x) = x^TQx` for symmetric
@@ -11,7 +12,14 @@ def prox_quad_form(v, t = 1, Q = None, *args, **kwargs):
     and d = quad_term. We must have t > 0, a = non-zero, and d >= 0. By default, t = 1, a = 1, b = 0, c = 0,
     and d = 0.
     """
-    if Q is None or Q.shape[0] != Q.shape[1]:
+    if np.isscalar(v):
+        v = np.array([v])
+    if Q is None:
+        raise ValueError("Q must be a matrix.")
+    elif np.isscalar(Q):
+        Q = np.array([[Q]])
+
+    if Q.shape[0] != Q.shape[1]:
         raise ValueError("Q must be a square matrix.")
     if Q.shape[0] != v.shape[0]:
         raise ValueError("Dimension mismatch: nrow(Q) != nrow(v).")
@@ -22,7 +30,7 @@ def prox_quad_form(v, t = 1, Q = None, *args, **kwargs):
     else:
         if not np.all(LA.eigvalsh(Q) >= 0):
             raise ValueError("Q must be a symmetric positive semidefinite matrix.")
-    return prox_scale(prox_quad_form_base, Q, *args, **kwargs)(v, t)
+    return prox_scale(prox_quad_form_base, Q=Q, *args, **kwargs)(v, t)
 
 def prox_sum_squares(v, t = 1, *args, **kwargs):
     """Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f(x) = \\sum_i x_i^2`
@@ -37,17 +45,24 @@ def prox_sum_squares_affine(v, t = 1, F = None, g = None, method = "lsqr", *args
         and d = quad_term. We must have t > 0, a = non-zero, and d >= 0. By default, t = 1, a = 1, b = 0, c = 0,
         and d = 0.
         """
+    if np.isscalar(v):
+        v = np.array([v])
     if F is None:
-        raise ValueError("F must be a matrix")
+        raise ValueError("F must be a matrix.")
+    elif np.isscalar(F):
+        F = np.array([[F]])
     if g is None:
-        raise ValueError("g must be a vector")
+        raise ValueError("g must be a vector.")
+    elif np.isscalar(g):
+        g = np.array([g])
+
     if F.shape[0] != g.shape[0]:
-        raise ValueError("Dimension mismatch: nrow(F) != nrow(g)")
+        raise ValueError("Dimension mismatch: nrow(F) != nrow(g).")
     if F.shape[1] != v.shape[0]:
-        raise ValueError("Dimension mismatch: ncol(F) != nrow(v)")
+        raise ValueError("Dimension mismatch: ncol(F) != nrow(v).")
     if method not in ["lsqr", "lstsq"]:
-        raise ValueError("method must be either 'lsqr' or 'lstsq'")
-    return prox_scale(prox_sum_squares_affine_base, F, g, method, *args, **kwargs)(v, t)
+        raise ValueError("method must be either 'lsqr' or 'lstsq'.")
+    return prox_scale(prox_sum_squares_affine_base, F=F, g=g, method=method, *args, **kwargs)(v, t)
 
 def prox_qp(v, t = 1, Q = None, q = None, F = None, g = None, *args, **kwargs):
     """Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f(x) = x^TQx+q^Tx+I{Fx<=g}`
@@ -81,11 +96,11 @@ def prox_quad_form_base(v, t, Q):
         # Q_min_eigval = spLA.eigsh(Q, k=1, which="SA", return_eigenvectors=False)[0]
         # if np.iscomplex(Q_min_eigval) or Q_min_eigval < 0:
         #    raise Exception("Q must be a symmetric positive semidefinite matrix.")
-        return spLA.lsqr(Q + (1/t)*sparse.eye(v.shape[0]), v/t, atol=1e-16, btol=1e-16)[0]
+        return spLA.lsqr(2*t*Q + sparse.eye(v.shape[0]), v, atol=1e-16, btol=1e-16)[0]
     else:
         # if not np.all(LA.eigvalsh(Q) >= 0):
         #    raise Exception("Q must be a symmetric positive semidefinite matrix.")
-        return LA.lstsq(Q + (1/t)*np.eye(v.shape[0]), v/t, rcond=None)[0]
+        return LA.lstsq(2*t*Q + np.eye(v.shape[0]), v, rcond=None)[0]
 
 def prox_sum_squares_base(v, t):
     """Proximal operator of :math:`f(x) = \\sum_i x_i^2`.
