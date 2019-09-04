@@ -31,6 +31,8 @@ def prox_psd_cone(B, t = 1, *args, **kwargs):
 	a = scale, b = offset, c = lin_term, and d = quad_term. We must have t > 0, a = non-zero, and d >= 0. By default,
 	t = 1, a = 1, b = 0, c = 0, and d = 0.
 	"""
+	if np.isscalar(B):
+		B = np.array([[B]])
 	if B.shape[0] != B.shape[1]:
 		raise ValueError("B must be a square matrix.")
 	B_symm = (B + B.T) / 2.0

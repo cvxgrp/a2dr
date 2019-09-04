@@ -7,7 +7,8 @@ class TestProximal(BaseTest):
 
     def setUp(self):
         np.random.seed(1)
-        self.t = 5*np.abs(np.random.randn()) + 1e-6
+        self.TOLERANCE = 1e-6
+        self.t = 5*np.abs(np.random.randn()) + self.TOLERANCE
         self.v = np.random.randn(100)
         self.B = np.random.randn(10,10)
         self.B_symm = (self.B + self.B.T) / 2.0
@@ -54,12 +55,21 @@ class TestProximal(BaseTest):
         self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = places)
 
     def test_box_constr(self):
-        # Projection onto nonnegative/nonpositive orthant.
-        self.composition_check(prox_nonneg_constr, lambda x: 0, self.v, constr_fun = lambda x: [x >= 0])
-        self.composition_check(prox_nonneg_constr, lambda x: 0, self.B, constr_fun = lambda x: [x >= 0], places = 3)
+        scale = 2*np.abs(np.random.randn()) + self.TOLERANCE
+        if np.random.rand() < 0.5:
+            scale = -scale
+        offset = np.random.randn(*self.v.shape)
+        lin_term = np.random.randn(*self.v.shape)
+        quad_term = np.abs(np.random.randn())
+        lo = np.random.randn()
+        hi = lo + 5*np.abs(np.random.randn())
 
-        self.composition_check(prox_nonpos_constr, lambda x: 0, self.v, constr_fun = lambda x: [x <= 0])
-        self.composition_check(prox_nonpos_constr, lambda x: 0, self.B, constr_fun = lambda x: [x <= 0], places = 3)
+        x_a2dr = prox_box_constr(self.v, self.t, v_lo = lo, v_hi = hi)
+        self.assertTrue(np.all(lo - self.TOLERANCE <= x_a2dr) and np.all(x_a2dr <= hi + self.TOLERANCE))
+        x_a2dr = prox_box_constr(self.v, self.t, v_lo = lo, v_hi = hi, scale = scale, offset = offset, \
+                                    lin_term = lin_term, quad_term = quad_term)
+        x_scaled = scale*x_a2dr - offset
+        self.assertTrue(np.all(lo - self.TOLERANCE <= x_scaled) and np.all(x_scaled <= hi + self.TOLERANCE))
 
         # Projection onto a box interval.
         bounds = [(0, 0), (-1, 1), (0, np.inf), (-np.inf, 0)]
@@ -69,6 +79,48 @@ class TestProximal(BaseTest):
                                    lambda x: 0, self.v, constr_fun = lambda x: [lo <= x, x <= hi])
             self.composition_check(lambda v, *args, **kwargs: prox_box_constr(v, v_lo = lo, v_hi = hi, *args, **kwargs),
                                    lambda x: 0, self.B, constr_fun = lambda x: [lo <= x, x <= hi])
+
+    def test_nonneg_constr(self):
+        x_a2dr = prox_nonneg_constr(self.v, self.t)
+        self.assertTrue(np.all(x_a2dr >= -self.TOLERANCE))
+
+        x_a2dr = prox_nonneg_constr(self.v, self.t, scale = -2, offset = 0)
+        self.assertTrue(np.all(-2*x_a2dr >= -self.TOLERANCE))
+
+        scale = 2*np.abs(np.random.randn()) + self.TOLERANCE
+        if np.random.rand() < 0.5:
+            scale = -scale
+        offset = np.random.randn(*self.v.shape)
+        lin_term = np.random.randn(*self.v.shape)
+        quad_term = np.abs(np.random.randn())
+
+        x_a2dr = prox_nonneg_constr(self.v, self.t, scale = scale, offset = offset, lin_term = lin_term, \
+                                    quad_term = quad_term)
+        self.assertTrue(np.all(scale*x_a2dr - offset) >= -self.TOLERANCE)
+
+        self.composition_check(prox_nonneg_constr, lambda x: 0, self.v, constr_fun=lambda x: [x >= 0])
+        self.composition_check(prox_nonneg_constr, lambda x: 0, self.B, constr_fun=lambda x: [x >= 0], places = 3)
+
+    def test_nonpos_constr(self):
+        x_a2dr = prox_nonpos_constr(self.v, self.t)
+        self.assertTrue(np.all(x_a2dr <= 0))
+
+        x_a2dr = prox_nonpos_constr(self.v, self.t, scale=-2, offset=0)
+        self.assertTrue(np.all(-2*x_a2dr <= self.TOLERANCE))
+
+        scale = 2 * np.abs(np.random.randn()) + self.TOLERANCE
+        if np.random.rand() < 0.5:
+            scale = -scale
+        offset = np.random.randn(*self.v.shape)
+        lin_term = np.random.randn(*self.v.shape)
+        quad_term = np.abs(np.random.randn())
+
+        x_a2dr = prox_nonpos_constr(self.v, self.t, scale=scale, offset=offset, lin_term=lin_term, \
+                                    quad_term=quad_term)
+        self.assertTrue(np.all(scale * x_a2dr - offset) <= self.TOLERANCE)
+
+        self.composition_check(prox_nonpos_constr, lambda x: 0, self.v, constr_fun=lambda x: [x <= 0])
+        self.composition_check(prox_nonpos_constr, lambda x: 0, self.B, constr_fun=lambda x: [x <= 0], places = 3)
 
     def test_huber(self):
         for M in [0, 0.5, 1, 2]:
@@ -81,15 +133,41 @@ class TestProximal(BaseTest):
             # Matrix input.
             self.composition_check(lambda v, *args, **kwargs: prox_huber(v, M = M, *args, **kwargs),
                                    lambda x: sum(huber(x, M = M)), self.B, places = 4)
+        # TODO: Elementwise test for prox of whole vector vs. prox of individual elements.
 
     def test_logistic(self):
+        # General composition tests.
         self.composition_check(prox_logistic, lambda x: sum(logistic(x)), np.random.randn(), places=4)
         self.composition_check(prox_logistic, lambda x: sum(logistic(x)), self.v, places = 4)
         self.composition_check(prox_logistic, lambda x: sum(logistic(x)), self.B, places = 4)
 
+        # f(x) = \sum_i log(1 + exp(-y_i*x_i)).
         y = np.random.randn(*self.v.shape)
-        self.composition_check(lambda v, *args, **kwargs: prox_logistic(v, y=y, *args, **kwargs),
+        self.composition_check(lambda v, *args, **kwargs: prox_logistic(v, y = y, *args, **kwargs),
                                lambda x: sum(logistic(-multiply(y,x))), self.v, places = 3, solver = "SCS")
+
+        # Multi-task logistic regression: f(B) = \sum_i log(1 + exp(-Y_{ij}*B_{ij}).
+        Y_mat = np.random.randn(*self.B.shape)
+        self.composition_check(lambda v, *args, **kwargs: prox_logistic(v, y = Y_mat, *args, **kwargs),
+                               lambda B: sum(logistic(-multiply(Y_mat,B))), self.B, places = 3, solver = "SCS")
+
+    def test_neg_log_det(self):
+        # f(B) = -log det(B)
+        B_a2dr = prox_neg_log_det(self.B_symm)
+        B_cvxpy = self.prox_cvxpy(self.B_symm, lambda X: -log_det(X))
+        self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 3)
+
+        B_a2dr = prox_neg_log_det(self.B_symm, self.t)
+        B_cvxpy = self.prox_cvxpy(self.B_symm, lambda X: -log_det(X), t = self.t)
+        self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 3)
+
+        B_a2dr = prox_neg_log_det(self.B_symm, scale = 2, offset = 0.5)
+        B_cvxpy = self.prox_cvxpy(self.B_symm, lambda X: -log_det(X), scale = 2, offset = 0.5)
+        self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 3)
+
+        B_a2dr = prox_neg_log_det(self.B_symm, t = self.t, scale = 2, offset = 0.5, lin_term = 1.5, quad_term = 1.75)
+        B_cvxpy = self.prox_cvxpy(self.B_symm, lambda X: -log_det(X), t = self.t, scale = 2, offset = 0.5, lin_term = 1.5, quad_term = 1.75)
+        self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 3)
 
     def test_norm1(self):
         # General composition tests.
@@ -134,36 +212,30 @@ class TestProximal(BaseTest):
     #     self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
 
     def test_norm_nuc(self):
-        B_a2dr = prox_norm_nuc(self.B)
-        B_cvxpy = self.prox_cvxpy(self.B, normNuc)
+        # General composition tests.
+        self.composition_check(prox_norm_nuc, normNuc, self.B, places = 3)
+
+        # Multi-task logistic regression: f(B) = \beta*||B||_*
+        beta = 1.5 + np.abs(np.random.randn())
+        B_a2dr = prox_norm_nuc(self.B, t = beta*self.t)
+        B_cvxpy = self.prox_cvxpy(self.B, normNuc, t = beta*self.t)
         self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 3)
 
-        # f(B) = (1/2)*||B||_*
-        B_a2dr = prox_norm_nuc(self.B, t = 0.5*self.t)
-        B_cvxpy = self.prox_cvxpy(self.B, normNuc, t = 0.5*self.t)
+    def test_group_lasso(self):
+        # General composition tests.
+        groupLasso = lambda B: sum([norm2(B[:,j]) for j in range(B.shape[1])])
+        self.composition_check(prox_group_lasso, groupLasso, self.B, places = 3, solver = "SCS")
+
+        # Multi-task logistic regression: f(B) = \alpha*||B||_{2,1}
+        alpha = 1.5 + np.abs(np.random.randn())
+        B_a2dr = prox_group_lasso(self.B, t = alpha*self.t)
+        B_cvxpy = self.prox_cvxpy(self.B, groupLasso, t = alpha*self.t)
         self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 3)
 
-        B_a2dr = prox_norm_nuc(self.B, t = self.t, scale = 2, offset = 0.5, lin_term = 1.5, quad_term = 1.75)
-        B_cvxpy = self.prox_cvxpy(self.B, normNuc, t = self.t, scale = 2, offset = 0.5, lin_term = 1.5, quad_term = 1.75)
-        self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 3)
-
-    def test_neg_log_det(self):
-        # f(B) = -log det(B)
-        B_a2dr = prox_neg_log_det(self.B_symm)
-        B_cvxpy = self.prox_cvxpy(self.B_symm, lambda X: -log_det(X))
-        self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 3)
-
-        B_a2dr = prox_neg_log_det(self.B_symm, self.t)
-        B_cvxpy = self.prox_cvxpy(self.B_symm, lambda X: -log_det(X), t = self.t)
-        self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 3)
-
-        B_a2dr = prox_neg_log_det(self.B_symm, scale = 2, offset = 0.5)
-        B_cvxpy = self.prox_cvxpy(self.B_symm, lambda X: -log_det(X), scale = 2, offset = 0.5)
-        self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 3)
-
-        B_a2dr = prox_neg_log_det(self.B_symm, t = self.t, scale = 2, offset = 0.5, lin_term = 1.5, quad_term = 1.75)
-        B_cvxpy = self.prox_cvxpy(self.B_symm, lambda X: -log_det(X), t = self.t, scale = 2, offset = 0.5, lin_term = 1.5, quad_term = 1.75)
-        self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 3)
+        # Compare with taking l2-norm separately on each column.
+        B_norm2 = [prox_norm2(self.B[:,j], t = alpha*self.t) for j in range(self.B.shape[1])]
+        B_norm2 = np.vstack(B_norm2)
+        self.assertItemsAlmostEqual(B_a2dr, B_norm2, places = 3)
 
     def test_sum_squares(self):
         # General composition tests.
