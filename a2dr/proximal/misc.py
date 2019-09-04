@@ -11,6 +11,8 @@ def prox_logistic(v, t = 1, x0 = None, y = None, *args, **kwargs):
     for scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term, and d = quad_term.
     We must have t > 0, a = non-zero, and d >= 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
     """
+    if np.isscalar(v):
+        v = np.array([v])
     if x0 is None:
         # x0 = np.random.randn(*v.shape)
         x0 = v
@@ -30,6 +32,12 @@ def prox_logistic_base(v, t, x0, y):
        solved using the Newton-CG method from scipy.optimize.minimize. The function defaults to y_i = -1 for all i,
        so that :math:`f(x) = \\sum_i \\log(1 + \\exp(x_i))`.
     """
+    # Treat matrices elementwise.
+    v_shape = v.shape
+    v = v.flatten(order='C')
+    x0 = x0.flatten(order='C')
+    y = y.flatten(order='C')
+
     # g(x) = \sum_i log(1 + exp(-y_i*x_i)) + 1/(2*t)*||x - v||_2^2
     def fun(x, y, v, t):
         # expit(x) = 1/(1 + exp(-x))
@@ -47,7 +55,7 @@ def prox_logistic_base(v, t, x0, y):
     # res = minimize(fun, x0, args=(y, v, t), method='Newton-CG', jac=jac)
     if not res.success:
         warnings.warn(res.message)
-    return res.x[0] if res.x.size == 1 else res.x
+    return res.x[0] if res.x.size == 1 else res.x.reshape(v_shape, order='C')
 
 def prox_max_base(v, t):
     """Proximal operator of :math:`f(x) = \\max_i x_i`.

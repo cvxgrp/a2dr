@@ -83,8 +83,13 @@ class TestProximal(BaseTest):
                                    lambda x: sum(huber(x, M = M)), self.B, places = 4)
 
     def test_logistic(self):
-        # TODO: Add more tests with different y.
+        self.composition_tests(prox_logistic, lambda x: sum(logistic(x)), np.random.randn(), places=4)
         self.composition_tests(prox_logistic, lambda x: sum(logistic(x)), self.v, places = 4)
+        self.composition_tests(prox_logistic, lambda x: sum(logistic(x)), self.B, places = 4)
+
+        y = np.random.randn(*self.v.shape)
+        self.composition_tests(lambda v, *args, **kwargs: prox_logistic(v, y=y, *args, **kwargs),
+                               lambda x: sum(logistic(-multiply(y,x))), self.v, places = 3, solver = "SCS")
 
     def test_norm1(self):
         # General composition tests.
