@@ -200,7 +200,7 @@ class TestProximal(BaseTest):
         # General composition tests.
         self.check_composition(prox_abs, cvxpy.abs, self.c, places=4)
         self.check_composition(prox_abs, lambda x: sum(abs(x)), self.v, places=4)
-        self.check_composition(prox_abs, lambda x: sum(abs(x)), self.B, places=4)
+        self.check_composition(prox_abs, lambda x: sum(abs(x)), self.B, places=3)
 
     def test_constant(self):
         # Elementwise consistency tests.
@@ -246,8 +246,8 @@ class TestProximal(BaseTest):
 
     def test_logistic(self):
         # General composition tests.
-        self.check_composition(prox_logistic, lambda x: logistic(x), self.c, places = 4)
-        self.check_composition(prox_logistic, lambda x: sum(logistic(x)), self.v, places = 3, solver = "SCS")
+        self.check_composition(prox_logistic, lambda x: logistic(x), self.c, places = 4, solver='ECOS')
+        self.check_composition(prox_logistic, lambda x: sum(logistic(x)), self.v, places = 3, solver = 'SCS')
         self.check_composition(prox_logistic, lambda x: sum(logistic(x)), self.B, places = 3, solver = "SCS")
 
         # f(x) = \sum_i log(1 + exp(-y_i*x_i)).
@@ -359,12 +359,12 @@ class TestProximal(BaseTest):
 
     def test_norm_nuc(self):
         # General composition tests.
-        self.check_composition(prox_norm_nuc, normNuc, self.B, places = 3)
+        self.check_composition(prox_norm_nuc, normNuc, self.B, places = 3, solver='SCS')
 
         # Multi-task logistic regression: f(B) = \beta*||B||_*
         beta = 1.5 + np.abs(np.random.randn())
         B_a2dr = prox_norm_nuc(self.B, t = beta*self.t)
-        B_cvxpy = self.prox_cvxpy(self.B, normNuc, t = beta*self.t)
+        B_cvxpy = self.prox_cvxpy(self.B, normNuc, t = beta*self.t, solver='SCS')
         self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 3)
 
     def test_group_lasso(self):

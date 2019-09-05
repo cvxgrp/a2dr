@@ -49,8 +49,8 @@ class TestPaper(BaseTest):
         # Problem data.
         K = 4 # number of blocks
         p = 10 # number of coupling constraints
-        nk = 50 # variable dimension of each subproblem QP
-        mk = 100 # constrain dimension of each subproblem QP
+        nk = 30 # variable dimension of each subproblem QP
+        mk = 50 # constrain dimension of each subproblem QP
         A_list = [np.random.randn(p, nk) for k in range(K)]
         F_list = [np.random.randn(mk, nk) for k in range(K)]
         q_list = [np.random.randn(nk) for k in range(K)]
