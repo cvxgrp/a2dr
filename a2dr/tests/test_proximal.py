@@ -9,6 +9,7 @@ class TestProximal(BaseTest):
         np.random.seed(1)
         self.TOLERANCE = 1e-6
         self.t = 5*np.abs(np.random.randn()) + self.TOLERANCE
+        self.c = np.random.randn()
         self.v = np.random.randn(100)
         self.v_small = np.random.randn(10)
 
@@ -197,7 +198,7 @@ class TestProximal(BaseTest):
         self.check_elementwise(prox_abs, places = 4)
 
         # General composition tests.
-        self.check_composition(prox_abs, cvxpy.abs, np.random.randn(), places=4)
+        self.check_composition(prox_abs, cvxpy.abs, self.c, places=4)
         self.check_composition(prox_abs, lambda x: sum(abs(x)), self.v, places=4)
         self.check_composition(prox_abs, lambda x: sum(abs(x)), self.B, places=4)
 
@@ -206,26 +207,47 @@ class TestProximal(BaseTest):
         self.check_elementwise(prox_constant, places = 4)
 
         # General composition tests.
+        self.check_composition(prox_constant, lambda x: 0, self.c, places = 4)
         self.check_composition(prox_constant, lambda x: 0, self.v, places = 4)
         self.check_composition(prox_constant, lambda x: 0, self.B, places = 4)
 
+    def test_exp(self):
+        # Elementwise consistency tests.
+        self.check_elementwise(prox_exp, places = 4)
+
+        # General composition tests.
+        self.check_composition(prox_exp, cvxpy.exp, self.c, places=4)
+        self.check_composition(prox_exp, lambda x: sum(exp(x)), self.v, places=4)
+        self.check_composition(prox_exp, lambda x: sum(exp(x)), self.B, places=3)
+
     def test_huber(self):
         for M in [0, 0.5, 1, 2]:
+            # Elementwise consistency tests.
+            self.check_elementwise(lambda v, *args, **kwargs: prox_huber(v, *args, **kwargs, M = M), places = 4)
+
             # Scalar input.
             self.check_composition(lambda v, *args, **kwargs: prox_huber(v, M = M, *args, **kwargs),
-                                   lambda x: huber(x, M = M), np.random.randn(), places = 4)
+                                   lambda x: huber(x, M = M), self.c, places = 4)
             # Vector input.
             self.check_composition(lambda v, *args, **kwargs: prox_huber(v, M = M, *args, **kwargs),
                                    lambda x: sum(huber(x, M = M)), self.v, places = 4)
             # Matrix input.
             self.check_composition(lambda v, *args, **kwargs: prox_huber(v, M = M, *args, **kwargs),
                                    lambda x: sum(huber(x, M = M)), self.B, places = 4)
-        # TODO: Elementwise test for prox of whole vector vs. prox of individual elements.
+
+    def test_identity(self):
+        # Elementwise consistency tests.
+        self.check_elementwise(prox_identity, places = 4)
+
+        # General composition tests.
+        self.check_composition(prox_identity, lambda x: x, self.c, places = 4)
+        self.check_composition(prox_identity, lambda x: sum(x), self.v, places = 4)
+        self.check_composition(prox_identity, lambda x: sum(x), self.B, places = 4)
 
     def test_logistic(self):
         # General composition tests.
-        self.check_composition(prox_logistic, lambda x: sum(logistic(x)), np.random.randn(), places = 4)
-        self.check_composition(prox_logistic, lambda x: sum(logistic(x)), self.v, places = 4)
+        self.check_composition(prox_logistic, lambda x: logistic(x), self.c, places = 4)
+        self.check_composition(prox_logistic, lambda x: sum(logistic(x)), self.v, places = 3, solver = "SCS")
         self.check_composition(prox_logistic, lambda x: sum(logistic(x)), self.B, places = 3, solver = "SCS")
 
         # f(x) = \sum_i log(1 + exp(-y_i*x_i)).
@@ -238,12 +260,41 @@ class TestProximal(BaseTest):
         self.check_composition(lambda v, *args, **kwargs: prox_logistic(v, y = Y_mat, *args, **kwargs),
                                lambda B: sum(logistic(-multiply(Y_mat,B))), self.B, places = 2, solver = "SCS")
 
-    # def test_max(self):
-    #    # TODO: Numbers are wrong here.
-    #    # General composition tests.
-    #    self.check_composition(prox_max, cvxpy.max, np.random.randn(), places = 4)
-    #    self.check_composition(prox_max, cvxpy.max, self.v, places = 4)
-    #    self.check_composition(prox_max, cvxpy.max, self.B, places = 3, solver = "SCS")
+    def test_pos(self):
+        # Elementwise consistency tests.
+        self.check_elementwise(prox_pos, places = 4)
+
+        # General composition tests.
+        self.check_composition(prox_pos, cvxpy.pos, self.c, places=4)
+        self.check_composition(prox_pos, lambda x: sum(pos(x)), self.v, places=4)
+        self.check_composition(prox_pos, lambda x: sum(pos(x)), self.B, places=4)
+
+    def test_neg(self):
+        # Elementwise consistency tests.
+        self.check_elementwise(prox_neg, places = 4)
+
+        # General composition tests.
+        self.check_composition(prox_neg, cvxpy.neg, self.c, places=4)
+        self.check_composition(prox_neg, lambda x: sum(neg(x)), self.v, places=4)
+        self.check_composition(prox_neg, lambda x: sum(neg(x)), self.B, places=4)
+
+    def test_neg_entr(self):
+        # Elementwise consistency tests.
+        self.check_elementwise(prox_neg_entr, places = 4)
+
+        # General composition tests.
+        self.check_composition(prox_neg_entr, lambda x: -entr(x), self.c, places=4)
+        self.check_composition(prox_neg_entr, lambda x: sum(-entr(x)), self.v, places=4)
+        self.check_composition(prox_neg_entr, lambda x: sum(-entr(x)), self.B, places=2, solver = "ECOS")
+
+    def test_neg_log(self):
+        # Elementwise consistency tests.
+        self.check_elementwise(prox_neg_log, places = 4)
+
+        # General composition tests.
+        self.check_composition(prox_neg_log, lambda x: -log(x), self.c, places=4)
+        self.check_composition(prox_neg_log, lambda x: sum(-log(x)), self.v, places=4)
+        self.check_composition(prox_neg_log, lambda x: sum(-log(x)), self.B, places=2, solver="SCS")
 
     def test_neg_log_det(self):
         # TODO: Poor accuracy with scaling/compositions.
@@ -257,9 +308,16 @@ class TestProximal(BaseTest):
         B_cvxpy = self.prox_cvxpy(B_spd, lambda B: -log_det(B), t = self.t, solver = "SCS")
         self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 2)
 
+    # def test_max(self):
+    #    # TODO: Numbers are wrong here.
+    #    # General composition tests.
+    #    self.check_composition(prox_max, cvxpy.max, self.c, places = 4)
+    #    self.check_composition(prox_max, cvxpy.max, self.v, places = 4)
+    #    self.check_composition(prox_max, cvxpy.max, self.B, places = 3, solver = "SCS")
+
     def test_norm1(self):
         # General composition tests.
-        self.check_composition(prox_norm1, norm1, np.random.randn(), places = 4)
+        self.check_composition(prox_norm1, norm1, self.c, places = 4)
         self.check_composition(prox_norm1, norm1, self.v, places = 4)
         self.check_composition(prox_norm1, norm1, self.B, places = 4)
 
@@ -289,7 +347,7 @@ class TestProximal(BaseTest):
     # def test_norm_inf(self):
     #     # TODO: Numbers are wrong here.
     #     # General composition tests.
-    #     self.composition_check(prox_norm_inf, norm_inf, np.random.randn(), places = 4)
+    #     self.composition_check(prox_norm_inf, norm_inf, self.c, places = 4)
     #     self.composition_check(prox_norm_inf, norm_inf, self.v, places = 4)
     #     # self.composition_check(prox_norm_inf, norm_inf, self.B, places = 4)
 

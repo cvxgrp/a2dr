@@ -17,12 +17,12 @@ def prox_constant(v, t = 1, *args, **kwargs):
     """
     return prox_scale(prox_constant_base, *args, **kwargs)(v, t)
 
-def prox_entr(v, t = 1, *args, **kwargs):
-    """Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f(x) = -x\\log(x)` applied
+def prox_neg_entr(v, t = 1, *args, **kwargs):
+    """Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f(x) = x\\log(x)` applied
     elementwise for scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term, and
     d = quad_term. We must have t > 0, a = non-zero, and d >= 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
     """
-    return prox_scale(prox_entr_base, *args, **kwargs)(v, t)
+    return prox_scale(prox_neg_entr_base, *args, **kwargs)(v, t)
 
 def prox_exp(v, t = 1, *args, **kwargs):
     """Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f(x) = \\exp(x)` applied
@@ -89,15 +89,15 @@ def prox_constant_base(v, t):
 	"""
 	return v
 
-def prox_entr_base(v, t):
-	"""Proximal operator of :math:`f(x) = -x\\log(x)`.
+def prox_neg_entr_base(v, t):
+	"""Proximal operator of :math:`f(x) = x\\log(x)`.
 	"""
-	return lambertw(t*v - 1) * np.log(t) / t
+	return t * lambertw(np.exp((v/t - 1) - np.log(t)))
 
 def prox_exp_base(v, t):
 	"""Proximal operator of :math:`f(x) = \\exp(x)`.
 	"""
-	return v - lambertw(np.exp(v - np.log(t)))
+	return v - lambertw(np.exp(v + np.log(t)))
 
 def prox_huber_base(v, t, M = 1):
 	"""Proximal operator of
