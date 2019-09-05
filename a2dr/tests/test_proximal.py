@@ -262,6 +262,11 @@ class TestProximal(BaseTest):
         B_norm2 = np.vstack(B_norm2)
         self.assertItemsAlmostEqual(B_a2dr, B_norm2, places = 3)
 
+    # def test_sigma_max(self):
+    #    # TODO: Numbers are wrong here.
+    #    # General composition tests.
+    #    self.check_composition(prox_sigma_max, sigma_max, self.B, places = 4)
+
     def test_sum_squares(self):
         # General composition tests.
         self.check_composition(prox_sum_squares, sum_squares, self.v, places = 4)
@@ -322,3 +327,18 @@ class TestProximal(BaseTest):
         Q = Q.T.dot(Q) + 0.5*np.eye(n)
         self.check_composition(lambda v, *args, **kwargs: prox_quad_form(v, Q = Q, *args, **kwargs),
                                lambda x: quad_form(x, P = Q), v)
+
+    def test_trace(self):
+        # General composition tests.
+        self.check_composition(prox_trace, cvxpy.trace, self.B_square, places = 4)
+
+        C = np.random.randn(*self.B.shape)
+        self.check_composition(lambda B, *args, **kwargs: prox_trace(B, C = C, *args, **kwargs),
+                               lambda X: cvxpy.trace(C.T * X), self.B, places = 4)
+
+        # Sparse inverse covariance estimation: f(B) = tr(BQ) for symmetric positive semidefinite Q.
+        Q = np.random.randn(*self.B_square.shape)
+        Q = Q.T.dot(Q)
+        B_a2dr = prox_trace(self.B_square, t = self.t, C = Q.T)   # tr(BQ) = tr(QB) = tr((Q^T)^TB)
+        B_cvxpy = self.prox_cvxpy(self.B_square, lambda X: cvxpy.trace(X * Q), t = self.t)
+        self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 4)

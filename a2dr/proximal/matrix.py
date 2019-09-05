@@ -1,5 +1,6 @@
 import numpy as np
 import numpy.linalg as LA
+from scipy import sparse
 from a2dr.proximal.composition import prox_scale
 from a2dr.proximal.projection import proj_simplex
 
@@ -23,13 +24,21 @@ def prox_sigma_max(B, t = 1, *args, **kwargs):
     """
     return prox_scale(prox_sigma_max_base, *args, **kwargs)(B, t)
 
-def prox_trace(B, t = 1, *args, **kwargs):
-    """Proximal operator of :math:`tf(aB-b) + cB + d\\|B\\|_F^2`, where :math:`f(B) = tr(B)` is the trace of
-    :math:`B`, for scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term, and
-    d = quad_term. We must have t > 0, a = non-zero, and d >= 0. By default, t = 1, a = 1, b = 0, c = 0, and
-    d = 0.
+def prox_trace(B, t = 1, C = None, *args, **kwargs):
+    """Proximal operator of :math:`tf(aB-b) + cB + d\\|B\\|_F^2`, where :math:`f(B) = tr(C^TB)` is the trace of
+    :math:`C^TB`, where C is a given matrix quantity. By default, C is the identity matrix, so :math:`f(B) = tr(B)`.
+    The scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term, and d = quad_term.
+    We must have t > 0, a = non-zero, and d >= 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
     """
-    return prox_scale(prox_trace_base, *args, **kwargs)(B, t)
+    if np.isscalar(B):
+        B = np.array([[B]])
+    if C is None:
+        C = sparse.eye(B.shape[0])
+    if B.shape[0] != C.shape[0]:
+        raise ValueError("Dimension mismatch: nrow(B) != nrow(C)")
+    if B.shape[1] != C.shape[1]:
+        raise ValueError("Dimension mismatch: ncol(B) != ncol(C)")
+    return prox_scale(prox_trace_base, C=C, *args, **kwargs)(B, t)
 
 def prox_neg_log_det_base(B, t):
     """Proximal operator of :math:`f(B) = -\\log\\det(B)`.
@@ -49,7 +58,9 @@ def prox_sigma_max_base(B, t):
     s_new = t * proj_simplex(s/t)
     return U.dot(np.diag(s_new)).dot(Vt)
 
-def prox_trace_base(B, t):
-    """Proximal operator of :math:`f(B) = tr(B)`, the trace of :math:`B`.
+def prox_trace_base(B, t, C):
+    """Proximal operator of :math:`f(B) = tr(C^TB)`, the trace of :math:`C^TB`, where C is a given matrix quantity
+    such that :math:`C^TB` is square.
     """
-    return B - np.diag(np.full((B.shape[0],), t))
+    # return B - np.diag(np.full((B.shape[0],), t))
+    return B - t*C
