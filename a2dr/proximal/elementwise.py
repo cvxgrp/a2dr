@@ -89,11 +89,6 @@ def prox_constant_base(v, t):
 	"""
 	return v
 
-def prox_neg_entr_base(v, t):
-	"""Proximal operator of :math:`f(x) = x\\log(x)`.
-	"""
-	return t * lambertw(np.exp((v/t - 1) - np.log(t)))
-
 def prox_exp_base(v, t):
 	"""Proximal operator of :math:`f(x) = \\exp(x)`.
 	"""
@@ -127,6 +122,11 @@ def prox_neg_base(v, t):
 	"""Proximal operator of :math:`f(x) = -\\min(x,0)`, where the minimum is taken elementwise.
 	"""
 	return np.where(v + t <= 0, v + t, np.where(v >= 0, v, 0))
+
+def prox_neg_entr_base(v, t):
+	"""Proximal operator of :math:`f(x) = x\\log(x)`.
+	"""
+	return t * lambertw(np.exp((v/t - 1) - np.log(t)))
 
 def prox_neg_log_base(v, t):
 	"""Proximal operator of :math:`f(x) = -\\log(x)`.
