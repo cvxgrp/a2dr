@@ -10,12 +10,14 @@ class TestProximal(BaseTest):
         self.TOLERANCE = 1e-6
         self.t = 5*np.abs(np.random.randn()) + self.TOLERANCE
         self.v = np.random.randn(100)
+        self.v_small = np.random.randn(10)
+
         self.B = np.random.randn(50,10)
+        self.B_small = np.random.randn(10,5)
         self.B_square = np.random.randn(10,10)
 
         self.B_symm = np.random.randn(10,10)
         self.B_symm = (self.B_symm + self.B_symm.T) / 2.0
-
         self.B_psd = np.random.randn(10,10)
         self.B_psd = self.B_psd.T.dot(self.B_psd)
 
@@ -59,6 +61,43 @@ class TestProximal(BaseTest):
                                   quad_term = 2.5, *args, **kwargs)
         self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = places)
 
+    def check_elementwise(self, prox, places = 4):
+        # Vector input.
+        x_vec1 = prox(self.v_small)
+        x_vec2 = np.array([prox(self.v_small[i]) for i in range(self.v_small.shape[0])])
+        self.assertItemsAlmostEqual(x_vec1, x_vec2, places = places)
+
+        x_vec1 = prox(self.v_small, t = self.t)
+        x_vec2 = np.array([prox(self.v_small[i], t = self.t) for i in range(self.v_small.shape[0])])
+        self.assertItemsAlmostEqual(x_vec1, x_vec2, places = places)
+
+        offset = np.random.randn(*self.v_small.shape)
+        lin_term = np.random.randn(*self.v_small.shape)
+        x_vec1 = prox(self.v_small, t = self.t, scale = 0.5, offset = offset, lin_term = lin_term, quad_term = 2.5)
+        x_vec2 = np.array([prox(self.v_small[i], t = self.t, scale = 0.5, offset = offset[i], lin_term = lin_term[i], \
+                                quad_term = 2.5) for i in range(self.v_small.shape[0])])
+        self.assertItemsAlmostEqual(x_vec1, x_vec2, places = places)
+
+        # Matrix input.
+        x_mat1 = prox(self.B_small)
+        x_mat2 = [[prox(self.B_small[i,j]) for j in range(self.B_small.shape[1])] for i in range(self.B_small.shape[0])]
+        x_mat2 = np.array(x_mat2)
+        self.assertItemsAlmostEqual(x_mat1, x_mat2, places = places)
+
+        x_mat1 = prox(self.B_small, t = self.t)
+        x_mat2 = [[prox(self.B_small[i,j], t = self.t) for j in range(self.B_small.shape[1])] \
+                    for i in range(self.B_small.shape[0])]
+        x_mat2 = np.array(x_mat2)
+        self.assertItemsAlmostEqual(x_mat1, x_mat2, places = places)
+
+        offset = np.random.randn(*self.B_small.shape)
+        lin_term = np.random.randn(*self.B_small.shape)
+        x_mat1 = prox(self.B_small, t = self.t, scale = 0.5, offset = offset, lin_term = lin_term, quad_term = 2.5)
+        x_mat2 = [[prox(self.B_small[i,j], t = self.t, scale = 0.5, offset = offset[i,j], lin_term = lin_term[i,j], \
+                        quad_term = 2.5) for j in range(self.B_small.shape[1])] for i in range(self.B_small.shape[0])]
+        x_mat2 = np.array(x_mat2)
+        self.assertItemsAlmostEqual(x_mat1, x_mat2, places = places)
+
     def test_box_constr(self):
         # Projection onto a random interval.
         lo = np.random.randn()
@@ -87,29 +126,6 @@ class TestProximal(BaseTest):
                                    lambda x: 0, self.v, constr_fun = lambda x: [lo <= x, x <= hi])
             self.check_composition(lambda v, *args, **kwargs: prox_box_constr(v, v_lo = lo, v_hi = hi, *args, **kwargs),
                                    lambda x: 0, self.B, constr_fun = lambda x: [lo <= x, x <= hi])
-
-    def test_psd_cone(self):
-        # Projection onto the PSD cone.
-        B_a2dr = prox_psd_cone(self.B_symm, self.t)
-        self.assertTrue(np.all(np.linalg.eigvals(B_a2dr) >= -self.TOLERANCE))
-
-        # Projection onto the PSD cone with affine composition.
-        scale = 2 * np.abs(np.random.randn()) + self.TOLERANCE
-        if np.random.rand() < 0.5:
-            scale = -scale
-        offset = np.random.randn(*self.B_symm.shape)
-        lin_term = np.random.randn(*self.B_symm.shape)
-        quad_term = np.abs(np.random.randn())
-        B_a2dr = prox_psd_cone(self.B_symm, self.t, scale = scale, offset = offset, lin_term = lin_term, \
-                                  quad_term = quad_term)
-        B_scaled = scale*B_a2dr - offset
-        self.assertTrue(np.all(np.linalg.eigvals(B_scaled) >= -self.TOLERANCE))
-
-        # Simple composition.
-        B_a2dr = prox_psd_cone(self.B_symm, t = self.t, scale = 2, offset = 0.5, lin_term = 1.5, quad_term = 2.5)
-        B_cvxpy = self.prox_cvxpy(self.B_symm, lambda X: 0, constr_fun = lambda X: [X >> 0], t = self.t, scale = 2, \
-                                  offset = 0.5, lin_term = 1.5, quad_term = 2.5)
-        self.assertItemsAlmostEqual(B_a2dr, B_cvxpy)
 
     def test_nonneg_constr(self):
         x_a2dr = prox_nonneg_constr(self.v, self.t)
@@ -153,6 +169,46 @@ class TestProximal(BaseTest):
         self.check_composition(prox_nonpos_constr, lambda x: 0, self.v, constr_fun=lambda x: [x <= 0])
         self.check_composition(prox_nonpos_constr, lambda x: 0, self.B, constr_fun=lambda x: [x <= 0], places = 3)
 
+    def test_psd_cone(self):
+        # Projection onto the PSD cone.
+        B_a2dr = prox_psd_cone(self.B_symm, self.t)
+        self.assertTrue(np.all(np.linalg.eigvals(B_a2dr) >= -self.TOLERANCE))
+
+        # Projection onto the PSD cone with affine composition.
+        scale = 2 * np.abs(np.random.randn()) + self.TOLERANCE
+        if np.random.rand() < 0.5:
+            scale = -scale
+        offset = np.random.randn(*self.B_symm.shape)
+        lin_term = np.random.randn(*self.B_symm.shape)
+        quad_term = np.abs(np.random.randn())
+        B_a2dr = prox_psd_cone(self.B_symm, self.t, scale = scale, offset = offset, lin_term = lin_term, \
+                                  quad_term = quad_term)
+        B_scaled = scale*B_a2dr - offset
+        self.assertTrue(np.all(np.linalg.eigvals(B_scaled) >= -self.TOLERANCE))
+
+        # Simple composition.
+        B_a2dr = prox_psd_cone(self.B_symm, t = self.t, scale = 2, offset = 0.5, lin_term = 1.5, quad_term = 2.5)
+        B_cvxpy = self.prox_cvxpy(self.B_symm, lambda X: 0, constr_fun = lambda X: [X >> 0], t = self.t, scale = 2, \
+                                  offset = 0.5, lin_term = 1.5, quad_term = 2.5)
+        self.assertItemsAlmostEqual(B_a2dr, B_cvxpy)
+
+    def test_abs(self):
+        # Elementwise consistency tests.
+        self.check_elementwise(prox_abs, places = 4)
+
+        # General composition tests.
+        self.check_composition(prox_abs, cvxpy.abs, np.random.randn(), places=4)
+        self.check_composition(prox_abs, lambda x: sum(abs(x)), self.v, places=4)
+        self.check_composition(prox_abs, lambda x: sum(abs(x)), self.B, places=4)
+
+    def test_constant(self):
+        # Elementwise consistency tests.
+        self.check_elementwise(prox_constant, places = 4)
+
+        # General composition tests.
+        self.check_composition(prox_constant, lambda x: 0, self.v, places = 4)
+        self.check_composition(prox_constant, lambda x: 0, self.B, places = 4)
+
     def test_huber(self):
         for M in [0, 0.5, 1, 2]:
             # Scalar input.
@@ -181,6 +237,13 @@ class TestProximal(BaseTest):
         Y_mat = np.random.randn(*self.B.shape)
         self.check_composition(lambda v, *args, **kwargs: prox_logistic(v, y = Y_mat, *args, **kwargs),
                                lambda B: sum(logistic(-multiply(Y_mat,B))), self.B, places = 2, solver = "SCS")
+
+    # def test_max(self):
+    #    # TODO: Numbers are wrong here.
+    #    # General composition tests.
+    #    self.check_composition(prox_max, cvxpy.max, np.random.randn(), places = 4)
+    #    self.check_composition(prox_max, cvxpy.max, self.v, places = 4)
+    #    self.check_composition(prox_max, cvxpy.max, self.B, places = 3, solver = "SCS")
 
     def test_neg_log_det(self):
         # TODO: Poor accuracy with scaling/compositions.

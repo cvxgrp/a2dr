@@ -82,7 +82,7 @@ def prox_abs_base(v, t):
 	else:
 		max_elemwise = np.maximum
 		min_elemwise = np.minimum
-	return max_elemwise(v - 1/t, 0) + min_elemwise(v + 1/t, 0)
+	return max_elemwise(v - t, 0) + min_elemwise(v + t, 0)
 
 def prox_constant_base(v, t):
 	"""Proximal operator of :math:`f(x) = c` for any constant :math:`c`.
