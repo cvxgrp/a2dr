@@ -368,18 +368,17 @@ class TestProximal(BaseTest):
         x_cvxpy = self.prox_cvxpy(self.v, norm2, t = alpha*self.t)
         self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
 
-    # def test_norm_inf(self):
-    #     # TODO: Numbers are wrong here.
-    #     # General composition tests.
-    #     self.composition_check(prox_norm_inf, norm_inf, self.c, places = 4)
-    #     self.composition_check(prox_norm_inf, norm_inf, self.v, places = 4)
-    #     # self.composition_check(prox_norm_inf, norm_inf, self.B, places = 4)
+    def test_norm_inf(self):
+        # General composition tests.
+        self.check_composition(prox_norm_inf, norm_inf, self.c, places = 4)
+        self.check_composition(prox_norm_inf, norm_inf, self.v, places = 4)
+        self.check_composition(prox_norm_inf, norm_inf, self.B, places = 3, solver="SCS")
 
-    #     # f(x) = \alpha*||x||_{\infty}
-    #     alpha = 0.5 + np.abs(np.random.randn())
-    #     x_a2dr = prox_norm_inf(self.v, t = alpha*self.t)
-    #     x_cvxpy = self.prox_cvxpy(self.v, norm_inf, t = alpha*self.t)
-    #     self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
+        # f(x) = \alpha*||x||_{\infty}
+        alpha = 0.5 + np.abs(np.random.randn())
+        x_a2dr = prox_norm_inf(self.v, t = alpha*self.t)
+        x_cvxpy = self.prox_cvxpy(self.v, norm_inf, t = alpha*self.t)
+        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
 
     def test_norm_nuc(self):
         # General composition tests.
