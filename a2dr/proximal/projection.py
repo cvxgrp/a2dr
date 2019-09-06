@@ -21,16 +21,3 @@ def proj_simplex(x, r = 1):
     # idx = np.squeeze(np.argwhere(x_diff > 0))[-1]
     idx = np.argwhere(x_diff > 0)[0][-1]
     return np.maximum(x - theta[idx], 0)
-
-def proj_soc(v, s):
-    """Project (v,s) onto the second-order cone :math:`C = {(x,t):\\|x\\|_2 \\leq t}`.
-    Parikh and Boyd (2013). "Proximal Algorithms." Foundations and Trends in Optimization. vol. 1, no. 3, Sect. 6.3.2.
-    """
-    v_norm = np.linalg.norm(v, 2)
-    if v_norm <= -s:
-        return np.zeros(v_norm.shape), 0
-    elif v_norm <= s:
-        return v, s
-    else:
-        scale = (1 + s/v_norm)/2
-        return scale*v, scale*s

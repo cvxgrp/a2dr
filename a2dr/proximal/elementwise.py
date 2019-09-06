@@ -17,13 +17,6 @@ def prox_constant(v, t = 1, *args, **kwargs):
     """
     return prox_scale(prox_constant_base, *args, **kwargs)(v, t)
 
-def prox_neg_entr(v, t = 1, *args, **kwargs):
-    """Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f(x) = x\\log(x)` applied
-    elementwise for scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term, and
-    d = quad_term. We must have t > 0, a = non-zero, and d >= 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
-    """
-    return prox_scale(prox_neg_entr_base, *args, **kwargs)(v, t)
-
 def prox_exp(v, t = 1, *args, **kwargs):
     """Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f(x) = \\exp(x)` applied
     elementwise for scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term, and
@@ -58,6 +51,13 @@ def prox_neg(v, t = 1, *args, **kwargs):
     d = quad_term. We must have t > 0, a = non-zero, and d >= 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
     """
     return prox_scale(prox_neg_base, *args, **kwargs)(v, t)
+
+def prox_neg_entr(v, t = 1, *args, **kwargs):
+    """Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f(x) = x\\log(x)` applied
+    elementwise for scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term, and
+    d = quad_term. We must have t > 0, a = non-zero, and d >= 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
+    """
+    return prox_scale(prox_neg_entr_base, *args, **kwargs)(v, t)
 
 def prox_neg_log(v, t = 1, *args, **kwargs):
     """Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f(x) = -\\log(x)` applied

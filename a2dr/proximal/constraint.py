@@ -1,5 +1,6 @@
 import numpy as np
 import numpy.linalg as LA
+import scipy.linalg as spLA
 from scipy import sparse
 from a2dr.proximal.composition import prox_scale
 
@@ -40,6 +41,19 @@ def prox_psd_cone(B, t = 1, *args, **kwargs):
 		raise ValueError("B must be a symmetric matrix.")
 	return prox_scale(prox_psd_cone_base, *args, **kwargs)(B_symm, t)
 
+def prox_soc(v, t = 1, *args, **kwargs):
+	# TODO: Make this apply row/column-wise to a matrix like CVXPY's SOC?
+	"""Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f` is the set indicator that
+	:math:`\\|x_{1:n}\\|_2 \\leq x_{n+1}`. The scalar t > 0, and the optional arguments are a = scale, b = offset,
+	c = lin_term, and d = quad_term. We must have t > 0, a = non-zero, and d >= 0. By default, 	t = 1, a = 1, b = 0,
+	c = 0, and d = 0.
+	"""
+	if np.isscalar(v) or len(v.shape) != 1:
+		raise ValueError("v must be a vector")
+	if v.size < 2:
+		raise ValueError("v must have at least 2 elements.")
+	return prox_scale(prox_soc_base, *args, **kwargs)(v, t)
+
 def prox_box_constr_base(v, t, v_lo, v_hi):
 	"""Proximal operator of the set indicator that :math:`\\underline x \\leq x \\leq \\overline x`.
 	"""
@@ -73,3 +87,26 @@ def prox_psd_cone_base(B, t):
 	s, u = LA.eigh(B)
 	s_new = np.maximum(s, 0)
 	return u.dot(np.diag(s_new)).dot(u.T)
+
+def prox_soc_base(v, t):
+	"""Proximal operator of the set indicator that :math:`\\|v_{1:n}\\_2 \\leq v_{n+1}`, where :math:`v` is a vector of
+	length n+1, `v_{1:n}` symbolizes its first n elements, and :math:`v_{n+1}` is its last element. This is equivalent
+	to the projection of :math:`v` onto the second-order cone :math:`C = {(u,s):\\|u\\|_2 \\leq s}`.
+	Parikh and Boyd (2013). "Proximal Algorithms." Foundations and Trends in Optimization. vol. 1, no. 3, Sect. 6.3.2.
+	"""
+	if sparse.issparse(v):
+		norm = spLA.norm
+	else:
+		norm = LA.norm
+
+	u = v[:-1]  # u = (v_1,...,v_n)
+	s = v[-1]   # s = v_{n+1}
+
+	u_norm = norm(u, 2)
+	if u_norm <= -s:
+		return np.zeros(v.shape)
+	elif u_norm <= s:
+		return v
+	else:
+		scale = (1 + s / u_norm) / 2
+		return scale * np.append(u, u_norm)

@@ -151,7 +151,7 @@ class TestProximal(BaseTest):
 
     def test_nonpos_constr(self):
         x_a2dr = prox_nonpos_constr(self.v, self.t)
-        self.assertTrue(np.all(x_a2dr <= 0))
+        self.assertTrue(np.all(x_a2dr <= self.TOLERANCE))
 
         x_a2dr = prox_nonpos_constr(self.v, self.t, scale=-2, offset=0)
         self.assertTrue(np.all(-2*x_a2dr <= self.TOLERANCE))
@@ -192,6 +192,30 @@ class TestProximal(BaseTest):
         B_cvxpy = self.prox_cvxpy(self.B_symm, lambda X: 0, constr_fun = lambda X: [X >> 0], t = self.t, scale = 2, \
                                   offset = 0.5, lin_term = 1.5, quad_term = 2.5)
         self.assertItemsAlmostEqual(B_a2dr, B_cvxpy)
+
+    def test_soc(self):
+        # Projection onto the SOC.
+        x_a2dr = prox_soc(self.v, self.t)
+        self.assertTrue(np.linalg.norm(x_a2dr[:-1],2) <= x_a2dr[-1] + self.TOLERANCE)
+
+        # Projection onto the SOC with affine composition.
+        x_a2dr = prox_soc(self.v, self.t, scale=2, offset=0.5)
+        x_scaled = 2*x_a2dr - 0.5
+        self.assertTrue(np.linalg.norm(x_scaled[:-1],2) <= x_scaled[-1] + self.TOLERANCE)
+
+        scale = 2 * np.abs(np.random.randn()) + self.TOLERANCE
+        if np.random.rand() < 0.5:
+            scale = -scale
+        offset = np.random.randn(*self.v.shape)
+        lin_term = np.random.randn(*self.v.shape)
+        quad_term = np.abs(np.random.randn())
+
+        x_a2dr = prox_soc(self.v, self.t, scale=scale, offset=offset, lin_term=lin_term, quad_term=quad_term)
+        x_scaled = scale*x_a2dr - offset
+        self.assertTrue(np.linalg.norm(x_scaled[:-1], 2) <= x_scaled[-1] + self.TOLERANCE)
+
+        self.check_composition(prox_soc, lambda x: 0, self.v, constr_fun = lambda x: [SOC(x[-1], x[:-1])], \
+                               places = 3, solver = "SCS")
 
     def test_abs(self):
         # Elementwise consistency tests.
