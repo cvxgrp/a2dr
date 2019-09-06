@@ -332,12 +332,11 @@ class TestProximal(BaseTest):
         B_cvxpy = self.prox_cvxpy(B_spd, lambda B: -log_det(B), t = self.t, solver = "SCS")
         self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 2)
 
-    # def test_max(self):
-    #    # TODO: Numbers are wrong here.
-    #    # General composition tests.
-    #    self.check_composition(prox_max, cvxpy.max, self.c, places = 4)
-    #    self.check_composition(prox_max, cvxpy.max, self.v, places = 4)
-    #    self.check_composition(prox_max, cvxpy.max, self.B, places = 3, solver = "SCS")
+    def test_max(self):
+        # General composition tests.
+        self.check_composition(prox_max, cvxpy.max, self.c, places = 4)
+        self.check_composition(prox_max, cvxpy.max, self.v, places = 4)
+        self.check_composition(prox_max, cvxpy.max, self.B, places = 3, solver = "SCS")
 
     def test_norm1(self):
         # General composition tests.
@@ -406,10 +405,9 @@ class TestProximal(BaseTest):
         B_norm2 = np.vstack(B_norm2)
         self.assertItemsAlmostEqual(B_a2dr, B_norm2, places = 3)
 
-    # def test_sigma_max(self):
-    #    # TODO: Numbers are wrong here.
-    #    # General composition tests.
-    #    self.check_composition(prox_sigma_max, sigma_max, self.B, places = 4)
+    def test_sigma_max(self):
+        # General composition tests.
+        self.check_composition(prox_sigma_max, sigma_max, self.B, places = 4)
 
     def test_sum_squares(self):
         # General composition tests.

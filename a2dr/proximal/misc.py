@@ -25,6 +25,8 @@ def prox_max(v, t = 1, *args, **kwargs):
     for scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term, and d = quad_term.
     We must have t > 0, a = non-zero, and d >= 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
     """
+    if np.isscalar(v):
+        v = np.array([v])
     return prox_scale(prox_max_base, *args, **kwargs)(v, t)
 
 def prox_logistic_base(v, t, x0, y):
