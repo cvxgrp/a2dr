@@ -128,10 +128,13 @@ class TestProximal(BaseTest):
             self.check_composition(lambda v, *args, **kwargs: prox_box_constr(v, v_lo = lo, v_hi = hi, *args, **kwargs),
                                    lambda x: 0, self.B, constr_fun = lambda x: [lo <= x, x <= hi])
 
-    def test_nonneg_constr(self):
-        x_a2dr = prox_nonneg_constr(self.v, self.t)
-        self.assertTrue(np.all(x_a2dr >= -self.TOLERANCE))
+        # Optimal control term: f(x) = I(||x||_{\infty} <= 1) = I(-1 <= x <= 1).
+        x_a2dr = prox_box_constr(self.v, self.t, v_lo = -1, v_hi = 1)
+        x_cvxpy = self.prox_cvxpy(self.v, lambda x: 0, constr_fun = lambda x: [norm_inf(x) <= 1], t = self.t)
+        self.assertTrue(np.all(-1 - self.TOLERANCE <= x_a2dr) and np.all(x_a2dr <= 1 + self.TOLERANCE))
+        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
 
+    def test_nonneg_constr(self):
         x_a2dr = prox_nonneg_constr(self.v, self.t, scale = -2, offset = 0)
         self.assertTrue(np.all(-2*x_a2dr >= -self.TOLERANCE))
 
@@ -146,8 +149,15 @@ class TestProximal(BaseTest):
                                     quad_term = quad_term)
         self.assertTrue(np.all(scale*x_a2dr - offset) >= -self.TOLERANCE)
 
+        # General composition tests.
         self.check_composition(prox_nonneg_constr, lambda x: 0, self.v, constr_fun = lambda x: [x >= 0])
         self.check_composition(prox_nonneg_constr, lambda x: 0, self.B, constr_fun = lambda x: [x >= 0], places = 3)
+
+        # Non-negative least squares term: f(x) = I(x >= 0).
+        x_a2dr = prox_nonneg_constr(self.v, self.t)
+        x_cvxpy = self.prox_cvxpy(self.v, lambda x: 0, constr_fun = lambda x: [x >= 0], t = self.t)
+        self.assertTrue(np.all(x_a2dr >= -self.TOLERANCE))
+        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
 
     def test_nonpos_constr(self):
         x_a2dr = prox_nonpos_constr(self.v, self.t)
@@ -274,15 +284,20 @@ class TestProximal(BaseTest):
         self.check_composition(prox_logistic, lambda x: sum(logistic(x)), self.v, places = 3, solver = 'SCS')
         self.check_composition(prox_logistic, lambda x: sum(logistic(x)), self.B, places = 3, solver = "SCS")
 
-        # f(x) = \sum_i log(1 + exp(-y_i*x_i)).
+        # Simple logistic function: f(x) = \sum_i log(1 + exp(-y_i*x_i)).
         y = np.random.randn(*self.v.shape)
         self.check_composition(lambda v, *args, **kwargs: prox_logistic(v, y = y, *args, **kwargs),
                                lambda x: sum(logistic(-multiply(y,x))), self.v, places = 2, solver = "SCS")
 
-        # Multi-task logistic regression: f(B) = \sum_i log(1 + exp(-Y_{ij}*B_{ij}).
+        # Multi-task logistic regression term: f(B) = \sum_i log(1 + exp(-Y_{ij}*B_{ij}).
         Y_mat = np.random.randn(*self.B.shape)
+        B_a2dr = prox_logistic(self.B, t = self.t, y = Y_mat)
+        B_cvxpy = self.prox_cvxpy(self.B, lambda B: sum(logistic(-multiply(Y_mat,B))), t = self.t, solver = "SCS")
+        self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 3)
+
         self.check_composition(lambda v, *args, **kwargs: prox_logistic(v, y = Y_mat, *args, **kwargs),
                                lambda B: sum(logistic(-multiply(Y_mat,B))), self.B, places = 2, solver = "SCS")
+
 
     def test_pos(self):
         # Elementwise consistency tests.
@@ -326,7 +341,7 @@ class TestProximal(BaseTest):
         # self.check_composition(prox_neg_log_det, lambda B: -log_det(B), self.B_symm, places = 3, solver = "SCS")
         # self.check_composition(prox_neg_log_det, lambda B: -log_det(B), self.B_psd, places = 3, solver = "SCS")
 
-        # Sparse inverse covariance estimation: f(B) = -log det(B) for symmetric positive definite B.
+        # Sparse inverse covariance estimation term: f(B) = -log(det(B)) for symmetric positive definite B.
         B_spd = self.B_psd + np.eye(self.B_psd.shape[0])
         B_a2dr = prox_neg_log_det(B_spd, self.t)
         B_cvxpy = self.prox_cvxpy(B_spd, lambda B: -log_det(B), t = self.t, solver = "SCS")
@@ -344,13 +359,13 @@ class TestProximal(BaseTest):
         self.check_composition(prox_norm1, norm1, self.v, places = 4)
         self.check_composition(prox_norm1, norm1, self.B, places = 4)
 
-        # l1 trend filtering: f(x) = \alpha*||x||_1
+        # l1 trend filtering term: f(x) = \alpha*||x||_1.
         alpha = 0.5 + np.abs(np.random.randn())
         x_a2dr = prox_norm1(self.v, t = alpha*self.t)
         x_cvxpy = self.prox_cvxpy(self.v, norm1, t = alpha*self.t)
         self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
 
-        # Sparse inverse covariance estimation: f(B) = \alpha*||B||_1
+        # Sparse inverse covariance estimation term: f(B) = \alpha*||B||_1.
         B_symm_a2dr = prox_norm1(self.B_symm, t = alpha*self.t)
         B_symm_cvxpy = self.prox_cvxpy(self.B_symm, norm1, t = alpha*self.t)
         self.assertItemsAlmostEqual(B_symm_a2dr, B_symm_cvxpy, places = 4)
@@ -368,11 +383,11 @@ class TestProximal(BaseTest):
         self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
 
     # def test_norm_inf(self):
-    #     # General composition tests.
-    #     self.check_composition(prox_norm_inf, norm_inf, self.c, places = 4)
-    #     self.check_composition(prox_norm_inf, norm_inf, self.v, places = 4)
-    #     self.check_composition(prox_norm_inf, norm_inf, self.B, places = 3, solver="SCS")
-
+    #    # General composition tests.
+    #    self.check_composition(prox_norm_inf, norm_inf, self.c, places = 4)
+    #    self.check_composition(prox_norm_inf, norm_inf, self.v, places = 4)
+    #    self.check_composition(prox_norm_inf, norm_inf, self.B, places = 3, solver="SCS")
+    #
     #     # f(x) = \alpha*||x||_{\infty}
     #     alpha = 0.5 + np.abs(np.random.randn())
     #     x_a2dr = prox_norm_inf(self.v, t = alpha*self.t)
@@ -383,7 +398,7 @@ class TestProximal(BaseTest):
         # General composition tests.
         self.check_composition(prox_norm_nuc, normNuc, self.B, places = 3, solver='SCS')
 
-        # Multi-task logistic regression: f(B) = \beta*||B||_*
+        # Multi-task logistic regression term: f(B) = \beta*||B||_*.
         beta = 1.5 + np.abs(np.random.randn())
         B_a2dr = prox_norm_nuc(self.B, t = beta*self.t)
         B_cvxpy = self.prox_cvxpy(self.B, normNuc, t = beta*self.t, solver='SCS')
@@ -394,7 +409,7 @@ class TestProximal(BaseTest):
         groupLasso = lambda B: sum([norm2(B[:,j]) for j in range(B.shape[1])])
         self.check_composition(prox_group_lasso, groupLasso, self.B, places = 3, solver ="SCS")
 
-        # Multi-task logistic regression: f(B) = \alpha*||B||_{2,1}
+        # Multi-task logistic regression term: f(B) = \alpha*||B||_{2,1}.
         alpha = 1.5 + np.abs(np.random.randn())
         B_a2dr = prox_group_lasso(self.B, t = alpha*self.t)
         B_cvxpy = self.prox_cvxpy(self.B, groupLasso, t = alpha*self.t)
@@ -414,10 +429,15 @@ class TestProximal(BaseTest):
         self.check_composition(prox_sum_squares, sum_squares, self.v, places = 4)
         self.check_composition(prox_sum_squares, sum_squares, self.B, places = 4)
 
-        # f(x) = (1/2)*||x - offset||_2^2
-        offset = np.random.randn(*self.v.shape)
-        x_a2dr = prox_sum_squares(self.v, t = 0.5*self.t, offset = offset)
-        x_cvxpy = self.prox_cvxpy(self.v, sum_squares, t = 0.5*self.t, offset = offset)
+        # Optimal control term: f(x) = ||x||_2^2.
+        x_a2dr = prox_sum_squares(self.v, t = self.t)
+        x_cvxpy = self.prox_cvxpy(self.v, sum_squares, t = self.t)
+        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
+
+        # l1 trend filtering term: f(x) = (1/2)*||x - y||_2^2 for given y.
+        y = np.random.randn(*self.v.shape)
+        x_a2dr = prox_sum_squares(self.v, t = 0.5*self.t, offset = y)
+        x_cvxpy = self.prox_cvxpy(self.v, sum_squares, t = 0.5*self.t, offset = y)
         self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
 
     def test_sum_squares_affine(self):
@@ -431,7 +451,7 @@ class TestProximal(BaseTest):
         self.check_composition(lambda v, *args, **kwargs: prox_sum_squares_affine(v, F = F, g = g, method ="lstsq",
                                                                                   *args, **kwargs), lambda x: sum_squares(F*x - g), v)
 
-        # Simple sum of squares.
+        # Simple sum of squares: f(x) = ||x||_2^2.
         n = 100
         F = np.eye(n)
         g = np.zeros(n)
@@ -442,7 +462,7 @@ class TestProximal(BaseTest):
         self.check_composition(lambda v, *args, **kwargs: prox_sum_squares_affine(v, F = F, g = g, method ="lstsq",
                                                                                   *args, **kwargs), lambda x: sum_squares(F*x - g), v)
 
-        # General composition tests.
+        # Non-negative least squares term: f(x) = ||Fx - g||_2^2.
         m = 1000
         n = 100
         F = 10 + 5*np.random.randn(m,n)
@@ -450,6 +470,12 @@ class TestProximal(BaseTest):
         g = F.dot(x) + 0.01*np.random.randn(m)
         v = np.random.randn(n)
 
+        for method in ["lsqr", "lstsq"]:
+            x_a2dr = prox_sum_squares_affine(self.v, t = self.t, F = F, g = g, method = method)
+            x_cvxpy = self.prox_cvxpy(self.v, lambda x: sum_squares(F*x - g), t = self.t)
+            self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
+
+        # General composition tests.
         self.check_composition(lambda v, *args, **kwargs: prox_sum_squares_affine(v, F = F, g = g, method ="lsqr",
                                                                                   *args, **kwargs), lambda x: sum_squares(F*x - g), v)
         self.check_composition(lambda v, *args, **kwargs: prox_sum_squares_affine(v, F = F, g = g, method ="lstsq",
@@ -478,9 +504,9 @@ class TestProximal(BaseTest):
         self.check_composition(lambda B, *args, **kwargs: prox_trace(B, C = C, *args, **kwargs),
                                lambda X: cvxpy.trace(C.T * X), self.B, places = 4)
 
-        # Sparse inverse covariance estimation: f(B) = tr(BQ) for symmetric positive semidefinite Q.
+        # Sparse inverse covariance estimation term: f(B) = tr(BQ) for given symmetric positive semidefinite Q.
         Q = np.random.randn(*self.B_square.shape)
         Q = Q.T.dot(Q)
-        B_a2dr = prox_trace(self.B_square, t = self.t, C = Q.T)   # tr(BQ) = tr(QB) = tr((Q^T)^TB)
+        B_a2dr = prox_trace(self.B_square, t = self.t, C = Q.T)   # tr(BQ) = tr(QB) = tr((Q^T)^TB).
         B_cvxpy = self.prox_cvxpy(self.B_square, lambda X: cvxpy.trace(X * Q), t = self.t)
         self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 4)
