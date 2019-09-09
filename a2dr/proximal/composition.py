@@ -3,7 +3,7 @@ import numpy as np
 def prox_scale(prox, *args, **kwargs):
     """Given the proximal operator of a function :math:`f`, returns the proximal operator of :math:`g` defined as
     .. math::
-        g(x) = `tf(ax-b) + c^Tx + d\\|x\\|_F^2`,
+        g(x) = `tf(ax-b) + <c,x> + d\\|x\\|_F^2`,
     where :math:`t > 0`, :math:`a \\neq 0` is a scaling term, :math:`b` is an offset, :math:`c` is a linear multiplier,
     and :math:`d \\geq 0` is a quadratic multiplier.
     :param prox: Function handle of a proximal operator that takes as input a vector/matrix :math:`v` and a scalar

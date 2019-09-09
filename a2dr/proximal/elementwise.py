@@ -1,6 +1,7 @@
 import numpy as np
 from scipy import sparse
 from scipy.special import lambertw
+from a2dr.proximal.interface import NUMPY_FUNS, SPARSE_FUNS
 from a2dr.proximal.composition import prox_scale
 
 def prox_abs(v, t = 1, *args, **kwargs):
@@ -76,12 +77,8 @@ def prox_pos(v, t = 1, *args, **kwargs):
 def prox_abs_base(v, t):
 	"""Proximal operator of :math:`f(x) = |x|`.
 	"""
-	if sparse.issparse(v):
-		max_elemwise = lambda x, y: x.maximum(y)
-		min_elemwise = lambda x, y: x.minimum(y)
-	else:
-		max_elemwise = np.maximum
-		min_elemwise = np.minimum
+	FUNS = SPARSE_FUNS if sparse.issparse(v) else NUMPY_FUNS
+	max_elemwise, min_elemwise = FUNS["max_elemwise"], FUNS["min_elemwise"]
 	return max_elemwise(v - t, 0) + min_elemwise(v + t, 0)
 
 def prox_constant_base(v, t):
@@ -92,6 +89,8 @@ def prox_constant_base(v, t):
 def prox_exp_base(v, t):
 	"""Proximal operator of :math:`f(x) = \\exp(x)`.
 	"""
+	if sparse.issparse(v):
+		v = v.todense()
 	return v - lambertw(np.exp(v + np.log(t)))
 
 def prox_huber_base(v, t, M = 1):
@@ -104,18 +103,16 @@ def prox_huber_base(v, t, M = 1):
             \\end{cases}
     applied elementwise, where :math:`M` is a positive scalar that defaults to 1.
 	"""
-	if sparse.issparse(v):
-		max_elemwise = lambda x, y: x.maximum(y)
-		mul_elemwise = lambda x, y: x.multiply(y)
-	else:
-		max_elemwise = np.maximum
-		mul_elemwise = np.multiply
+	FUNS = SPARSE_FUNS if sparse.issparse(v) else NUMPY_FUNS
+	max_elemwise, mul_elemwise = FUNS["max_elemwise"], FUNS["mul_elemwise"]
 	# return v / (1 + 1/t) if np.abs(v) < (1 + 1/t) else v - np.sign(v)/t
 	return mul_elemwise(1 - (2*M*t) / max_elemwise(abs(v), M + 2*M*t), v)
 
 def prox_identity_base(v, t):
 	"""Proximal operator of :math:`f(x) = x`.
 	"""
+	if sparse.issparse(v):
+		v = v.todense()
 	return v - t
 
 def prox_neg_base(v, t):
@@ -126,11 +123,15 @@ def prox_neg_base(v, t):
 def prox_neg_entr_base(v, t):
 	"""Proximal operator of :math:`f(x) = x\\log(x)`.
 	"""
+	if sparse.issparse(v):
+		v = v.todense()
 	return t * lambertw(np.exp((v/t - 1) - np.log(t)))
 
 def prox_neg_log_base(v, t):
 	"""Proximal operator of :math:`f(x) = -\\log(x)`.
 	"""
+	if sparse.issparse(v):
+		v = v.todense()
 	return (v + np.sqrt(v**2 + 4*t)) / 2
 
 def prox_pos_base(v, t):

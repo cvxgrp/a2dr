@@ -1,7 +1,6 @@
 import numpy as np
-import numpy.linalg as LA
-import scipy.linalg as spLA
 from scipy import sparse
+from a2dr.proximal.interface import NUMPY_FUNS, SPARSE_FUNS
 from a2dr.proximal.composition import prox_scale
 
 def prox_box_constr(v, t = 1, v_lo = -np.inf, v_hi = np.inf, *args, **kwargs):
@@ -42,7 +41,6 @@ def prox_psd_cone(B, t = 1, *args, **kwargs):
 	return prox_scale(prox_psd_cone_base, *args, **kwargs)(B_symm, t)
 
 def prox_soc(v, t = 1, *args, **kwargs):
-	# TODO: Make this apply row/column-wise to a matrix like CVXPY's SOC?
 	"""Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f` is the set indicator that
 	:math:`\\|x_{1:n}\\|_2 \\leq x_{n+1}`. The scalar t > 0, and the optional arguments are a = scale, b = offset,
 	c = lin_term, and d = quad_term. We must have t > 0, a = non-zero, and d >= 0. By default, 	t = 1, a = 1, b = 0,
@@ -57,25 +55,27 @@ def prox_soc(v, t = 1, *args, **kwargs):
 def prox_box_constr_base(v, t, v_lo, v_hi):
 	"""Proximal operator of the set indicator that :math:`\\underline x \\leq x \\leq \\overline x`.
 	"""
-	if sparse.issparse(v):
-		max_elemwise = lambda x, y: x.maximum(y)
-		min_elemwise = lambda x, y: x.minimum(y)
-	else:
-		max_elemwise = np.maximum
-		min_elemwise = np.minimum
+	FUNS = SPARSE_FUNS if sparse.issparse(v) else NUMPY_FUNS
+	max_elemwise, min_elemwise = FUNS["max_elemwise"], FUNS["min_elemwise"]
 	return min_elemwise(max_elemwise(v, v_lo), v_hi)
 
 def prox_nonneg_constr_base(v, t):
 	"""Proximal operator of the set indicator that :math:`x \\geq 0`.
 	"""
 	# return prox_box_constr_base(v, t, 0, np.inf)
-	return v.maximum(0) if sparse.issparse(v) else np.maximum(v,0)
+	# return v.maximum(0) if sparse.issparse(v) else np.maximum(v,0)
+	FUNS = SPARSE_FUNS if sparse.issparse(v) else NUMPY_FUNS
+	max_elemwise = FUNS["max_elemwise"]
+	return max_elemwise(v, 0)
 
 def prox_nonpos_constr_base(v, t):
 	"""Proximal operator of the set indicator that :math:`x \\leq 0`.
 	"""
 	# return prox_box_constr_base(v, t, -np.inf, 0)
-	return v.minimum(0) if sparse.issparse(v) else np.minimum(v,0)
+	# return v.minimum(0) if sparse.issparse(v) else np.minimum(v,0)
+	FUNS = SPARSE_FUNS if sparse.issparse(v) else NUMPY_FUNS
+	min_elemwise = FUNS["min_elemwise"]
+	return min_elemwise(v, 0)
 
 def prox_psd_cone_base(B, t):
 	"""Proximal operator of the set indicator that :math:`B \\succeq 0`, where :math:`B` is a symmetric matrix.
@@ -83,8 +83,8 @@ def prox_psd_cone_base(B, t):
 	# B_symm = (B + B.T)/2.0
 	# if not np.allclose(B, B_symm):
 	#	raise ValueError("B must be a symmetric matrix.")
-	# s, u = LA.eigh(B_symm)
-	s, u = LA.eigh(B)
+	# s, u = np.linalg.eigh(B_symm)
+	s, u = np.linalg.eigh(B)
 	s_new = np.maximum(s, 0)
 	return u.dot(np.diag(s_new)).dot(u.T)
 
@@ -95,18 +95,22 @@ def prox_soc_base(v, t):
 	Parikh and Boyd (2013). "Proximal Algorithms." Foundations and Trends in Optimization. vol. 1, no. 3, Sect. 6.3.2.
 	"""
 	if sparse.issparse(v):
-		norm = spLA.norm
+		FUNS = SPARSE_FUNS
+		append = lambda x, y: sparse.vstack((x,y))
 	else:
-		norm = LA.norm
+		FUNS = NUMPY_FUNS
+		append = np.append
+	norm, zeros = FUNS["norm"], FUNS["zeros"]
 
 	u = v[:-1]  # u = (v_1,...,v_n)
 	s = v[-1]   # s = v_{n+1}
 
 	u_norm = norm(u, 2)
 	if u_norm <= -s:
-		return np.zeros(v.shape)
+		return zeros(v.shape)
 	elif u_norm <= s:
 		return v
 	else:
 		scale = (1 + s / u_norm) / 2
-		return scale * np.append(u, u_norm)
+		return scale * append(u, u_norm)
+

@@ -29,7 +29,7 @@ class TestProximal(BaseTest):
         Problem(Minimize(expr + 0.5 * sum_squares(x_var - v)), constrs).solve(*args, **kwargs)
         return x_var.value
 
-    def check_composition(self, prox, fun, v_init, places = 4, *args, **kwargs):
+    def check_composition(self, prox, fun, v_init, places = 3, *args, **kwargs):
         x_a2dr = prox(v_init)
         x_cvxpy = self.prox_cvxpy(v_init, fun, *args, **kwargs)
         self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = places)
@@ -132,7 +132,7 @@ class TestProximal(BaseTest):
         x_a2dr = prox_box_constr(self.v, self.t, v_lo = -1, v_hi = 1)
         x_cvxpy = self.prox_cvxpy(self.v, lambda x: 0, constr_fun = lambda x: [norm_inf(x) <= 1], t = self.t)
         self.assertTrue(np.all(-1 - self.TOLERANCE <= x_a2dr) and np.all(x_a2dr <= 1 + self.TOLERANCE))
-        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
+        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 3)
 
     def test_nonneg_constr(self):
         x_a2dr = prox_nonneg_constr(self.v, self.t, scale = -2, offset = 0)
@@ -151,13 +151,13 @@ class TestProximal(BaseTest):
 
         # General composition tests.
         self.check_composition(prox_nonneg_constr, lambda x: 0, self.v, constr_fun = lambda x: [x >= 0])
-        self.check_composition(prox_nonneg_constr, lambda x: 0, self.B, constr_fun = lambda x: [x >= 0], places = 3)
+        self.check_composition(prox_nonneg_constr, lambda x: 0, self.B, constr_fun = lambda x: [x >= 0])
 
         # Non-negative least squares term: f(x) = I(x >= 0).
         x_a2dr = prox_nonneg_constr(self.v, self.t)
         x_cvxpy = self.prox_cvxpy(self.v, lambda x: 0, constr_fun = lambda x: [x >= 0], t = self.t)
         self.assertTrue(np.all(x_a2dr >= -self.TOLERANCE))
-        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
+        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 3)
 
     def test_nonpos_constr(self):
         x_a2dr = prox_nonpos_constr(self.v, self.t)
@@ -178,7 +178,7 @@ class TestProximal(BaseTest):
         self.assertTrue(np.all(scale * x_a2dr - offset) <= self.TOLERANCE)
 
         self.check_composition(prox_nonpos_constr, lambda x: 0, self.v, constr_fun=lambda x: [x <= 0])
-        self.check_composition(prox_nonpos_constr, lambda x: 0, self.B, constr_fun=lambda x: [x <= 0], places = 3)
+        self.check_composition(prox_nonpos_constr, lambda x: 0, self.B, constr_fun=lambda x: [x <= 0])
 
     def test_psd_cone(self):
         # Projection onto the PSD cone.
@@ -225,64 +225,64 @@ class TestProximal(BaseTest):
         self.assertTrue(np.linalg.norm(x_scaled[:-1], 2) <= x_scaled[-1] + self.TOLERANCE)
 
         self.check_composition(prox_soc, lambda x: 0, self.v, constr_fun = lambda x: [SOC(x[-1], x[:-1])], \
-                               places = 3, solver = "SCS")
+                               solver = "SCS")
 
     def test_abs(self):
         # Elementwise consistency tests.
-        self.check_elementwise(prox_abs, places = 4)
+        self.check_elementwise(prox_abs)
 
         # General composition tests.
-        self.check_composition(prox_abs, cvxpy.abs, self.c, places=4)
-        self.check_composition(prox_abs, lambda x: sum(abs(x)), self.v, places=4)
-        self.check_composition(prox_abs, lambda x: sum(abs(x)), self.B, places=3)
+        self.check_composition(prox_abs, cvxpy.abs, self.c)
+        self.check_composition(prox_abs, lambda x: sum(abs(x)), self.v)
+        self.check_composition(prox_abs, lambda x: sum(abs(x)), self.B)
 
     def test_constant(self):
         # Elementwise consistency tests.
-        self.check_elementwise(prox_constant, places = 4)
+        self.check_elementwise(prox_constant)
 
         # General composition tests.
-        self.check_composition(prox_constant, lambda x: 0, self.c, places = 4)
-        self.check_composition(prox_constant, lambda x: 0, self.v, places = 4)
-        self.check_composition(prox_constant, lambda x: 0, self.B, places = 4)
+        self.check_composition(prox_constant, lambda x: 0, self.c)
+        self.check_composition(prox_constant, lambda x: 0, self.v)
+        self.check_composition(prox_constant, lambda x: 0, self.B)
 
     def test_exp(self):
         # Elementwise consistency tests.
-        self.check_elementwise(prox_exp, places = 4)
+        self.check_elementwise(prox_exp)
 
         # General composition tests.
-        self.check_composition(prox_exp, cvxpy.exp, self.c, places=4)
-        self.check_composition(prox_exp, lambda x: sum(exp(x)), self.v, places=4)
-        self.check_composition(prox_exp, lambda x: sum(exp(x)), self.B, places=3)
+        self.check_composition(prox_exp, cvxpy.exp, self.c)
+        self.check_composition(prox_exp, lambda x: sum(exp(x)), self.v)
+        self.check_composition(prox_exp, lambda x: sum(exp(x)), self.B)
 
     def test_huber(self):
         for M in [0, 0.5, 1, 2]:
             # Elementwise consistency tests.
-            self.check_elementwise(lambda v, *args, **kwargs: prox_huber(v, *args, **kwargs, M = M), places = 4)
+            self.check_elementwise(lambda v, *args, **kwargs: prox_huber(v, *args, **kwargs, M = M))
 
             # Scalar input.
             self.check_composition(lambda v, *args, **kwargs: prox_huber(v, M = M, *args, **kwargs),
-                                   lambda x: huber(x, M = M), self.c, places = 4)
+                                   lambda x: huber(x, M = M), self.c)
             # Vector input.
             self.check_composition(lambda v, *args, **kwargs: prox_huber(v, M = M, *args, **kwargs),
-                                   lambda x: sum(huber(x, M = M)), self.v, places = 4)
+                                   lambda x: sum(huber(x, M = M)), self.v)
             # Matrix input.
             self.check_composition(lambda v, *args, **kwargs: prox_huber(v, M = M, *args, **kwargs),
-                                   lambda x: sum(huber(x, M = M)), self.B, places = 4)
+                                   lambda x: sum(huber(x, M = M)), self.B)
 
     def test_identity(self):
         # Elementwise consistency tests.
-        self.check_elementwise(prox_identity, places = 4)
+        self.check_elementwise(prox_identity)
 
         # General composition tests.
-        self.check_composition(prox_identity, lambda x: x, self.c, places = 4)
-        self.check_composition(prox_identity, lambda x: sum(x), self.v, places = 4)
-        self.check_composition(prox_identity, lambda x: sum(x), self.B, places = 4)
+        self.check_composition(prox_identity, lambda x: x, self.c)
+        self.check_composition(prox_identity, lambda x: sum(x), self.v)
+        self.check_composition(prox_identity, lambda x: sum(x), self.B)
 
     def test_logistic(self):
         # General composition tests.
-        self.check_composition(prox_logistic, lambda x: logistic(x), self.c, places = 4, solver='ECOS')
-        self.check_composition(prox_logistic, lambda x: sum(logistic(x)), self.v, places = 3, solver = 'SCS')
-        self.check_composition(prox_logistic, lambda x: sum(logistic(x)), self.B, places = 3, solver = "SCS")
+        self.check_composition(prox_logistic, lambda x: logistic(x), self.c, solver='ECOS')
+        self.check_composition(prox_logistic, lambda x: sum(logistic(x)), self.v, solver = 'SCS')
+        self.check_composition(prox_logistic, lambda x: sum(logistic(x)), self.B, solver = "SCS")
 
         # Simple logistic function: f(x) = \sum_i log(1 + exp(-y_i*x_i)).
         y = np.random.randn(*self.v.shape)
@@ -301,45 +301,45 @@ class TestProximal(BaseTest):
 
     def test_pos(self):
         # Elementwise consistency tests.
-        self.check_elementwise(prox_pos, places = 4)
+        self.check_elementwise(prox_pos)
 
         # General composition tests.
-        self.check_composition(prox_pos, cvxpy.pos, self.c, places=4)
-        self.check_composition(prox_pos, lambda x: sum(pos(x)), self.v, places=4)
-        self.check_composition(prox_pos, lambda x: sum(pos(x)), self.B, places=4)
+        self.check_composition(prox_pos, cvxpy.pos, self.c)
+        self.check_composition(prox_pos, lambda x: sum(pos(x)), self.v)
+        self.check_composition(prox_pos, lambda x: sum(pos(x)), self.B)
 
     def test_neg(self):
         # Elementwise consistency tests.
-        self.check_elementwise(prox_neg, places = 4)
+        self.check_elementwise(prox_neg)
 
         # General composition tests.
-        self.check_composition(prox_neg, cvxpy.neg, self.c, places=4)
-        self.check_composition(prox_neg, lambda x: sum(neg(x)), self.v, places=4)
-        self.check_composition(prox_neg, lambda x: sum(neg(x)), self.B, places=4)
+        self.check_composition(prox_neg, cvxpy.neg, self.c)
+        self.check_composition(prox_neg, lambda x: sum(neg(x)), self.v)
+        self.check_composition(prox_neg, lambda x: sum(neg(x)), self.B)
 
     def test_neg_entr(self):
         # Elementwise consistency tests.
-        self.check_elementwise(prox_neg_entr, places = 4)
+        self.check_elementwise(prox_neg_entr)
 
         # General composition tests.
-        self.check_composition(prox_neg_entr, lambda x: -entr(x), self.c, places=4)
-        self.check_composition(prox_neg_entr, lambda x: sum(-entr(x)), self.v, places=4)
+        self.check_composition(prox_neg_entr, lambda x: -entr(x), self.c)
+        self.check_composition(prox_neg_entr, lambda x: sum(-entr(x)), self.v)
         self.check_composition(prox_neg_entr, lambda x: sum(-entr(x)), self.B, places=2, solver = "ECOS")
 
     def test_neg_log(self):
         # Elementwise consistency tests.
-        self.check_elementwise(prox_neg_log, places = 4)
+        self.check_elementwise(prox_neg_log)
 
         # General composition tests.
-        self.check_composition(prox_neg_log, lambda x: -log(x), self.c, places=4)
-        self.check_composition(prox_neg_log, lambda x: sum(-log(x)), self.v, places=4)
+        self.check_composition(prox_neg_log, lambda x: -log(x), self.c)
+        self.check_composition(prox_neg_log, lambda x: sum(-log(x)), self.v)
         self.check_composition(prox_neg_log, lambda x: sum(-log(x)), self.B, places=2, solver="SCS")
 
     def test_neg_log_det(self):
         # TODO: Poor accuracy with scaling/compositions.
         # General composition tests.
-        # self.check_composition(prox_neg_log_det, lambda B: -log_det(B), self.B_symm, places = 3, solver = "SCS")
-        # self.check_composition(prox_neg_log_det, lambda B: -log_det(B), self.B_psd, places = 3, solver = "SCS")
+        # self.check_composition(prox_neg_log_det, lambda B: -log_det(B), self.B_symm, solver = "SCS")
+        # self.check_composition(prox_neg_log_det, lambda B: -log_det(B), self.B_psd, solver = "SCS")
 
         # Sparse inverse covariance estimation term: f(B) = -log(det(B)) for symmetric positive definite B.
         B_spd = self.B_psd + np.eye(self.B_psd.shape[0])
@@ -347,17 +347,24 @@ class TestProximal(BaseTest):
         B_cvxpy = self.prox_cvxpy(B_spd, lambda B: -log_det(B), t = self.t, solver = "SCS")
         self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 2)
 
+        # Sparse inverse covariance estimation term: f(B) = -log(det(B)) + tr(BQ) for symmetric positive definite B
+        # and given matrix Q.
+        # Q = np.random.randn(*B_spd.shape)
+        # B_a2dr = prox_neg_log_det(B_spd, self.t, lin_term = Q.T)   # tr(BQ) = \sum_{ij} Q_{ji}B_{ij}
+        # B_cvxpy = self.prox_cvxpy(B_spd, lambda B: -log_det(B) + trace(B*Q), t = self.t)
+        # self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 3)
+
     def test_max(self):
         # General composition tests.
-        self.check_composition(prox_max, cvxpy.max, self.c, places = 4)
-        self.check_composition(prox_max, cvxpy.max, self.v, places = 4)
-        self.check_composition(prox_max, cvxpy.max, self.B, places = 3, solver = "SCS")
+        self.check_composition(prox_max, cvxpy.max, self.c)
+        self.check_composition(prox_max, cvxpy.max, self.v)
+        self.check_composition(prox_max, cvxpy.max, self.B, solver = "SCS")
 
     def test_norm1(self):
         # General composition tests.
-        self.check_composition(prox_norm1, norm1, self.c, places = 4)
-        self.check_composition(prox_norm1, norm1, self.v, places = 4)
-        self.check_composition(prox_norm1, norm1, self.B, places = 4)
+        self.check_composition(prox_norm1, norm1, self.c)
+        self.check_composition(prox_norm1, norm1, self.v)
+        self.check_composition(prox_norm1, norm1, self.B)
 
         # l1 trend filtering term: f(x) = \alpha*||x||_1.
         alpha = 0.5 + np.abs(np.random.randn())
@@ -372,9 +379,9 @@ class TestProximal(BaseTest):
 
     def test_norm2(self):
         # General composition tests.
-        self.check_composition(prox_norm2, norm2, np.random.randn(), places = 4)
-        self.check_composition(prox_norm2, norm2, self.v, places = 4, solver ="SCS")
-        self.check_composition(prox_norm2, lambda B: cvxpy.norm(B, 'fro'), self.B, places = 3, solver ="SCS")
+        self.check_composition(prox_norm2, norm2, np.random.randn())
+        self.check_composition(prox_norm2, norm2, self.v, solver ="SCS")
+        self.check_composition(prox_norm2, lambda B: cvxpy.norm(B, 'fro'), self.B, solver ="SCS")
 
         # f(x) = \alpha*||x||_2
         alpha = 0.5 + np.abs(np.random.randn())
@@ -384,9 +391,9 @@ class TestProximal(BaseTest):
 
     # def test_norm_inf(self):
     #    # General composition tests.
-    #    self.check_composition(prox_norm_inf, norm_inf, self.c, places = 4)
-    #    self.check_composition(prox_norm_inf, norm_inf, self.v, places = 4)
-    #    self.check_composition(prox_norm_inf, norm_inf, self.B, places = 3, solver="SCS")
+    #    self.check_composition(prox_norm_inf, norm_inf, self.c)
+    #    self.check_composition(prox_norm_inf, norm_inf, self.v)
+    #    self.check_composition(prox_norm_inf, norm_inf, self.B, solver="SCS")
     #
     #     # f(x) = \alpha*||x||_{\infty}
     #     alpha = 0.5 + np.abs(np.random.randn())
@@ -396,7 +403,7 @@ class TestProximal(BaseTest):
 
     def test_norm_nuc(self):
         # General composition tests.
-        self.check_composition(prox_norm_nuc, normNuc, self.B, places = 3, solver='SCS')
+        self.check_composition(prox_norm_nuc, normNuc, self.B, solver='SCS')
 
         # Multi-task logistic regression term: f(B) = \beta*||B||_*.
         beta = 1.5 + np.abs(np.random.randn())
@@ -407,7 +414,7 @@ class TestProximal(BaseTest):
     def test_group_lasso(self):
         # General composition tests.
         groupLasso = lambda B: sum([norm2(B[:,j]) for j in range(B.shape[1])])
-        self.check_composition(prox_group_lasso, groupLasso, self.B, places = 3, solver ="SCS")
+        self.check_composition(prox_group_lasso, groupLasso, self.B, solver ="SCS")
 
         # Multi-task logistic regression term: f(B) = \alpha*||B||_{2,1}.
         alpha = 1.5 + np.abs(np.random.randn())
@@ -422,12 +429,12 @@ class TestProximal(BaseTest):
 
     # def test_sigma_max(self):
     #     # General composition tests.
-    #     self.check_composition(prox_sigma_max, sigma_max, self.B, places = 4)
+    #     self.check_composition(prox_sigma_max, sigma_max, self.B)
 
     def test_sum_squares(self):
         # General composition tests.
-        self.check_composition(prox_sum_squares, sum_squares, self.v, places = 4)
-        self.check_composition(prox_sum_squares, sum_squares, self.B, places = 4)
+        self.check_composition(prox_sum_squares, sum_squares, self.v)
+        self.check_composition(prox_sum_squares, sum_squares, self.B)
 
         # Optimal control term: f(x) = ||x||_2^2.
         x_a2dr = prox_sum_squares(self.v, t = self.t)
@@ -485,7 +492,9 @@ class TestProximal(BaseTest):
         # Simple quadratic.
         v = np.random.randn(1)
         Q = np.array([[5]])
-        self.check_composition(lambda v, *args, **kwargs: prox_quad_form(v, Q = Q, *args, **kwargs),
+        self.check_composition(lambda v, *args, **kwargs: prox_quad_form(v, Q = Q, method = "lsqr", *args, **kwargs),
+                               lambda x: quad_form(x, P = Q), v)
+        self.check_composition(lambda v, *args, **kwargs: prox_quad_form(v, Q = Q, method = "lstsq", *args, **kwargs),
                                lambda x: quad_form(x, P = Q), v)
 
         # General composition tests.
@@ -493,16 +502,18 @@ class TestProximal(BaseTest):
         v = np.random.randn(n)
         Q = np.random.randn(n,n)
         Q = Q.T.dot(Q) + 0.5*np.eye(n)
-        self.check_composition(lambda v, *args, **kwargs: prox_quad_form(v, Q = Q, *args, **kwargs),
+        self.check_composition(lambda v, *args, **kwargs: prox_quad_form(v, Q = Q, method = "lsqr", *args, **kwargs),
+                               lambda x: quad_form(x, P = Q), v)
+        self.check_composition(lambda v, *args, **kwargs: prox_quad_form(v, Q = Q, method = "lstsq", *args, **kwargs),
                                lambda x: quad_form(x, P = Q), v)
 
     def test_trace(self):
         # General composition tests.
-        self.check_composition(prox_trace, cvxpy.trace, self.B_square, places = 4)
+        self.check_composition(prox_trace, cvxpy.trace, self.B_square)
 
         C = np.random.randn(*self.B.shape)
         self.check_composition(lambda B, *args, **kwargs: prox_trace(B, C = C, *args, **kwargs),
-                               lambda X: cvxpy.trace(C.T * X), self.B, places = 4)
+                               lambda X: cvxpy.trace(C.T * X), self.B)
 
         # Sparse inverse covariance estimation term: f(B) = tr(BQ) for given symmetric positive semidefinite Q.
         Q = np.random.randn(*self.B_square.shape)

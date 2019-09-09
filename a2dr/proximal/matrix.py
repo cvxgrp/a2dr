@@ -1,5 +1,4 @@
 import numpy as np
-import numpy.linalg as LA
 from scipy import sparse
 from a2dr.proximal.composition import prox_scale
 from a2dr.proximal.projection import proj_simplex
@@ -43,7 +42,7 @@ def prox_trace(B, t = 1, C = None, *args, **kwargs):
 def prox_neg_log_det_base(B, t):
     """Proximal operator of :math:`f(B) = -\\log\\det(B)`.
 	"""
-    s, u = LA.eigh(B)
+    s, u = np.linalg.eigh(B)
     id_pos = (s >= 0)
     id_neg = (s < 0)
     s_new = np.zeros(len(s))
@@ -54,7 +53,7 @@ def prox_neg_log_det_base(B, t):
 def prox_sigma_max_base(B, t):
     """Proximal operator of :math:`f(B) = \\sigma_{\\max}(B)`, the maximum singular value of :math:`B`.
 	"""
-    U, s, Vt = LA.svd(B, full_matrices=False)
+    U, s, Vt = np.linalg.svd(B, full_matrices=False)
     s_new = t * proj_simplex(s/t)
     return U.dot(np.diag(s_new)).dot(Vt)
 
