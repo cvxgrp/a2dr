@@ -1,4 +1,5 @@
 import numpy as np
+from scipy import sparse
 from cvxpy import *
 from a2dr.proximal import *
 from a2dr.tests.base_test import BaseTest
@@ -21,6 +22,13 @@ class TestProximal(BaseTest):
         self.B_symm = (self.B_symm + self.B_symm.T) / 2.0
         self.B_psd = np.random.randn(10,10)
         self.B_psd = self.B_psd.T.dot(self.B_psd)
+
+        self.u_sparse = sparse.random(100,1)
+        self.u_dense = self.u_sparse.todense()
+        self.C_sparse = sparse.random(50,10)
+        self.C_dense = self.C_sparse.todense()
+        self.C_square_sparse = sparse.random(50,50)
+        self.C_square_dense = self.C_square_sparse.todense()
 
     def prox_cvxpy(self, v, fun, constr_fun = None, t = 1, scale = 1, offset = 0, lin_term = 0, quad_term = 0, *args, **kwargs):
         x_var = Variable() if np.isscalar(v) else Variable(v.shape)
@@ -99,6 +107,54 @@ class TestProximal(BaseTest):
         x_mat2 = np.array(x_mat2)
         self.assertItemsAlmostEqual(x_mat1, x_mat2, places = places)
 
+    def check_sparsity(self, prox, places = 4, check_vector = True, check_matrix = True, matrix_type = "general"):
+        if check_vector:
+            # Vector input.
+            x_vec1 = prox(self.u_sparse)
+            x_vec2 = prox(self.u_dense)
+            self.assertTrue(sparse.issparse(x_vec1))
+            self.assertItemsAlmostEqual(x_vec1.todense(), x_vec2, places = places)
+
+            x_vec1 = prox(self.u_sparse, t=self.t)
+            x_vec2 = prox(self.u_dense, t=self.t)
+            self.assertTrue(sparse.issparse(x_vec1))
+            self.assertItemsAlmostEqual(x_vec1.todense(), x_vec2, places = places)
+
+            offset = sparse.random(*self.u_sparse.shape)
+            lin_term = sparse.random(*self.u_sparse.shape)
+            x_vec1 = prox(self.u_sparse, t=self.t, scale=0.5, offset=offset, lin_term=lin_term, quad_term=2.5)
+            x_vec2 = prox(self.u_dense, t=self.t, scale=0.5, offset=offset, lin_term=lin_term, quad_term=2.5)
+            self.assertTrue(sparse.issparse(x_vec1))
+            self.assertItemsAlmostEqual(x_vec1.todense(), x_vec2, places = places)
+
+        if check_matrix:
+            if matrix_type == "general":
+                C_sparse = self.C_sparse
+                C_dense = self.C_dense
+            elif matrix_type == "square":
+                C_sparse = self.C_square_sparse
+                C_dense = self.C_square_dense
+            else:
+                raise ValueError("matrix_type must be 'general' or 'square'")
+
+            # Matrix input.
+            x_mat1 = prox(C_sparse)
+            x_mat2 = prox(C_dense)
+            self.assertTrue(sparse.issparse(x_mat1))
+            self.assertItemsAlmostEqual(x_mat1.todense(), x_mat2, places = places)
+
+            x_mat1 = prox(C_sparse, t=self.t)
+            x_mat2 = prox(C_dense, t=self.t)
+            self.assertTrue(sparse.issparse(x_mat1))
+            self.assertItemsAlmostEqual(x_mat1.todense(), x_mat2, places = places)
+
+            offset = sparse.random(*C_sparse.shape)
+            lin_term = sparse.random(*C_sparse.shape)
+            x_mat1 = prox(C_sparse, t=self.t, scale=0.5, offset=offset, lin_term=lin_term, quad_term=2.5)
+            x_mat2 = prox(C_dense, t=self.t, scale=0.5, offset=offset, lin_term=lin_term, quad_term=2.5)
+            self.assertTrue(sparse.issparse(x_mat1))
+            self.assertItemsAlmostEqual(x_mat1.todense(), x_mat2, places = places)
+
     def test_box_constr(self):
         # Projection onto a random interval.
         lo = np.random.randn()
@@ -123,6 +179,13 @@ class TestProximal(BaseTest):
         bounds = [(0, 0), (-1, 1), (0, np.inf), (-np.inf, 0)]
         for bound in bounds:
             lo, hi = bound
+            # Elementwise consistency tests.
+            self.check_elementwise(lambda v, *args, **kwargs: prox_box_constr(v, v_lo = lo, v_hi = hi, *args, **kwargs))
+
+            # Sparsity consistency tests.
+            self.check_sparsity(lambda v, *args, **kwargs: prox_box_constr(v, v_lo = lo, v_hi = hi, *args, **kwargs))
+
+            # General composition tests.
             self.check_composition(lambda v, *args, **kwargs: prox_box_constr(v, v_lo = lo, v_hi = hi, *args, **kwargs),
                                    lambda x: 0, self.v, constr_fun = lambda x: [lo <= x, x <= hi])
             self.check_composition(lambda v, *args, **kwargs: prox_box_constr(v, v_lo = lo, v_hi = hi, *args, **kwargs),
@@ -148,6 +211,12 @@ class TestProximal(BaseTest):
         x_a2dr = prox_nonneg_constr(self.v, self.t, scale = scale, offset = offset, lin_term = lin_term, \
                                     quad_term = quad_term)
         self.assertTrue(np.all(scale*x_a2dr - offset) >= -self.TOLERANCE)
+
+        # Elementwise consistency tests.
+        self.check_elementwise(prox_nonneg_constr)
+
+        # Sparsity consistency tests.
+        self.check_sparsity(prox_nonneg_constr)
 
         # General composition tests.
         self.check_composition(prox_nonneg_constr, lambda x: 0, self.v, constr_fun = lambda x: [x >= 0])
@@ -177,6 +246,13 @@ class TestProximal(BaseTest):
                                     quad_term=quad_term)
         self.assertTrue(np.all(scale * x_a2dr - offset) <= self.TOLERANCE)
 
+        # Elementwise consistency tests.
+        self.check_elementwise(prox_nonpos_constr)
+
+        # Sparsity consistency tests.
+        self.check_sparsity(prox_nonpos_constr)
+
+        # General composition tests.
         self.check_composition(prox_nonpos_constr, lambda x: 0, self.v, constr_fun=lambda x: [x <= 0])
         self.check_composition(prox_nonpos_constr, lambda x: 0, self.B, constr_fun=lambda x: [x <= 0])
 
@@ -224,10 +300,17 @@ class TestProximal(BaseTest):
         x_scaled = scale*x_a2dr - offset
         self.assertTrue(np.linalg.norm(x_scaled[:-1], 2) <= x_scaled[-1] + self.TOLERANCE)
 
+        # Sparsity consistency tests.
+        self.check_sparsity(prox_soc, check_matrix = False)
+
+        # General composition tests.
         self.check_composition(prox_soc, lambda x: 0, self.v, constr_fun = lambda x: [SOC(x[-1], x[:-1])], \
                                solver = "SCS")
 
     def test_abs(self):
+        # Elementwise consistency tests.
+        self.check_elementwise(prox_abs)
+
         # Elementwise consistency tests.
         self.check_elementwise(prox_abs)
 
@@ -240,6 +323,9 @@ class TestProximal(BaseTest):
         # Elementwise consistency tests.
         self.check_elementwise(prox_constant)
 
+        # Sparsity consistency tests.
+        self.check_sparsity(prox_constant)
+
         # General composition tests.
         self.check_composition(prox_constant, lambda x: 0, self.c)
         self.check_composition(prox_constant, lambda x: 0, self.v)
@@ -251,13 +337,16 @@ class TestProximal(BaseTest):
 
         # General composition tests.
         self.check_composition(prox_exp, cvxpy.exp, self.c)
-        self.check_composition(prox_exp, lambda x: sum(exp(x)), self.v)
-        self.check_composition(prox_exp, lambda x: sum(exp(x)), self.B)
+        self.check_composition(prox_exp, lambda x: sum(exp(x)), self.v, solver = "SCS")
+        self.check_composition(prox_exp, lambda x: sum(exp(x)), self.B, solver = "SCS")
 
     def test_huber(self):
         for M in [0, 0.5, 1, 2]:
             # Elementwise consistency tests.
             self.check_elementwise(lambda v, *args, **kwargs: prox_huber(v, *args, **kwargs, M = M))
+
+            # TODO: Sparsity consistency tests.
+            # self.check_sparsity(lambda v, *args, **kwargs: prox_huber(v, *args, **kwargs, M = M))
 
             # Scalar input.
             self.check_composition(lambda v, *args, **kwargs: prox_huber(v, M = M, *args, **kwargs),
@@ -293,15 +382,17 @@ class TestProximal(BaseTest):
         Y_mat = np.random.randn(*self.B.shape)
         B_a2dr = prox_logistic(self.B, t = self.t, y = Y_mat)
         B_cvxpy = self.prox_cvxpy(self.B, lambda B: sum(logistic(-multiply(Y_mat,B))), t = self.t, solver = "SCS")
-        self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 3)
+        self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 2)
 
         self.check_composition(lambda v, *args, **kwargs: prox_logistic(v, y = Y_mat, *args, **kwargs),
                                lambda B: sum(logistic(-multiply(Y_mat,B))), self.B, places = 2, solver = "SCS")
 
-
     def test_pos(self):
         # Elementwise consistency tests.
         self.check_elementwise(prox_pos)
+
+        # Sparsity consistency tests.
+        self.check_sparsity(prox_pos)
 
         # General composition tests.
         self.check_composition(prox_pos, cvxpy.pos, self.c)
@@ -311,6 +402,9 @@ class TestProximal(BaseTest):
     def test_neg(self):
         # Elementwise consistency tests.
         self.check_elementwise(prox_neg)
+
+        # Sparsity consistency tests.
+        self.check_sparsity(prox_neg)
 
         # General composition tests.
         self.check_composition(prox_neg, cvxpy.neg, self.c)
@@ -324,7 +418,7 @@ class TestProximal(BaseTest):
         # General composition tests.
         self.check_composition(prox_neg_entr, lambda x: -entr(x), self.c)
         self.check_composition(prox_neg_entr, lambda x: sum(-entr(x)), self.v)
-        self.check_composition(prox_neg_entr, lambda x: sum(-entr(x)), self.B, places=2, solver = "ECOS")
+        self.check_composition(prox_neg_entr, lambda x: sum(-entr(x)), self.B, places=2, solver = "SCS")
 
     def test_neg_log(self):
         # Elementwise consistency tests.
@@ -361,6 +455,9 @@ class TestProximal(BaseTest):
         self.check_composition(prox_max, cvxpy.max, self.B, solver = "SCS")
 
     def test_norm1(self):
+        # Sparsity consistency tests.
+        self.check_sparsity(prox_norm1)
+
         # General composition tests.
         self.check_composition(prox_norm1, norm1, self.c)
         self.check_composition(prox_norm1, norm1, self.v)
@@ -378,6 +475,9 @@ class TestProximal(BaseTest):
         self.assertItemsAlmostEqual(B_symm_a2dr, B_symm_cvxpy, places = 4)
 
     def test_norm2(self):
+        # Sparsity consistency tests.
+        self.check_sparsity(prox_norm2)
+
         # General composition tests.
         self.check_composition(prox_norm2, norm2, np.random.randn())
         self.check_composition(prox_norm2, norm2, self.v, solver ="SCS")
@@ -412,6 +512,9 @@ class TestProximal(BaseTest):
         self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 3)
 
     def test_group_lasso(self):
+        # TODO: Sparsity consistency tests.
+        # self.check_sparsity(prox_group_lasso)
+
         # General composition tests.
         groupLasso = lambda B: sum([norm2(B[:,j]) for j in range(B.shape[1])])
         self.check_composition(prox_group_lasso, groupLasso, self.B, solver ="SCS")
@@ -432,6 +535,9 @@ class TestProximal(BaseTest):
     #     self.check_composition(prox_sigma_max, sigma_max, self.B)
 
     def test_sum_squares(self):
+        # Sparsity consistency tests.
+        self.check_sparsity(prox_sum_squares)
+
         # General composition tests.
         self.check_composition(prox_sum_squares, sum_squares, self.v)
         self.check_composition(prox_sum_squares, sum_squares, self.B)
@@ -508,10 +614,15 @@ class TestProximal(BaseTest):
                                lambda x: quad_form(x, P = Q), v)
 
     def test_trace(self):
-        # General composition tests.
-        self.check_composition(prox_trace, cvxpy.trace, self.B_square)
+        # Sparsity consistency tests.
+        C = sparse.random(*self.C_square_sparse.shape)
+        self.check_sparsity(prox_trace, check_vector = False, matrix_type = "square")
+        self.check_sparsity(lambda B, *args, **kwargs: prox_trace(B, C = C, *args, **kwargs), check_vector = False, \
+                            matrix_type = "square")
 
+        # General composition tests.
         C = np.random.randn(*self.B.shape)
+        self.check_composition(prox_trace, cvxpy.trace, self.B_square)
         self.check_composition(lambda B, *args, **kwargs: prox_trace(B, C = C, *args, **kwargs),
                                lambda X: cvxpy.trace(C.T * X), self.B)
 

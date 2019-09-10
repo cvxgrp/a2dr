@@ -1,7 +1,7 @@
 import numpy as np
 from scipy import sparse
 from scipy.special import lambertw
-from a2dr.proximal.interface import NUMPY_FUNS, SPARSE_FUNS
+from a2dr.proximal.interface import NUMPY_FUNS, SPARSE_FUNS, apply_to_nonzeros
 from a2dr.proximal.composition import prox_scale
 
 def prox_abs(v, t = 1, *args, **kwargs):
@@ -77,9 +77,7 @@ def prox_pos(v, t = 1, *args, **kwargs):
 def prox_abs_base(v, t):
 	"""Proximal operator of :math:`f(x) = |x|`.
 	"""
-	FUNS = SPARSE_FUNS if sparse.issparse(v) else NUMPY_FUNS
-	max_elemwise, min_elemwise = FUNS["max_elemwise"], FUNS["min_elemwise"]
-	return max_elemwise(v - t, 0) + min_elemwise(v + t, 0)
+	return apply_to_nonzeros(lambda y: np.maximum(y - t, 0) + np.minimum(y + t, 0), v)
 
 def prox_constant_base(v, t):
 	"""Proximal operator of :math:`f(x) = c` for any constant :math:`c`.
@@ -105,7 +103,6 @@ def prox_huber_base(v, t, M = 1):
 	"""
 	FUNS = SPARSE_FUNS if sparse.issparse(v) else NUMPY_FUNS
 	max_elemwise, mul_elemwise = FUNS["max_elemwise"], FUNS["mul_elemwise"]
-	# return v / (1 + 1/t) if np.abs(v) < (1 + 1/t) else v - np.sign(v)/t
 	return mul_elemwise(1 - (2*M*t) / max_elemwise(abs(v), M + 2*M*t), v)
 
 def prox_identity_base(v, t):
@@ -118,7 +115,7 @@ def prox_identity_base(v, t):
 def prox_neg_base(v, t):
 	"""Proximal operator of :math:`f(x) = -\\min(x,0)`, where the minimum is taken elementwise.
 	"""
-	return np.where(v + t <= 0, v + t, np.where(v >= 0, v, 0))
+	return apply_to_nonzeros(lambda y: np.where(y + t <= 0, y + t, np.where(y >= 0, y, 0)), v)
 
 def prox_neg_entr_base(v, t):
 	"""Proximal operator of :math:`f(x) = x\\log(x)`.
@@ -137,4 +134,4 @@ def prox_neg_log_base(v, t):
 def prox_pos_base(v, t):
 	"""Proximal operator of :math:`f(x) = \\max(x,0)`, where the maximum is taken elementwise.
 	"""
-	return np.where(v >= t, v - t, np.where(v <= 0, v, 0))
+	return apply_to_nonzeros(lambda y: np.where(y - t >= 0, y - t, np.where(y <= 0, y, 0)), v)

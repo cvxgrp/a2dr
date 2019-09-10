@@ -1,5 +1,6 @@
 import numpy as np
 import warnings
+from scipy import sparse
 from scipy.special import expit
 from scipy.optimize import minimize
 from a2dr.proximal.projection import proj_simplex
@@ -39,6 +40,14 @@ def prox_logistic_base(v, t, x0, y):
     v = v.flatten(order='C')
     x0 = x0.flatten(order='C')
     y = y.flatten(order='C')
+
+    # Only works on dense vectors.
+    if sparse.issparse(v):
+        v = v.todense()
+    if sparse.issparse(x0):
+        x0 = x0.todense()
+    if sparse.issparse(y):
+        y = y.todense()
 
     # g(x) = \sum_i log(1 + exp(-y_i*x_i)) + 1/(2*t)*||x - v||_2^2
     def fun(x, y, v, t):

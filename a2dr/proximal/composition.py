@@ -1,4 +1,5 @@
 import numpy as np
+from scipy import sparse
 
 def prox_scale(prox, *args, **kwargs):
     """Given the proximal operator of a function :math:`f`, returns the proximal operator of :math:`g` defined as
@@ -28,6 +29,10 @@ def prox_scale(prox, *args, **kwargs):
         raise ValueError("quad_term must be a non-negative scalar.")
 
     def prox_new(v, t):
+        # if sparse.issparse(v):
+        #     if not ((lin_term == 0 or sparse.issparse(lin_term)) and \
+        #              (quad_term == 0 or sparse.issparse(quad_term))):
+        #         v = v.todense()
         v_new = scale*(v - lin_term)/(2*quad_term + 1) - offset
         t_new = t*scale**2/(2*quad_term + 1)
         return (prox(v_new, t_new, *args, **kwargs) + offset)/scale

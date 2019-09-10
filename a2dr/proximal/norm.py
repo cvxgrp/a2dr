@@ -1,6 +1,6 @@
 import numpy as np
 from scipy import sparse
-from a2dr.proximal.interface import NUMPY_FUNS, SPARSE_FUNS
+from a2dr.proximal.interface import NUMPY_FUNS, SPARSE_FUNS, apply_to_nonzeros
 from a2dr.proximal.projection import proj_l1
 from a2dr.proximal.composition import prox_scale
 
@@ -53,15 +53,13 @@ def prox_group_lasso(B, t = 1, *args, **kwargs):
 def prox_norm1_base(v, t):
 	"""Proximal operator of :math:`f(x) = \\|x\\|_1`.
 	"""
-	FUNS = SPARSE_FUNS if sparse.issparse(v) else NUMPY_FUNS
-	max_elemwise = FUNS["max_elemwise"]
-	return max_elemwise(v - t, 0) - max_elemwise(-v - t, 0)
+	return apply_to_nonzeros(lambda y: np.maximum(y - t, 0) - np.maximum(-y - t, 0), v)
 
 def prox_norm2_base(v, t):
 	"""Proximal operator of :math:`f(x) = \\|x\\|_2`.
 	"""
 	FUNS = SPARSE_FUNS if sparse.issparse(v) else NUMPY_FUNS
-	max_elemwise, norm, zeros = FUNS["max_elemwise"], FUNS["norm"], FUNS["zeros"]
+	norm, zeros = FUNS["norm"], FUNS["zeros"]
 
 	if np.isscalar(v):
 		v_norm = abs(v)
@@ -73,7 +71,7 @@ def prox_norm2_base(v, t):
 	if v_norm == 0:
 		return zeros(v.shape)
 	else:
-		return max_elemwise(1 - t*1.0/v_norm, 0) * v
+		return np.maximum(1 - t*1.0/v_norm, 0) * v
 
 def prox_norm_inf_base(v, t):
 	"""Proximal operator of :math:`f(x) = \\|x\\|_{\\infty}`.

@@ -1,4 +1,5 @@
 import numpy as np
+import scipy as sp
 from scipy import sparse
 from a2dr.proximal.interface import NUMPY_FUNS, SPARSE_FUNS
 from a2dr.proximal.composition import prox_scale
@@ -46,9 +47,9 @@ def prox_soc(v, t = 1, *args, **kwargs):
 	c = lin_term, and d = quad_term. We must have t > 0, a = non-zero, and d >= 0. By default, 	t = 1, a = 1, b = 0,
 	c = 0, and d = 0.
 	"""
-	if np.isscalar(v) or len(v.shape) != 1:
+	if np.isscalar(v) or not (len(v.shape) == 1 or (len(v.shape) == 2 and v.shape[1] == 1)):
 		raise ValueError("v must be a vector")
-	if v.size < 2:
+	if v.shape[0] < 2:
 		raise ValueError("v must have at least 2 elements.")
 	return prox_scale(prox_soc_base, *args, **kwargs)(v, t)
 
@@ -95,22 +96,32 @@ def prox_soc_base(v, t):
 	Parikh and Boyd (2013). "Proximal Algorithms." Foundations and Trends in Optimization. vol. 1, no. 3, Sect. 6.3.2.
 	"""
 	if sparse.issparse(v):
-		FUNS = SPARSE_FUNS
-		append = lambda x, y: sparse.vstack((x,y))
+		v = v.tocsr()
+		u = v[:-1]  # u = (v_1,...,v_n)
+		s = v[-1]   # s = v_{n+1}
+		s = np.asscalar(s.todense())
+
+		u_norm = sp.sparse.linalg.norm(u,'fro')
+		if u_norm <= -s:
+			return np.zeros(v.shape)
+		elif u_norm <= s:
+			return v
+		else:
+			scale = (1 + s / u_norm) / 2
+			return scale * sparse.vstack((u, u_norm))
 	else:
-		FUNS = NUMPY_FUNS
-		append = np.append
-	norm, zeros = FUNS["norm"], FUNS["zeros"]
+		u = v[:-1]  # u = (v_1,...,v_n)
+		s = v[-1]   # s = v_{n+1}
+		s = np.asscalar(s)
 
-	u = v[:-1]  # u = (v_1,...,v_n)
-	s = v[-1]   # s = v_{n+1}
-
-	u_norm = norm(u, 2)
-	if u_norm <= -s:
-		return zeros(v.shape)
-	elif u_norm <= s:
-		return v
-	else:
-		scale = (1 + s / u_norm) / 2
-		return scale * append(u, u_norm)
-
+		u_norm = np.linalg.norm(u,2)
+		if u_norm <= -s:
+			return np.zeros(v.shape)
+		elif u_norm <= s:
+			return v
+		else:
+			scale = (1 + s / u_norm) / 2
+			u_all = np.zeros(v.shape)
+			u_all[:-1] = u
+			u_all[-1] = u_norm
+			return scale * u_all
