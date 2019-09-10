@@ -51,44 +51,48 @@ def prox_group_lasso(B, t = 1, *args, **kwargs):
     return prox_scale(prox_group_lasso_base, *args, **kwargs)(B, t)
 
 def prox_norm1_base(v, t):
-	"""Proximal operator of :math:`f(x) = \\|x\\|_1`.
+    """Proximal operator of :math:`f(x) = \\|x\\|_1`.
 	"""
-	return apply_to_nonzeros(lambda y: np.maximum(y - t, 0) - np.maximum(-y - t, 0), v)
+    return apply_to_nonzeros(lambda y: np.maximum(y - t, 0) - np.maximum(-y - t, 0), v)
 
 def prox_norm2_base(v, t):
-	"""Proximal operator of :math:`f(x) = \\|x\\|_2`.
+    """Proximal operator of :math:`f(x) = \\|x\\|_2`.
 	"""
-	FUNS = SPARSE_FUNS if sparse.issparse(v) else NUMPY_FUNS
-	norm, zeros = FUNS["norm"], FUNS["zeros"]
+    FUNS = SPARSE_FUNS if sparse.issparse(v) else NUMPY_FUNS
+    norm, zeros = FUNS["norm"], FUNS["zeros"]
 
-	if np.isscalar(v):
-		v_norm = abs(v)
-	elif len(v.shape) == 1:
-		v_norm = norm(v,2)
-	elif len(v.shape) == 2:
-		v_norm = norm(v,'fro')
+    if np.isscalar(v):
+        v_norm = abs(v)
+    elif len(v.shape) == 1:
+        v_norm = norm(v,2)
+    elif len(v.shape) == 2:
+        v_norm = norm(v,'fro')
 
-	if v_norm == 0:
-		return zeros(v.shape)
-	else:
-		return np.maximum(1 - t*1.0/v_norm, 0) * v
+    if v_norm == 0:
+        return zeros(v.shape)
+    else:
+        return np.maximum(1 - t*1.0/v_norm, 0) * v
 
 def prox_norm_inf_base(v, t):
-	"""Proximal operator of :math:`f(x) = \\|x\\|_{\\infty}`.
+    """Proximal operator of :math:`f(x) = \\|x\\|_{\\infty}`.
 	"""
-	return v - t * proj_l1(v/t)
+    return v - t * proj_l1(v/t)
 
 def prox_norm_nuc_base(B, t):
-	"""Proximal operator of :math:`f(B) = \\|B\\|_*`, the nuclear norm of :math:`B`.
+    """Proximal operator of :math:`f(B) = \\|B\\|_*`, the nuclear norm of :math:`B`.
 	"""
-	U, s, Vt = np.linalg.svd(B, full_matrices=False)
-	s_new = np.maximum(s - t, 0)
-	return U.dot(np.diag(s_new)).dot(Vt)
+    U, s, Vt = np.linalg.svd(B, full_matrices=False)
+    s_new = np.maximum(s - t, 0)
+    return U.dot(np.diag(s_new)).dot(Vt)
 
 def prox_group_lasso_base(B, t):
-	"""Proximal operator of :math:`f(B) = \\|B\\|_{2,1} = \\sum_j \\|B_j\\|_2`, the group lasso of :math:`B`,
+    """Proximal operator of :math:`f(B) = \\|B\\|_{2,1} = \\sum_j \\|B_j\\|_2`, the group lasso of :math:`B`,
 	where :math:`B_j` is the j-th column of :math:`B`.
 	"""
-	FUNS = SPARSE_FUNS if sparse.issparse(B) else NUMPY_FUNS
-	vstack = FUNS["vstack"]
-	return vstack([prox_norm2(B[:, j], t) for j in range(B.shape[1])]).T
+    if sparse.issparse(B):
+        B = B.tocsc()
+        vstack = SPARSE_FUNS["vstack"]
+    else:
+        vstack = NUMPY_FUNS["vstack"]
+    prox_cols = [prox_norm2(B[:, j], t) for j in range(B.shape[1])]
+    return vstack(prox_cols).T

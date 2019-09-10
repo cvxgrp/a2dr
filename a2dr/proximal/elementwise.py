@@ -101,9 +101,7 @@ def prox_huber_base(v, t, M = 1):
             \\end{cases}
     applied elementwise, where :math:`M` is a positive scalar that defaults to 1.
 	"""
-	FUNS = SPARSE_FUNS if sparse.issparse(v) else NUMPY_FUNS
-	max_elemwise, mul_elemwise = FUNS["max_elemwise"], FUNS["mul_elemwise"]
-	return mul_elemwise(1 - (2*M*t) / max_elemwise(abs(v), M + 2*M*t), v)
+	return apply_to_nonzeros(lambda y: np.where(np.abs(y) <= (M + 2*M*t), y / (1 + 2*t), y - 2*M*t*np.sign(y)), v)
 
 def prox_identity_base(v, t):
 	"""Proximal operator of :math:`f(x) = x`.

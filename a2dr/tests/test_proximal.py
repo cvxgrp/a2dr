@@ -345,8 +345,8 @@ class TestProximal(BaseTest):
             # Elementwise consistency tests.
             self.check_elementwise(lambda v, *args, **kwargs: prox_huber(v, *args, **kwargs, M = M))
 
-            # TODO: Sparsity consistency tests.
-            # self.check_sparsity(lambda v, *args, **kwargs: prox_huber(v, *args, **kwargs, M = M))
+            # Sparsity consistency tests.
+            self.check_sparsity(lambda v, *args, **kwargs: prox_huber(v, *args, **kwargs, M = M))
 
             # Scalar input.
             self.check_composition(lambda v, *args, **kwargs: prox_huber(v, M = M, *args, **kwargs),
