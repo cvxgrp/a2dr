@@ -512,8 +512,8 @@ class TestProximal(BaseTest):
         self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 3)
 
     def test_group_lasso(self):
-        # TODO: Sparsity consistency tests.
-        # self.check_sparsity(prox_group_lasso)
+        # Sparsity consistency tests.
+        self.check_sparsity(prox_group_lasso)
 
         # General composition tests.
         groupLasso = lambda B: sum([norm2(B[:,j]) for j in range(B.shape[1])])

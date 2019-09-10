@@ -71,7 +71,7 @@ def prox_norm2_base(v, t):
     if v_norm == 0:
         return zeros(v.shape)
     else:
-        return np.maximum(1 - t*1.0/v_norm, 0) * v
+        return np.maximum(1 - t/v_norm, 0) * v
 
 def prox_norm_inf_base(v, t):
     """Proximal operator of :math:`f(x) = \\|x\\|_{\\infty}`.
@@ -91,8 +91,11 @@ def prox_group_lasso_base(B, t):
 	"""
     if sparse.issparse(B):
         B = B.tocsc()
-        vstack = SPARSE_FUNS["vstack"]
+        prox_cols = [prox_norm2(B[:, j], t) for j in range(B.shape[1])]
+        return sparse.hstack(prox_cols)
     else:
-        vstack = NUMPY_FUNS["vstack"]
-    prox_cols = [prox_norm2(B[:, j], t) for j in range(B.shape[1])]
-    return vstack(prox_cols).T
+        prox_cols = [prox_norm2(B[:, j], t) for j in range(B.shape[1])]
+        return np.column_stack(prox_cols)
+    # FUNS = SPARSE_FUNS if sparse.issparse(B) else NUMPY_FUNS
+    # vstack, hstack = FUNS["vstack"], FUNS["hstack"]
+    # return vstack(prox_cols).T if prox_cols[0].ndim == 1 else hstack(prox_cols)
