@@ -40,6 +40,15 @@ def prox_norm_nuc(B, t = 1, *args, **kwargs):
         B = np.array([[B]])
     return prox_scale(prox_norm_nuc_base, *args, **kwargs)(B, t)
 
+def prox_norm_spec(B, t = 1, *args, **kwargs):
+    """Proximal operator of :math:`tf(aB-b) + cB + d\\|B\\|_F^2`, where :math:`f(B) = \\max_i \\sum_j |B_{ij}|`
+    for scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term, and d = quad_term.
+    We must have t > 0, a = non-zero, and d >= 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
+    """
+    if np.isscalar(B):
+        B = np.array([[B]])
+    return prox_scale(prox_norm_spec_base, *args, **kwargs)(B, t)
+
 def prox_group_lasso(B, t = 1, *args, **kwargs):
     """Proximal operator of :math:`tf(aB-b) + cB + d\\|B\\|_F^2`, where :math:`f(B) = \\|B\\|_{2,1}` is the
     group lasso of :math:`B`, for scalar t > 0, and the optional arguments are a = scale, b = offset,
@@ -83,6 +92,13 @@ def prox_norm_nuc_base(B, t):
     """
     U, s, Vt = np.linalg.svd(B, full_matrices=False)
     s_new = np.maximum(s - t, 0)
+    return U.dot(np.diag(s_new)).dot(Vt)
+
+def prox_norm_spec_base(B, t):
+    """Proximal operator of :math:`f(B) = \\max_i \\sum_j |B_{ij}|`, the spectral norm of :math:`B`.
+    """
+    U, s, Vt = np.linalg.svd(B, full_matrices=False)
+    s_new = prox_norm_inf_base(s, t)
     return U.dot(np.diag(s_new)).dot(Vt)
 
 def prox_group_lasso_base(B, t):

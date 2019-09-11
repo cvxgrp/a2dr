@@ -1,3 +1,22 @@
+"""
+Copyright 2019 Anqi Fu, Junzi Zhang
+
+This file is part of A2DR.
+
+A2DR is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+A2DR is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with A2DR. If not, see <http://www.gnu.org/licenses/>.
+"""
+
 import numpy as np
 from scipy import sparse
 from cvxpy import *
@@ -5,6 +24,7 @@ from a2dr.proximal import *
 from a2dr.tests.base_test import BaseTest
 
 class TestProximal(BaseTest):
+    """Unit tests for proximal operators"""
 
     def setUp(self):
         np.random.seed(1)
@@ -489,17 +509,17 @@ class TestProximal(BaseTest):
         x_cvxpy = self.prox_cvxpy(self.v, norm2, t = alpha*self.t)
         self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
 
-    # def test_norm_inf(self):
-    #    # General composition tests.
-    #    self.check_composition(prox_norm_inf, norm_inf, self.c)
-    #    self.check_composition(prox_norm_inf, norm_inf, self.v)
-    #    self.check_composition(prox_norm_inf, norm_inf, self.B, solver="SCS")
-    #
-    #     # f(x) = \alpha*||x||_{\infty}
-    #     alpha = 0.5 + np.abs(np.random.randn())
-    #     x_a2dr = prox_norm_inf(self.v, t = alpha*self.t)
-    #     x_cvxpy = self.prox_cvxpy(self.v, norm_inf, t = alpha*self.t)
-    #     self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
+    def test_norm_inf(self):
+        # General composition tests.
+        # TODO: self.check_composition(prox_norm_inf, norm_inf, self.c)
+        self.check_composition(prox_norm_inf, norm_inf, self.v)
+        self.check_composition(prox_norm_inf, norm_inf, self.B)
+
+        # f(x) = \alpha*||x||_{\infty}
+        alpha = 0.5 + np.abs(np.random.randn())
+        x_a2dr = prox_norm_inf(self.v, t = alpha*self.t)
+        x_cvxpy = self.prox_cvxpy(self.v, norm_inf, t = alpha*self.t)
+        self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
 
     def test_norm_nuc(self):
         # General composition tests.
@@ -511,13 +531,17 @@ class TestProximal(BaseTest):
         B_cvxpy = self.prox_cvxpy(self.B, normNuc, t = beta*self.t, solver='SCS')
         self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 3)
 
+    # def test_norm_spec(self):
+    #     # General composition tests.
+    #     self.check_composition(prox_norm_spec, lambda X: cvxpy.norm(X, 'inf'), self.B, solver='SCS')
+
     def test_group_lasso(self):
         # Sparsity consistency tests.
         self.check_sparsity(prox_group_lasso)
 
         # General composition tests.
         groupLasso = lambda B: sum([norm2(B[:,j]) for j in range(B.shape[1])])
-        self.check_composition(prox_group_lasso, groupLasso, self.B, solver ="SCS")
+        self.check_composition(prox_group_lasso, groupLasso, self.B, solver="SCS")
 
         # Multi-task logistic regression term: f(B) = \alpha*||B||_{2,1}.
         alpha = 1.5 + np.abs(np.random.randn())
@@ -532,7 +556,7 @@ class TestProximal(BaseTest):
 
     # def test_sigma_max(self):
     #     # General composition tests.
-    #     self.check_composition(prox_sigma_max, sigma_max, self.B)
+    #     self.check_composition(prox_sigma_max, sigma_max, self.B, solver="SCS")
 
     def test_sum_squares(self):
         # Sparsity consistency tests.

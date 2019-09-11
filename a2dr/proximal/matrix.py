@@ -1,7 +1,7 @@
 import numpy as np
 from scipy import sparse
 from a2dr.proximal.composition import prox_scale
-from a2dr.proximal.projection import proj_simplex
+from a2dr.proximal.norm import prox_norm2_base
 
 def prox_neg_log_det(B, t = 1, *args, **kwargs):
     """Proximal operator of :math:`tf(aB-b) + cB + d\\|B\\|_F^2`, where :math:`f(B) = -\\log\\det(B)`
@@ -54,7 +54,7 @@ def prox_sigma_max_base(B, t):
     """Proximal operator of :math:`f(B) = \\sigma_{\\max}(B)`, the maximum singular value of :math:`B`.
 	"""
     U, s, Vt = np.linalg.svd(B, full_matrices=False)
-    s_new = t * proj_simplex(s/t)
+    s_new = prox_norm2_base(s, t)
     return U.dot(np.diag(s_new)).dot(Vt)
 
 def prox_trace_base(B, t, C):
