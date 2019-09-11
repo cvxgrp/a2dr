@@ -52,12 +52,12 @@ def prox_group_lasso(B, t = 1, *args, **kwargs):
 
 def prox_norm1_base(v, t):
     """Proximal operator of :math:`f(x) = \\|x\\|_1`.
-	"""
+    """
     return apply_to_nonzeros(lambda y: np.maximum(y - t, 0) - np.maximum(-y - t, 0), v)
 
 def prox_norm2_base(v, t):
     """Proximal operator of :math:`f(x) = \\|x\\|_2`.
-	"""
+    """
     FUNS = SPARSE_FUNS if sparse.issparse(v) else NUMPY_FUNS
     norm, zeros = FUNS["norm"], FUNS["zeros"]
 
@@ -75,20 +75,24 @@ def prox_norm2_base(v, t):
 
 def prox_norm_inf_base(v, t):
     """Proximal operator of :math:`f(x) = \\|x\\|_{\\infty}`.
-	"""
+    """
     return v - t * proj_l1(v/t)
 
 def prox_norm_nuc_base(B, t):
     """Proximal operator of :math:`f(B) = \\|B\\|_*`, the nuclear norm of :math:`B`.
-	"""
+    """
     U, s, Vt = np.linalg.svd(B, full_matrices=False)
     s_new = np.maximum(s - t, 0)
     return U.dot(np.diag(s_new)).dot(Vt)
 
 def prox_group_lasso_base(B, t):
     """Proximal operator of :math:`f(B) = \\|B\\|_{2,1} = \\sum_j \\|B_j\\|_2`, the group lasso of :math:`B`,
-	where :math:`B_j` is the j-th column of :math:`B`.
-	"""
+    where :math:`B_j` is the j-th column of :math:`B`.
+    """
+    # FUNS = SPARSE_FUNS if sparse.issparse(B) else NUMPY_FUNS
+    # vstack, hstack = FUNS["vstack"], FUNS["hstack"]
+    # prox_cols = [prox_norm2(B[:, j], t) for j in range(B.shape[1])]
+    # return vstack(prox_cols).T if prox_cols[0].ndim == 1 else hstack(prox_cols)
     if sparse.issparse(B):
         B = B.tocsc()
         prox_cols = [prox_norm2(B[:, j], t) for j in range(B.shape[1])]
@@ -96,6 +100,3 @@ def prox_group_lasso_base(B, t):
     else:
         prox_cols = [prox_norm2(B[:, j], t) for j in range(B.shape[1])]
         return np.column_stack(prox_cols)
-    # FUNS = SPARSE_FUNS if sparse.issparse(B) else NUMPY_FUNS
-    # vstack, hstack = FUNS["vstack"], FUNS["hstack"]
-    # return vstack(prox_cols).T if prox_cols[0].ndim == 1 else hstack(prox_cols)

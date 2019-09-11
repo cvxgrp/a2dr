@@ -1,5 +1,4 @@
 import numpy as np
-import scipy as sp
 from scipy import sparse
 from a2dr.proximal.interface import NUMPY_FUNS, SPARSE_FUNS
 from a2dr.proximal.composition import prox_scale
@@ -101,7 +100,7 @@ def prox_soc_base(v, t):
 		s = v[-1]   # s = v_{n+1}
 		s = np.asscalar(s.todense())
 
-		u_norm = sp.sparse.linalg.norm(u,'fro')
+		u_norm = sparse.linalg.norm(u,'fro')
 		if u_norm <= -s:
 			return np.zeros(v.shape)
 		elif u_norm <= s:

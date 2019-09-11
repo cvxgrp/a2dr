@@ -45,7 +45,12 @@ def precondition(p_list, A_list, b, tol = 1e-3, max_iter = 1000):
     split_idx = np.hstack([0, split_idx])
     A_hat = csc_matrix(A_hat)   # faster column slicing
     A_eq_list = [A_hat[:,split_idx[i]:split_idx[i+1]] for i in range(len(n_list))]
-    A_eq_list = [csr_matrix(A_eq_list[i]) for i in range(len(A_eq_list))] # change back to csr format
+    A_eq_list = [csr_matrix(A_eq_list[i]) for i in range(len(A_eq_list))]   # change back to csr format
+
+    # Note: We must do it this way because the standard pythonic list comprehension, i.e., [f(x) for x in iterable]
+    # will create *duplicate* function handles, leading to incorrect results! This is due to late binding:
+    # https://stackoverflow.com/questions/3431676/creating-functions-in-a-loop
+    # https://docs.python-guide.org/writing/gotchas/#late-binding-closures
     def proto(i, p_list, e):
         return lambda v, t: p_list[i](e[i]*v, t*e[i]**2)/e[i]
     p_eq_list = list(map(lambda i: proto(i,p_list,e), range(len(p_list))))

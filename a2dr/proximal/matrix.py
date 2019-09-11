@@ -41,7 +41,7 @@ def prox_trace(B, t = 1, C = None, *args, **kwargs):
 
 def prox_neg_log_det_base(B, t):
     """Proximal operator of :math:`f(B) = -\\log\\det(B)`.
-	"""
+    """
     s, u = np.linalg.eigh(B)
     id_pos = (s >= 0)
     id_neg = (s < 0)
@@ -61,5 +61,4 @@ def prox_trace_base(B, t, C):
     """Proximal operator of :math:`f(B) = tr(C^TB)`, the trace of :math:`C^TB`, where C is a given matrix quantity
     such that :math:`C^TB` is square.
     """
-    # return B - np.diag(np.full((B.shape[0],), t))
     return B - t*C

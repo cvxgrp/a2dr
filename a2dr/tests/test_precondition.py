@@ -16,40 +16,14 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with A2DR. If not, see <http://www.gnu.org/licenses/>.
 """
-
 import numpy as np
 import scipy as sp
-import copy as copy
-from scipy.linalg import toeplitz, block_diag
-import time
 from scipy import sparse
-from scipy.sparse import block_diag, issparse, csr_matrix, diags
-from scipy.stats.mstats import gmean
 
 from a2dr import a2dr
-from a2dr.precondition import *
+from a2dr.proximal import prox_norm1, prox_sum_squares_affine
+from a2dr.precondition import precondition
 from a2dr.tests.base_test import BaseTest
-
-def prox_norm1(alpha = 1.0):
-    return lambda v, t: (v - t*alpha).maximum(0) - (-v - t*alpha).maximum(0) if sparse.issparse(v) else \
-                        np.maximum(v - t*alpha,0) - np.maximum(-v - t*alpha,0)
-
-def prox_sum_squares(X, y, type = "lsqr"):
-    n = X.shape[1]
-    if type == "lsqr":
-        X = sparse.csr_matrix(X)
-        def prox(v, t):
-            A = sparse.vstack([X, 1/np.sqrt(2*t)*sparse.eye(n)])
-            b = np.concatenate([y, 1/np.sqrt(2*t)*v])
-            return sparse.linalg.lsqr(A, b, atol=1e-16, btol=1e-16)[0]
-    elif type == "lstsq":
-        def prox(v, t):
-            A = np.vstack([X, 1/np.sqrt(2*t)*np.eye(n)])
-            b = np.concatenate([y, 1/np.sqrt(2*t)*v])
-            return LA.lstsq(A, b, rcond=None)[0]
-    else:
-        raise ValueError("Algorithm type not supported:", type)
-    return prox
 
 class TestPrecondition(BaseTest):
     """Unit tests for preconditioning data before S-DRS"""
@@ -76,16 +50,16 @@ class TestPrecondition(BaseTest):
         # Convert problem to standard form.
         # f_1(x_1) = (1/2)||y - x_1||_2^2, f_2(x_2) = \alpha*||x_2||_1.
         # A_1 = D, A_2 = -I_{n-2}, b = 0.
-        prox_list = [lambda v, t: (t*y + v)/(t + 1.0), prox_norm1(alpha)]
+        prox_list = [lambda v, t: (t*y + v)/(t + 1.0), lambda v, t: prox_norm1(v, t = alpha*t)]
         A_list = [D, -sparse.eye(n0-2)]
         b = np.zeros(n0-2)
 
         b = np.random.randn(m)
         prox_list = [prox_norm1] * N
-        A = csr_matrix(sparse.hstack(A_list))
+        A = sparse.csr_matrix(sparse.hstack(A_list))
         
         p_eq_list, A_eq_list, db, e = precondition(prox_list, A_list, b)
-        A_eq = csr_matrix(sparse.hstack(A_eq_list))
+        A_eq = sparse.csr_matrix(sparse.hstack(A_eq_list))
         
         print(r'[Sanity Check]')
         print(r'\|A\|_2 = {}, \|DAE\|_2 = {}'.format(sparse.linalg.norm(A), sparse.linalg.norm(A_eq)))
@@ -116,7 +90,8 @@ class TestPrecondition(BaseTest):
 
         X_split = np.split(X, N)
         y_split = np.split(y, N)
-        p_list = [prox_sum_squares(X_sub, y_sub) for X_sub, y_sub in zip(X_split, y_split)]
+        p_list = [lambda v, t: prox_sum_squares_affine(v, t, F=X_sub, g=y_sub, method="lsqr") \
+                    for X_sub, y_sub in zip(X_split, y_split)]
         p_list += [lambda u, rho: np.maximum(u, 0)]   # Projection onto non-negative orthant.
         A_list = np.hsplit(np.eye(N*n), N) + [-np.vstack(N*(np.eye(n),))]
         b = np.zeros(N*n)

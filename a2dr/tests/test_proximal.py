@@ -569,11 +569,14 @@ class TestProximal(BaseTest):
         F = np.eye(n)
         g = np.zeros(n)
         v = np.random.randn(n)
+        F_sparse = sparse.eye(n)
+        g_sparse = sparse.csr_matrix((n,1))
 
-        self.check_composition(lambda v, *args, **kwargs: prox_sum_squares_affine(v, F = F, g = g, method ="lsqr",
-                                                                                  *args, **kwargs), lambda x: sum_squares(F*x - g), v)
-        self.check_composition(lambda v, *args, **kwargs: prox_sum_squares_affine(v, F = F, g = g, method ="lstsq",
-                                                                                  *args, **kwargs), lambda x: sum_squares(F*x - g), v)
+        for method in ["lsqr", "lstsq"]:
+            self.check_composition(lambda v, *args, **kwargs: prox_sum_squares_affine(v, F = F, g = g, \
+                                        method = method, *args, **kwargs), lambda x: sum_squares(F*x - g), v)
+            self.check_composition(lambda v, *args, **kwargs: prox_sum_squares_affine(v, F = F_sparse, g = g_sparse, \
+                                        method = method, *args, **kwargs), lambda x: sum_squares(F*x - g), v)
 
         # Non-negative least squares term: f(x) = ||Fx - g||_2^2.
         m = 1000

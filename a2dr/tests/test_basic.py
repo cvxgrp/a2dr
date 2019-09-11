@@ -18,36 +18,12 @@ along with A2DR. If not, see <http://www.gnu.org/licenses/>.
 """
 
 import numpy as np
-import scipy as sp
 import numpy.linalg as LA
-import time
-
-from cvxpy import *
 from scipy import sparse
 
 from a2dr import a2dr
+from a2dr.proximal import prox_sum_squares_affine
 from a2dr.tests.base_test import BaseTest
-
-def prox_norm1(alpha = 1.0):
-    return lambda v, t: (v - t*alpha).maximum(0) - (-v - t*alpha).maximum(0) if sparse.issparse(v) else \
-                        np.maximum(v - t*alpha,0) - np.maximum(-v - t*alpha,0)
-
-def prox_sum_squares(X, y, type = "lsqr"):
-    n = X.shape[1]
-    if type == "lsqr":
-        X = sparse.csr_matrix(X)
-        def prox(v, t):
-            A = sparse.vstack([X, 1/np.sqrt(2*t)*sparse.eye(n)])
-            b = np.concatenate([y, 1/np.sqrt(2*t)*v])
-            return sparse.linalg.lsqr(A, b, atol=1e-16, btol=1e-16)[0]
-    elif type == "lstsq":
-        def prox(v, t):
-            A = np.vstack([X, 1/np.sqrt(2*t)*np.eye(n)])
-            b = np.concatenate([y, 1/np.sqrt(2*t)*v])
-            return LA.lstsq(A, b, rcond=None)[0]
-    else:
-        raise ValueError("Algorithm type not supported:", type)
-    return prox
 
 class TestBasic(BaseTest):
     """Unit tests for A2DR paper experiments."""
@@ -66,7 +42,7 @@ class TestBasic(BaseTest):
         density = 0.1
         X = sparse.random(m, n, density=density, data_rvs=np.random.randn)
         y = np.random.randn(m)
-        prox_list = [prox_sum_squares(X, y)]
+        prox_list = [lambda v, t: prox_sum_squares_affine(v, t, F=X, g=y, method="lstsq")]
 
         # Solve with NumPy.
         np_result = LA.lstsq(X.todense(), y, rcond=None)
@@ -100,7 +76,12 @@ class TestBasic(BaseTest):
         # Split problem.
         X_split = np.split(X, N)
         y_split = np.split(y, N)
-        p_list = [prox_sum_squares(X_sub, y_sub) for X_sub, y_sub in zip(X_split, y_split)]
+
+        # Construct list of proximal operators.
+        # Note: We must do it this way to avoid problems caused by late binding:
+        # https://docs.python-guide.org/writing/gotchas/#late-binding-closures
+        prox_list = [lambda v, t, i=i: prox_sum_squares_affine(v, t, F=X_split[i], g=y_split[i], method="lstsq") \
+                        for i in range(N)]
         v_init = N * [np.random.randn(n)]
 
         # Solve with NumPy.
@@ -114,7 +95,7 @@ class TestBasic(BaseTest):
         print("NumPy Solution:", np_beta)
 
         # Solve with DRS (proximal point method).
-        drs_result = a2dr(p_list, v_init=v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, \
+        drs_result = a2dr(prox_list, v_init=v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, \
                           eps_rel=self.eps_rel, anderson=False)
         drs_beta = drs_result["x_vals"]
         drs_obj = np.sum([(yi - Xi.dot(beta)) ** 2 for yi, Xi, beta in zip(y_split, X_split, drs_beta)])
@@ -122,7 +103,7 @@ class TestBasic(BaseTest):
         print("DRS Solution:", drs_beta)
 
         # Solve with A2DR (proximal point method with Anderson acceleration).
-        a2dr_result = a2dr(p_list, v_init=v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, \
+        a2dr_result = a2dr(prox_list, v_init=v_init, max_iter=self.MAX_ITER, eps_abs=self.eps_abs, \
                            eps_rel=self.eps_rel, anderson=True)
         a2dr_beta = a2dr_result["x_vals"]
         a2dr_obj = np.sum([(yi - Xi.dot(beta)) ** 2 for yi, Xi, beta in zip(y_split, X_split, drs_beta)])

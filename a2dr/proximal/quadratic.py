@@ -117,6 +117,12 @@ def prox_sum_squares_affine_base(v, t, F, g, method = "lsqr"):
     # if F.shape[1] != v.shape[0]:
     #    raise ValueError("Dimension mismatch: ncol(F) != nrow(v)")
 
+    # Only works on dense vectors.
+    if sparse.issparse(g):
+        g = g.toarray()[:, 0]
+    if sparse.issparse(v):
+        v = v.toarray()[:, 0]
+
     n = v.shape[0]
     if method == "lsqr":
         F = sparse.csr_matrix(F)
@@ -124,6 +130,8 @@ def prox_sum_squares_affine_base(v, t, F, g, method = "lsqr"):
         g_stack = np.concatenate([g, 1/np.sqrt(2*t)*v])
         return sparse.linalg.lsqr(F_stack, g_stack, atol=1e-16, btol=1e-16)[0]
     elif method == "lstsq":
+        if sparse.issparse(F):
+            F = F.todense()
         F_stack = np.vstack([F, 1/np.sqrt(2*t)*np.eye(n)])
         g_stack = np.concatenate([g, 1/np.sqrt(2*t)*v])
         return np.linalg.lstsq(F_stack, g_stack, rcond=None)[0]
