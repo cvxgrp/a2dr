@@ -32,8 +32,8 @@ def solve_vec(x, var_type='vec'):
 		if x.shape[0] != x.shape[1] or np.linalg.norm(x-x.T) != 0:
 			raise ValueError("input must be square and symmetric")
 		mask = np.ones(Q.shape, dtype=bool)
-        np.fill_diagonal(mask, 0)
-        x[mask] *= np.sqrt(2)
+		np.fill_diagonal(mask, 0)
+		x[mask] *= np.sqrt(2)
 		ind = np.tril_indices(x.shape[0])
 		return x[ind], x.shape
 	else:
