@@ -4,8 +4,13 @@ from scipy.optimize import bisect
 TOLERANCE = 1e-6
 
 def proj_l1(x, r = 1, method = "bisection"):
-    beta = proj_simplex(np.abs(x), r, method)
-    return np.sign(x) * beta
+    if np.isscalar(x):
+        x = np.array([x])
+    if np.linalg.norm(x,1) <= r:
+        return x
+    else:
+        beta = proj_simplex(np.abs(x), r, method)
+        return np.sign(x) * beta
 
 def proj_simplex(x, r = 1, method = "bisection"):
     """Project x onto a simplex with upper bound r.
@@ -15,9 +20,11 @@ def proj_simplex(x, r = 1, method = "bisection"):
             Fig. 1 and Sect. 4.
             https://stanford.edu/~jduchi/projects/DuchiShSiCh08.pdf
     """
+    if np.isscalar(x):
+        x = np.array([x])
     if method == "bisection":
-        c_min = np.min(x) - r/x.size - TOLERANCE
-        c_max = np.max(x) + TOLERANCE
+        c_min = np.min(x) - (r + TOLERANCE)/x.size
+        c_max = np.max(x) + (r + TOLERANCE)/x.size
         c_star = bisect(lambda c: np.sum(np.maximum(x - c, 0)) - r, c_min, c_max)
     elif method == "efficient":
         # TODO: This is giving me wrong numbers.

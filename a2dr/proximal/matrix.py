@@ -55,6 +55,8 @@ def prox_sigma_max_base(B, t):
 	"""
     U, s, Vt = np.linalg.svd(B, full_matrices=False)
     s_new = prox_norm2_base(s, t)
+    # s_norm = np.linalg.norm(s, 2)
+    # s_new = np.zeros(s.shape) if s_norm == 0 else np.maximum(1 - t/s_norm, 0) * s
     return U.dot(np.diag(s_new)).dot(Vt)
 
 def prox_trace_base(B, t, C):

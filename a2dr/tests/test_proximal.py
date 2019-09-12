@@ -511,9 +511,9 @@ class TestProximal(BaseTest):
 
     def test_norm_inf(self):
         # General composition tests.
-        # TODO: self.check_composition(prox_norm_inf, norm_inf, self.c)
+        self.check_composition(prox_norm_inf, norm_inf, self.c)
         self.check_composition(prox_norm_inf, norm_inf, self.v)
-        self.check_composition(prox_norm_inf, norm_inf, self.B)
+        self.check_composition(prox_norm_inf, norm_inf, self.B, solver='ECOS')
 
         # f(x) = \alpha*||x||_{\infty}
         alpha = 0.5 + np.abs(np.random.randn())
@@ -532,6 +532,7 @@ class TestProximal(BaseTest):
         self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 3)
 
     # def test_norm_spec(self):
+    #     # TODO: Poor accuracy.
     #     # General composition tests.
     #     self.check_composition(prox_norm_spec, lambda X: cvxpy.norm(X, 'inf'), self.B, solver='SCS')
 
@@ -555,6 +556,7 @@ class TestProximal(BaseTest):
         self.assertItemsAlmostEqual(B_a2dr, B_norm2, places = 3)
 
     # def test_sigma_max(self):
+    #     # TODO: Poor accuracy.
     #     # General composition tests.
     #     self.check_composition(prox_sigma_max, sigma_max, self.B, solver="SCS")
 

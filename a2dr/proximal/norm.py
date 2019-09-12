@@ -1,7 +1,7 @@
 import numpy as np
 from scipy import sparse
 from a2dr.proximal.interface import NUMPY_FUNS, SPARSE_FUNS, apply_to_nonzeros
-from a2dr.proximal.projection import proj_l1
+from a2dr.proximal.projection import proj_l1, proj_simplex
 from a2dr.proximal.composition import prox_scale
 
 def prox_norm1(v, t = 1, *args, **kwargs):
@@ -91,7 +91,8 @@ def prox_norm_nuc_base(B, t):
     """Proximal operator of :math:`f(B) = \\|B\\|_*`, the nuclear norm of :math:`B`.
     """
     U, s, Vt = np.linalg.svd(B, full_matrices=False)
-    s_new = np.maximum(s - t, 0)
+    s_new = prox_norm1_base(s, t)
+    # s_new = np.maximum(s - t, 0)
     return U.dot(np.diag(s_new)).dot(Vt)
 
 def prox_norm_spec_base(B, t):
@@ -99,6 +100,7 @@ def prox_norm_spec_base(B, t):
     """
     U, s, Vt = np.linalg.svd(B, full_matrices=False)
     s_new = prox_norm_inf_base(s, t)
+    # s_new = s - t * proj_simplex(s/t)
     return U.dot(np.diag(s_new)).dot(Vt)
 
 def prox_group_lasso_base(B, t):
