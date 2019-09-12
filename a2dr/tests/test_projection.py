@@ -64,16 +64,14 @@ class TestProjection(BaseTest):
 
     def test_simplex(self):
         for radius in self.radii:
-            # for method in ["bisection", "efficient"]:
-            for method in ["bisection"]:
+            for method in ["bisection", "sorted"]:
                 self.check_simplex(self.c, radius, method)
                 self.check_simplex(self.v, radius, method)
                 self.check_simplex(self.B, radius, method)
 
     def test_l1_ball(self):
         for radius in self.radii:
-            # for method in ["bisection", "efficient"]:
-            for method in ["bisection"]:
+            for method in ["bisection", "sorted"]:
                 self.check_l1_ball(self.c, radius, method, solver='ECOS')
                 self.check_l1_ball(self.v, radius, method)
                 self.check_l1_ball(self.B, radius, method)

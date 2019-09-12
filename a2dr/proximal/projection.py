@@ -6,6 +6,8 @@ TOLERANCE = 1e-6
 def proj_l1(x, r = 1, method = "bisection"):
     if np.isscalar(x):
         x = np.array([x])
+    if not np.isscalar(r) or r < 0:
+        raise ValueError("r must be a non-negative scalar.")
     if np.linalg.norm(x,1) <= r:
         return x
     else:
@@ -22,13 +24,16 @@ def proj_simplex(x, r = 1, method = "bisection"):
     """
     if np.isscalar(x):
         x = np.array([x])
+    if not np.isscalar(r) or r < 0:
+        raise ValueError("r must be a non-negative scalar.")
+    elif r == 0:
+        return np.zeros(x.shape)
+
     if method == "bisection":
         c_min = np.min(x) - (r + TOLERANCE)/x.size
         c_max = np.max(x) + (r + TOLERANCE)/x.size
         c_star = bisect(lambda c: np.sum(np.maximum(x - c, 0)) - r, c_min, c_max)
-    elif method == "efficient":
-        # TODO: This is giving me wrong numbers.
-        raise NotImplementedError
+    elif method == "sorted":
         x_decr = np.sort(x, axis = None)[::-1]
         x_cumsum = np.cumsum(x_decr)
         denom = np.arange(1, x_decr.size + 1)
@@ -37,5 +42,5 @@ def proj_simplex(x, r = 1, method = "bisection"):
         idx = np.max(np.argwhere(x_diff > 0).ravel())
         c_star = theta[idx]
     else:
-        raise ValueError("method must be either 'bisection' or 'efficient'")
+        raise ValueError("method must be either 'bisection' or 'sorted'.")
     return np.maximum(x - c_star, 0)
