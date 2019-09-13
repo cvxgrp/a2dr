@@ -4,9 +4,9 @@ from a2dr.proximal.composition import prox_scale
 from a2dr.proximal.norm import prox_norm_inf_base
 
 def prox_neg_log_det(B, t = 1, *args, **kwargs):
-    """Proximal operator of :math:`tf(aB-b) + cB + d\\|B\\|_F^2`, where :math:`f(B) = -\\log\\det(B)`
-    for scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term, and d = quad_term.
-    We must have t > 0, a = non-zero, and d >= 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
+    """Proximal operator of :math:`tf(aB-b) + cB + d\\|B\\|_F^2`, where :math:`f(B) = -\\log\\det(B)`, where `B` is a
+    symmetric matrix. The scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term, and
+    d = quad_term. We must have t > 0, a = non-zero, and d >= 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
     """
     if B.shape[0] != B.shape[1]:
         raise ValueError("B must be a square matrix.")
@@ -43,7 +43,12 @@ def prox_neg_log_det_base(B, t):
     """Proximal operator of :math:`f(B) = -\\log\\det(B)`.
     """
     s, u = np.linalg.eigh(B)
-    s_new = (s + np.sqrt(s**2 + 4*t))/2
+    # s_new = (s + np.sqrt(s**2 + 4*t))/2
+    id_pos = (s >= 0)
+    id_neg = (s < 0)
+    s_new = np.zeros(len(s))
+    s_new[id_pos] = (s[id_pos] + np.sqrt(s[id_pos] ** 2 + 4.0 * t)) / 2
+    s_new[id_neg] = 2.0 * t / (np.sqrt(s[id_neg] ** 2 + 4.0 * t) - s[id_neg])
     return u.dot(np.diag(s_new)).dot(u.T)
 
 def prox_sigma_max_base(B, t):

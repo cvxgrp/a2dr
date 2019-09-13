@@ -451,7 +451,7 @@ class TestProximal(BaseTest):
         self.check_composition(prox_neg_log, lambda x: sum(-log(x)), self.B, places=2, solver="SCS")
 
     def test_neg_log_det(self):
-        # TODO: Poor accuracy with scaling/composition.
+        # TODO: Poor accuracy in compositions.
         # General composition tests.
         # self.check_composition(prox_neg_log_det, lambda X: -log_det(X), self.B_symm, places=2, solver="SCS")
         # self.check_composition(prox_neg_log_det, lambda X: -log_det(X), self.B_psd, places=2, solver="SCS")
