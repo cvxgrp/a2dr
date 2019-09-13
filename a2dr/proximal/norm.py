@@ -40,6 +40,15 @@ def prox_norm_nuc(B, t = 1, *args, **kwargs):
         B = np.array([[B]])
     return prox_scale(prox_norm_nuc_base, *args, **kwargs)(B, t)
 
+def prox_norm_fro(B, t = 1, *args, **kwargs):
+    """Proximal operator of :math:`tf(aB-b) + cB + d\\|B\\|_F^2`, where :math:`f(B) = \\|B\\|_2`
+    for scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term, and d = quad_term.
+    We must have t > 0, a = non-zero, and d >= 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
+    """
+    if np.isscalar(B):
+        B = np.array([[B]])
+    return prox_scale(prox_norm_fro_base, *args, **kwargs)(B, t)
+
 def prox_norm_spec(B, t = 1, *args, **kwargs):
     """Proximal operator of :math:`tf(aB-b) + cB + d\\|B\\|_F^2`, where :math:`f(B) = \\max_i \\sum_j |B_{ij}|`
     for scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term, and d = quad_term.
@@ -86,6 +95,15 @@ def prox_norm_inf_base(v, t):
     """Proximal operator of :math:`f(x) = \\|x\\|_{\\infty}`.
     """
     return v - t * proj_l1(v/t)
+
+def prox_norm_fro_base(B, t):
+    """Proximal operator of :math:`f(B) = \\|B\\|_2`, the Frobenius norm of :math:`B`.
+    """
+    U, s, Vt = np.linalg.svd(B, full_matrices=False)
+    s_new = prox_norm2_base(s, t)
+    # s_norm = np.linalg.norm(s, 2)
+    # s_new = np.zeros(s.shape) if s_norm == 0 else np.maximum(1 - t/s_norm, 0) * s
+    return U.dot(np.diag(s_new)).dot(Vt)
 
 def prox_norm_nuc_base(B, t):
     """Proximal operator of :math:`f(B) = \\|B\\|_*`, the nuclear norm of :math:`B`.

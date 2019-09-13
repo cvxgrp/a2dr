@@ -54,7 +54,8 @@ class TestProximal(BaseTest):
         x_var = Variable() if np.isscalar(v) else Variable(v.shape)
         expr = t * fun(scale * x_var - offset) + sum(multiply(lin_term, x_var)) + quad_term * sum_squares(x_var)
         constrs = [] if constr_fun is None else constr_fun(scale * x_var - offset)
-        Problem(Minimize(expr + 0.5 * sum_squares(x_var - v)), constrs).solve(*args, **kwargs)
+        prob = Problem(Minimize(expr + 0.5 * sum_squares(x_var - v)), constrs)
+        prob.solve(*args, **kwargs)
         return x_var.value
 
     def check_composition(self, prox, fun, v_init, places = 3, *args, **kwargs):
@@ -521,6 +522,10 @@ class TestProximal(BaseTest):
         x_cvxpy = self.prox_cvxpy(self.v, norm_inf, t = alpha*self.t)
         self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = 4)
 
+    def test_norm_fro(self):
+        # General composition tests.
+        self.check_composition(prox_norm_fro, lambda X: cvxpy.norm(X,'fro'), self.B, solver='SCS')
+
     def test_norm_nuc(self):
         # General composition tests.
         self.check_composition(prox_norm_nuc, normNuc, self.B, solver='SCS')
@@ -534,7 +539,7 @@ class TestProximal(BaseTest):
     # def test_norm_spec(self):
     #     # TODO: Poor accuracy.
     #     # General composition tests.
-    #     self.check_composition(prox_norm_spec, lambda X: cvxpy.norm(X, 'inf'), self.B, solver='SCS')
+    #     self.check_composition(prox_norm_spec, lambda X: cvxpy.norm(X,'inf'), self.B, solver='SCS')
 
     def test_group_lasso(self):
         # Sparsity consistency tests.
@@ -555,10 +560,9 @@ class TestProximal(BaseTest):
         B_norm2 = np.vstack(B_norm2)
         self.assertItemsAlmostEqual(B_a2dr, B_norm2, places = 3)
 
-    # def test_sigma_max(self):
-    #     # TODO: Poor accuracy.
-    #     # General composition tests.
-    #     self.check_composition(prox_sigma_max, sigma_max, self.B, solver="SCS")
+    def test_sigma_max(self):
+        # General composition tests.
+        self.check_composition(prox_sigma_max, sigma_max, self.B)
 
     def test_sum_squares(self):
         # Sparsity consistency tests.
