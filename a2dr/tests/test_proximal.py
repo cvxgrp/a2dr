@@ -359,7 +359,7 @@ class TestProximal(BaseTest):
         # General composition tests.
         self.check_composition(prox_exp, cvxpy.exp, self.c)
         self.check_composition(prox_exp, lambda x: sum(exp(x)), self.v, solver = "SCS")
-        self.check_composition(prox_exp, lambda x: sum(exp(x)), self.B, solver = "SCS")
+        self.check_composition(prox_exp, lambda x: sum(exp(x)), self.B, places=2, solver = "SCS")
 
     def test_huber(self):
         for M in [0, 0.5, 1, 2]:
@@ -446,8 +446,8 @@ class TestProximal(BaseTest):
         self.check_elementwise(prox_neg_log)
 
         # General composition tests.
-        self.check_composition(prox_neg_log, lambda x: -log(x), self.c)
-        self.check_composition(prox_neg_log, lambda x: sum(-log(x)), self.v)
+        self.check_composition(prox_neg_log, lambda x: -log(x), self.c, solver='SCS')
+        self.check_composition(prox_neg_log, lambda x: sum(-log(x)), self.v, solver='SCS')
         self.check_composition(prox_neg_log, lambda x: sum(-log(x)), self.B, places=2, solver="SCS")
 
     def test_neg_log_det(self):
@@ -557,7 +557,7 @@ class TestProximal(BaseTest):
 
     def test_sigma_max(self):
         # General composition tests.
-        self.check_composition(prox_sigma_max, sigma_max, self.B)
+        self.check_composition(prox_sigma_max, sigma_max, self.B, solver='SCS')
 
     def test_sum_squares(self):
         # Sparsity consistency tests.
