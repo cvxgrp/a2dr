@@ -536,11 +536,6 @@ class TestProximal(BaseTest):
         B_cvxpy = self.prox_cvxpy(self.B, normNuc, t = beta*self.t, solver='SCS')
         self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 3)
 
-    # def test_norm_spec(self):
-    #     # TODO: Poor accuracy.
-    #     # General composition tests.
-    #     self.check_composition(prox_norm_spec, lambda X: cvxpy.norm(X,'inf'), self.B, solver='SCS')
-
     def test_group_lasso(self):
         # Sparsity consistency tests.
         self.check_sparsity(prox_group_lasso)
