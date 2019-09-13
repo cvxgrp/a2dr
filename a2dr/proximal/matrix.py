@@ -43,11 +43,7 @@ def prox_neg_log_det_base(B, t):
     """Proximal operator of :math:`f(B) = -\\log\\det(B)`.
     """
     s, u = np.linalg.eigh(B)
-    id_pos = (s >= 0)
-    id_neg = (s < 0)
-    s_new = np.zeros(len(s))
-    s_new[id_pos] = (s[id_pos] + np.sqrt(s[id_pos]**2 + 4.0*t))/2
-    s_new[id_neg] = 2.0*t/(np.sqrt(s[id_neg]**2 + 4.0*t) - s[id_neg])
+    s_new = (s + np.sqrt(s**2 + 4*t))/2
     return u.dot(np.diag(s_new)).dot(u.T)
 
 def prox_sigma_max_base(B, t):

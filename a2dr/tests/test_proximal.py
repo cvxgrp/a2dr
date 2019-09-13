@@ -439,7 +439,7 @@ class TestProximal(BaseTest):
         # General composition tests.
         self.check_composition(prox_neg_entr, lambda x: -entr(x), self.c)
         self.check_composition(prox_neg_entr, lambda x: sum(-entr(x)), self.v)
-        self.check_composition(prox_neg_entr, lambda x: sum(-entr(x)), self.B, places=2, solver = "SCS")
+        self.check_composition(prox_neg_entr, lambda x: sum(-entr(x)), self.B, places=2, solver="SCS")
 
     def test_neg_log(self):
         # Elementwise consistency tests.
@@ -451,23 +451,23 @@ class TestProximal(BaseTest):
         self.check_composition(prox_neg_log, lambda x: sum(-log(x)), self.B, places=2, solver="SCS")
 
     def test_neg_log_det(self):
-        # TODO: Poor accuracy with scaling/compositions.
+        # TODO: Poor accuracy with scaling/composition.
         # General composition tests.
-        # self.check_composition(prox_neg_log_det, lambda B: -log_det(B), self.B_symm, solver = "SCS")
-        # self.check_composition(prox_neg_log_det, lambda B: -log_det(B), self.B_psd, solver = "SCS")
+        # self.check_composition(prox_neg_log_det, lambda X: -log_det(X), self.B_symm, places=2, solver="SCS")
+        # self.check_composition(prox_neg_log_det, lambda X: -log_det(X), self.B_psd, places=2, solver="SCS")
 
         # Sparse inverse covariance estimation term: f(B) = -log(det(B)) for symmetric positive definite B.
         B_spd = self.B_psd + np.eye(self.B_psd.shape[0])
         B_a2dr = prox_neg_log_det(B_spd, self.t)
-        B_cvxpy = self.prox_cvxpy(B_spd, lambda B: -log_det(B), t = self.t, solver = "SCS")
-        self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 2)
+        B_cvxpy = self.prox_cvxpy(B_spd, lambda X: -log_det(X), t=self.t, solver="SCS")
+        self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places=2)
 
         # Sparse inverse covariance estimation term: f(B) = -log(det(B)) + tr(BQ) for symmetric positive definite B
         # and given matrix Q.
         # Q = np.random.randn(*B_spd.shape)
         # B_a2dr = prox_neg_log_det(B_spd, self.t, lin_term = Q.T)   # tr(BQ) = \sum_{ij} Q_{ji}B_{ij}
-        # B_cvxpy = self.prox_cvxpy(B_spd, lambda B: -log_det(B) + trace(B*Q), t = self.t)
-        # self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 3)
+        # B_cvxpy = self.prox_cvxpy(B_spd, lambda X: -log_det(X) + trace(X*Q), t=self.t, solver="SCS")
+        # self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places=2)
 
     def test_max(self):
         # General composition tests.
