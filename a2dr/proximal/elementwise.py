@@ -21,7 +21,8 @@ def prox_constant(v, t = 1, *args, **kwargs):
 def prox_exp(v, t = 1, *args, **kwargs):
     """Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where :math:`f(x) = \\exp(x)` applied
     elementwise for scalar t > 0, and the optional arguments are a = scale, b = offset, c = lin_term, and
-    d = quad_term. We must have t > 0, a = non-zero, and d >= 0. By default, t = 1, a = 1, b = 0, c = 0, and d = 0.
+    d = quad_term. We must have t > 0, a = non-zero, and d >= 0. By default, t = 1, a = 1, b = 0, c = 0, and 
+    d = 0.
     """
     return prox_scale(prox_exp_base, *args, **kwargs)(v, t)
 
@@ -34,8 +35,8 @@ def prox_huber(v, t = 1, M = 1, *args, **kwargs):
                       |x|^2 & \\text{for } |x| \\leq |M|
             \\end{cases}
     applied elementwise for scalar M > 0, t > 0, and the optional arguments are a = scale, b = offset, c = lin_term,
-    and d = quad_term. We must have M > 0, t > 0, a = non-zero, and d >= 0. By default, t = 1, a = 1, b = 0, c = 0,
-    and d = 0.
+    and d = quad_term. We must have M > 0, t > 0, a = non-zero, and d >= 0. By default, M = 1, t = 1, a = 1, b = 0, 
+    c = 0, and d = 0.
     """
     return prox_scale(prox_huber_base, M, *args, **kwargs)(v, t)
 
@@ -91,7 +92,7 @@ def prox_exp_base(v, t):
 		v = v.todense()
 	return v - lambertw(np.exp(v + np.log(t)))
 
-def prox_huber_base(v, t, M = 1):
+def prox_huber_base(v, t, M):
 	"""Proximal operator of
 	.. math::
         f(x) =
@@ -99,7 +100,7 @@ def prox_huber_base(v, t, M = 1):
                 2M|x|-M^2 & \\text{for } |x| \\geq |M| \\\\
                       |x|^2 & \\text{for } |x| \\leq |M|
             \\end{cases}
-    applied elementwise, where :math:`M` is a positive scalar that defaults to 1.
+    applied elementwise, where :math:`M` is a positive scalar.
 	"""
 	return apply_to_nonzeros(lambda y: np.where(np.abs(y) <= (M + 2*M*t), y / (1 + 2*t), y - 2*M*t*np.sign(y)), v)
 
