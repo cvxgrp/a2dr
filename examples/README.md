@@ -1,6 +1,6 @@
 ### Examples
 
-This repo contains scripts and notebooks for reproducing the plots in the paper. It also includes some additional tests and examples (other_examples/).
+This repo contains scripts and notebooks for reproducing the plots in the paper. It also includes some additional tests and examples ([other_examples/]).
 
 To reproduce the plots in the paper, simply run [notebooks/paper_plots.ipynb](https://github.com/cvxgrp/a2dr/edit/master/examples/notebooks/), which imports [paper_examples/paper_plots.py](https://github.com/cvxgrp/a2dr/edit/master/examples/paper_examples/), run the examples, and store the plots in [figures/](https://github.com/cvxgrp/a2dr/edit/master/examples/figures).
 
