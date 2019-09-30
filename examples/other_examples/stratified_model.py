@@ -62,10 +62,10 @@ class TestPaper(BaseTest):
         lam = 1e-4
 
         # Convert problem to standard form.
-        # f_i(x_1) = \sum_i \|A_i (x_1)_i - b_i\|_2^2
-        # f_i(x_2) = \sum_i lam \|(x_2)_i\|_2^2
-        # f_i(x_3) = \sum_{i, j} W_{ij} \|(x_3)_i - (x_3)_j\|_2^2
-        # f_1(x_4) = 0
+        # f_1(x_1) = \sum_i \|A_i (x_1)_i - b_i\|_2^2
+        # f_2(x_2) = \sum_i lam \|(x_2)_i\|_2^2
+        # f_3(x_3) = \sum_{i, j} W_{ij} \|(x_3)_i - (x_3)_j\|_2^2
+        # f_4(x_4) = 0
         # A_1 = [I 0 0]^T
         # A_2 = [0 I 0]^T
         # A_3 = [0 0 I]^T
@@ -73,7 +73,7 @@ class TestPaper(BaseTest):
         # b = 0
 
         def loss_prox(v, t):
-            result = np.empty(1)
+            result = np.empty(0)
             for i in range(K):
                 result = np.append(
                     result,
@@ -85,9 +85,7 @@ class TestPaper(BaseTest):
             return prox_sum_squares(v, t, scale=lam)
 
         Q = sparse.kron(sparse.eye(n), L)
-        Q_min_eigval = sparse.linalg.eigsh(Q, k=1, which="SA", return_eigenvectors=False)[0]
-        if Q_min_eigval < 0:
-            Q = Q + (-Q_min_eigval + 1e-12) * sparse.eye(n*K)
+        Q = Q + 1e-12 * sparse.eye(n*K) # ensure positive-semi-definite-ness
 
         def laplacian_prox(v, t):
             return prox_quad_form(v, t, Q=Q, method="lsqr")
