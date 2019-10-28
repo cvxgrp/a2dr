@@ -42,8 +42,8 @@ class TestOther(BaseTest):
         p = 80
         X = np.random.randn(m, p)
         beta_true = np.random.randn(p)
-        z_true = X.dot(beta_true)
-        y = 2 * (z_true > 0) - 1   # y_i = 1 or -1.
+        Z_true = X.dot(beta_true)
+        y = 2 * (Z_true > 0) - 1   # y_i = 1 or -1.
 
         # Solve with CVXPY.
         beta = Variable(p)
@@ -55,25 +55,25 @@ class TestOther(BaseTest):
         print('CVXPY finished.')
 
         # Split problem by row.
-        # minimize \sum_{i,j} log(1 + exp(-y_{ij}*Z_{ij})) subject to Z_i = X_i\beta with variables (Z_1,...,Z_N,\beta),
-        # where y_i is the i-th (m/N) subvector and X_i is the i-th (m/N) x p submatrix for i = 1,...,N.
-        N = 4                # Number of splits.
-        m_split = int(m/N)   # Rows in each split.
-        y_split = np.split(y, N)
+        # minimize \sum_{i,j} log(1 + exp(-y_{ij}*Z_{ij})) subject to Z_i = X_i\beta with variables (Z_1,...,Z_K,\beta),
+        # where y_i is the i-th (m/N) subvector and X_i is the i-th (m/N) x p submatrix for i = 1,...,K.
+        K = 4                # Number of splits.
+        m_split = int(m / K)   # Rows in each split.
+        y_split = np.split(y, K)
 
         # Convert problem to standard form.
-        # f_i(Z_i) = \sum_j log(1 + exp(-y_{ij}*Z_{ij})) for i = 1,...,N.
-        # f_{N+1}(\beta) = 0.
-        # A_1 = [I; 0; ...; 0], A_2 = [0; I; 0; ...; 0], ..., A_N = [0; ...; 0; I], A_{N+1} = -X, b = 0.
-        prox_list = [lambda v, t, i=i: prox_logistic(v, t, y=y_split[i]) for i in range(N)] + \
+        # f_i(Z_i) = \sum_j log(1 + exp(-y_{ij}*Z_{ij})) for i = 1,...,K.
+        # f_{K+1}(\beta) = 0.
+        # A_1 = [I; 0; ...; 0], A_2 = [0; I; 0; ...; 0], ..., A_K = [0; ...; 0; I], A_{K+1} = -X, b = 0.
+        prox_list = [lambda v, t, i=i: prox_logistic(v, t, y=y_split[i]) for i in range(K)] + \
                     [prox_constant]
         A_list = []
-        for i in range(N):
+        for i in range(K):
             mat_top = sparse.csr_matrix((i*m_split, m_split))
             mat_bot = sparse.csr_matrix((m-(i+1)*m_split, m_split))
             A_list += [sparse.vstack([mat_top, sparse.eye(m_split), mat_bot])]
         A_list += [-X]
-        b = np.zeros(N*m_split)
+        b = np.zeros(K*m_split)
 
         # Solve with DRS.
         drs_result = a2dr(prox_list, A_list, b, anderson=False, precond=True, max_iter=self.MAX_ITER)
