@@ -39,7 +39,7 @@ from a2dr.tests.base_test import BaseTest
 
 import networkx as nx
 
-class TestPaper(BaseTest):
+class TestOther(BaseTest):
     """Unit tests for A2DR paper experiments."""
 
     def setUp(self):
@@ -115,6 +115,6 @@ class TestPaper(BaseTest):
         self.compare_total(drs_result, a2dr_result)
         
 if __name__ == '__main__':
-    tests = TestPaper()
+    tests = TestOther()
     tests.setUp()
     tests.test_strat_model()
