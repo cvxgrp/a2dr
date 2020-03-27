@@ -58,7 +58,7 @@ class TestOther(BaseTest):
         # minimize \sum_{i,j} log(1 + exp(-y_{ij}*Z_{ij})) subject to Z_i = X_i\beta with variables (Z_1,...,Z_K,\beta),
         # where y_i is the i-th (m/N) subvector and X_i is the i-th (m/N) x p submatrix for i = 1,...,K.
         K = 4                # Number of splits.
-        m_split = int(m / K)   # Rows in each split.
+        m_split = int(m/K)   # Rows in each split.
         y_split = np.split(y, K)
 
         # Convert problem to standard form.

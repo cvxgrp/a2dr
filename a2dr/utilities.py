@@ -21,7 +21,7 @@ import numpy as np
 
 def solve_vec(x, var_type='vec'):
 	# reshape to vector format for input to a2dr
-	if var_type == 'vec': 
+	if var_type == 'vec':
 		return x, x.shape
 	elif var_type == 'mat_C':
 		return x.ravel(order='C'), x.shape
@@ -39,12 +39,9 @@ def solve_vec(x, var_type='vec'):
 	else:
 		raise ValueError("var_type = must be vec, mat_C, mat_F or mat_symm")
 
-
-
-
 def solve_mat(x, shape=None, var_type='vec'):
-	# reshape back to the original fomrat after running a2dr
-	if var_type == 'vec': 
+	# reshape back to the original format after running a2dr
+	if var_type == 'vec':
 		return x
 	elif var_type == 'mat_C':
 		if shape == None:
