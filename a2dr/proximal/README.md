@@ -1,35 +1,51 @@
 # Proximal Operators
 `a2dr` provides a library of proximal operators for common sets and functions in `a2dr.proximal`. Recall that the proximal operator of a function $f:\mathbf{R}^n \rightarrow \mathbf{R}$ is
 $$\mathbf{prox}_{tf}(v) = \arg\min_x \left\{f(x) + \frac{1}{2t}\|x - v\|_2^2\right\},$$
-where $v \in \mathbf{R}^n$ is the input and $t > 0$ is a parameter. A similar definition exists for a function over matrices, except the 2-norm is replaced with the Frobenius norm.
+where $v \in \mathbf{R}^n$ is the input and $t > 0$ is a parameter. A similar definition exists for a function over matrices, except the $\ell_2$ norm is replaced with the Frobenius norm.
+
+**Notation.** We use $\mathbf{R}$ to denote the real numbers and $\mathbf{Z}$ the integers. We let $\mathbf{R}_+$ and $\mathbf{R}_-$ be the non-negative and non-positive reals, respectively, and similarly for $\mathbf{Z}_+$ and $\mathbf{Z}_-$. The domain $\mathbf{S}^n$ refers to the set of symmetric $n \times n$ matrices, and the domains $\mathbf{S}_+^n$ and $\mathbf{S}_-^n$ refer to the set of positive semidefinite and negative semidefinite matrices, respectively. For a set $C$, the indicator function $I_C(x) = 0$ if $x \in C$ and $\infty$ otherwise.
 
 ### Example
 To call a proximal operator, we simply import it and pass in the values of $v$ and $t$. For example,
 ```
 import numpy as np
-from a2dr.proximal import prox_norm1
+from a2dr.proximal import prox_norm2
 
-t = 2
 v = np.arange(10)
-prox_norm1(v, t)
+prox_norm2(v, t=2)
 ```
-computes $\mathbf{prox}_{t\|\cdot\|_1}(v)$ for $t = 2$ and $v = (0,1,\ldots,9)$. Most of the proximal operators in `a2dr.proximal` have a closed-form solution. Where possible, we have used this solution in our implementation - see [N. Parikh and S. Boyd (2013)](https://web.stanford.edu/~boyd/papers/pdf/prox_algs.pdf) and [A. Beck (2017), Ch. 6](https://archive.siam.org/books/mo25/mo25_ch6.pdf) for the mathematical details. Otherwise, we typically provide options for how to numerically evaluate the operator, e.g., `prox_sum_squares_affine` can be called with argument `method = "lsqr"` for [scipy.sparse.linalg.lsqr](https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.linalg.lsqr.html) or `method = "lstsq"` for [numpy.linalg.lstsq](https://docs.scipy.org/doc/numpy/reference/generated/numpy.linalg.lstsq.html) as the least-squares solution method.
+computes $\mathbf{prox}_{t\|\cdot\|_2}(v)$ for $t = 2$ and $v = (0,1,\ldots,9)$. Most of the proximal operators in `a2dr.proximal` have a closed-form solution. Where possible, we have used this solution in our implementation - see [N. Parikh and S. Boyd (2013)](https://web.stanford.edu/~boyd/papers/pdf/prox_algs.pdf) for mathematical details. Otherwise, we typically provide options for how to numerically evaluate the operator, e.g., `prox_sum_squares_affine` can be called with argument `method = "lsqr"` for [scipy.sparse.linalg.lsqr](https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.linalg.lsqr.html) or `method = "lstsq"` for [numpy.linalg.lstsq](https://docs.scipy.org/doc/numpy/reference/generated/numpy.linalg.lstsq.html) as the least-squares solution method.
 
-TODO: Solving a simple problem.
+Let us solve the problem
+$$\begin{array}{ll} \text{minimize} & \|x\|_2 \\ \text{subject to} & Ax = b \end{array}$$
+with variable $x \in \mathbf{R}^n$ and problem data $A \in \mathbf{R}^{m \times n}$ and $b \in \mathbf{R}^m$. The code for this is
 ```
-from a2dr.proximal import prox_sum_squares, prox_nonneg_constr
-
-A_list =
-b =
-prox_list = [prox_sum_squares, prox_nonneg_constr]
-a2dr_result = a2dr(prox_list, A_list, b, anderson=True)
+from a2dr import a2dr
+a2dr_result = a2dr([prox_norm2], [A], b, anderson=True)
 ```
+Here we pass a list containing the handle `prox_norm2` directly into `a2dr`. Our proximal library provides many such predefined operator handles, so users can quickly and easily solve a wide array of problems.
 
 ### Additional arguments
-TODO: Passing in arguments.
+Certain proximal operators require additional input arguments. For instance, `prox_quad_form` is the proximal operator of $f(x) = x^TQx$ for a matrix $Q \in \mathbf{R}^n$. To use this operator, we need to create a wrapper function that takes only $(v, t)$ as input, setting $Q$ directly in its body.
+```
+Q = np.random.randn(n,n)   # User-defined matrix
+prox_quad_form_wrapper = lambda v,t: prox_quad_form(v, t, Q=Q)
+a2dr_result = a2dr([prox_quad_form_wrapper], ...)
+```
 
-### Notation
-In the following tables, we describe our library of proximal operators: their Python handle, main input arguments, domain, and corresponding function $f(x)$. We use $\mathbf{R}$ to denote the real numbers and $\mathbf{Z}$ the integers. The domain $\mathbf{S}^n$ refers to the set of symmetric $n \times n$ matrices, and the domains $\mathbf{S}_+^n$ and $\mathbf{S}_-^n$ refer to the set of positive semidefinite and negative semidefinite matrices, respectively.
+### Compositions
+Given a function $f(x)$, define
+$$g(x) := tf(ax-b) + c^Tx + d\|x\|_2^2,$$
+where $t > 0$, $a \neq 0$, $b \in \mathbf{R}$, $c \in \mathbf{R}^n$, and $d \geq 0$ are parameters. It can be shown that
+$$\mathbf{prox}_g(v) = \mathbf{prox}_{(ta^2/(2d+1))f}(a(v - c)/(2d + 1) - b)$$
+using Theorems 6.11 to 6.15 in [A. Beck (2017), Ch. 6](https://archive.siam.org/books/mo25/mo25_ch6.pdf). Thus, we can access the proximal operator of the transformation $g(x)$ via the proximal operator of $f(x)$. The `a2dr.proximal` library provides built-in support for such compositions. For instance,
+```
+prox_norm2(v, t=2, scale=5, offset=10, lin_term=np.ones(n), quad_term=1)
+```
+evaluates $\mathbf{prox}_g(v)$ with $f(x) = \|x\|_2$ and $t = 2, a = 5, b = 10, c = (1,1,\ldots,1)$, and $d = 1$.
+
+# Reference Tables
+In the following tables, we describe our library of proximal operators: their Python handle, main input arguments, domain, and corresponding function $f(x)$.
 
 ## Scalar functions
 A scalar function takes a scalar, vector, or matrix as input and returns a scalar.
@@ -70,7 +86,7 @@ These functions apply to each element of the input, which can be a scalar, vecto
 | prox_pos        | (v, t = 1)        | $v \in \mathbf{R}$ | $\max(x,0)$                       |
 
 ## Set indicators
-For a set $C$, the indicator function $I_C(x) = 0$ if $x \in C$ and $\infty$ otherwise. The proximal operator of $f = I_C$ is the minimum norm projection $\mathbf{prox}_{tI_C}(v) = \arg\min_{x \in C}\{\|x - v\|_2^2\}$ when $C \subseteq \mathbf{R}^n$. Below we describe the proximal operators for several constraint sets $C$.
+Below we describe the proximal operators for several constraint sets $C$. The proximal operator of $f = I_C$ is the minimum norm projection $\mathbf{prox}_{tI_C}(v) = \arg\min_{x \in C}\{\|x - v\|_2^2\}$ when $C \subseteq \mathbf{R}^n$.
 ### Convex sets
 |  Python Handle     |  Arguments    |  Domain                |  Constraint Set                           |
 | ------------------ | ------------- | ---------------------- | ----------------------------------------- |
@@ -81,7 +97,7 @@ For a set $C$, the indicator function $I_C(x) = 0$ if $x \in C$ and $\infty$ oth
 | prox_soc           | v             | $v \in \mathbf{R}^n$   | $\sqrt{\sum_{i=1}^{n-1} x_i^2} \leq x_n$  |
 
 ### Nonconvex sets
-These sets are currently an experimental addition to `a2dr`.
+These sets are currently in the experimental phase.
 |  Python Handle   |  Arguments  |  Domain              | Constraint Set       |
 | ---------------- | ----------- | -------------------- | -------------------- |
 | prox_cardinality | (v, k = 10) | $v \in \mathbf{R}^n$ <br> $k \geq 0$ | $\mathbf{card}(\{v_i\vert v_i \neq 0\}) \leq k$ |
