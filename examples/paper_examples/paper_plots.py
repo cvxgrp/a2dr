@@ -260,7 +260,6 @@ class TestPaper(BaseTest):
         print('objective cvxpy = {}, objective cvxpy raw = {}, objective a2dr = {}'.format(cvxpy_obj, 
                                                                                            cvxpy_obj_raw,
                                                                                            a2dr_obj))
-
         
     def test_coupled_qp(self, figname):
         # Problem data.

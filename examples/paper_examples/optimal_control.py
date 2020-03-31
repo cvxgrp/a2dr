@@ -46,7 +46,7 @@ class TestPaper(BaseTest):
         self.MAX_ITER = 1000
 
     def test_optimal_control(self):
-        # Problem data/
+        # Problem data.
         m = 20
         n = 40
         K = 5
