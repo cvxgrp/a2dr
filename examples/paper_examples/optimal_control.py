@@ -118,7 +118,7 @@ class TestPaper(BaseTest):
         for k in range(K-1):
             cvxpy_constr_vio.append(np.linalg.norm(cvxpy_X[k+1]-A.dot(cvxpy_X[k])-B.dot(cvxpy_U[k])-c))
             a2dr_constr_vio.append(np.linalg.norm(a2dr_X[k+1]-A.dot(a2dr_X[k])-B.dot(a2dr_U[k])-c))    
-        print('linear constr vio cvxpy = {}, linear constr_vio a2dr = {}'.format(
+        print('linear constr vio cvxpy = {}, linear constr vio a2dr = {}'.format(
             np.mean(cvxpy_constr_vio), np.mean(a2dr_constr_vio)))
         print('norm constr vio cvxpy = {}, norm constr vio a2dr = {}'.format(np.max(np.abs(cvxpy_u)), 
                                                                              np.max(np.abs(a2dr_u))))
