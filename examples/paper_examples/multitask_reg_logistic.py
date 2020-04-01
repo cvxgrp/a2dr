@@ -46,40 +46,40 @@ class TestPaper(BaseTest):
         self.MAX_ITER = 1000
 
     def test_multi_task_logistic(self):
-        # minimize \sum_{ik} log(1 + exp(-Y_{ik}*Z_{ik})) + \alpha*||\theta||_{2,1} + \beta*||\theta||_*
-        # subject to Z = X\theta, ||.||_{2,1} = group lasso, ||.||_* = nuclear norm.
+        # minimize \sum_{il} log(1 + exp(-Y_{il}*Z_{il})) + \alpha*||\theta||_{2,1} + \beta*||\theta||_*
+        # subject to Z = W\theta, ||.||_{2,1} = group lasso, ||.||_* = nuclear norm.
 
         # Problem data.
-        K = 3     # Number of tasks.
-        p = 80    # Number of features.
-        m = 100   # Number of samples.
+        L = 3     # Number of tasks.
+        s = 80    # Number of features.
+        p = 100   # Number of samples.
         alpha = 0.1
         beta = 0.1
 
-        X = np.random.randn(m,p)
-        theta_true = np.random.randn(p,K)
-        Z_true = X.dot(theta_true)
+        W = np.random.randn(p,s)
+        theta_true = np.random.randn(s,L)
+        Z_true = W.dot(theta_true)
         Y = 2*(Z_true > 0) - 1   # Y_{ij} = 1 or -1.
 
         def calc_obj(theta):
-            obj = np.sum(-np.log(sp.special.expit(np.multiply(Y, X.dot(theta)))))
-            reg = alpha*np.sum([LA.norm(theta[:,k], 2) for k in range(K)])
+            obj = np.sum(-np.log(sp.special.expit(np.multiply(Y, W.dot(theta)))))
+            reg = alpha*np.sum([LA.norm(theta[:,l], 2) for l in range(L)])
             reg += beta*LA.norm(theta, ord='nuc')
             return obj + reg
 
         # Convert problem to standard form. 
-        # f_1(Z) = \sum_{ik} log(1 + exp(-Y_{ik}*Z_{ik})), 
+        # f_1(Z) = \sum_{il} log(1 + exp(-Y_{il}*Z_{il})), 
         # f_2(\theta) = \alpha*||\theta||_{2,1}, 
         # f_3(\tilde \theta) = \beta*||\tilde \theta||_*.
-        # A_1 = [I; 0], A_2 = [-X; I], A_3 = [0; -I], b = 0.
+        # A_1 = [I; 0], A_2 = [-W; I], A_3 = [0; -I], b = 0.
         prox_list = [lambda v, t: prox_logistic(v, t, y = Y.ravel(order='F')),   
-                     # TODO: Calculate in parallel for k = 1,...K.
-                     lambda v, t: prox_group_lasso(v.reshape((p,K), order='F'), t*alpha).ravel(order='F'),
-                     lambda v, t: prox_norm_nuc(v.reshape((p,K), order='F'), t*beta).ravel(order='F')]
-        A_list = [sparse.vstack([sparse.eye(m*K), sparse.csr_matrix((p*K,m*K))]),
-                  sparse.vstack([-sparse.block_diag(K*[X]), sparse.eye(p*K)]),
-                  sparse.vstack([sparse.csr_matrix((m*K,p*K)), -sparse.eye(p*K)])]
-        b = np.zeros(m*K + p*K)
+                     # TODO: Calculate in parallel for l = 1,...L.
+                     lambda v, t: prox_group_lasso(v.reshape((s,L), order='F'), t*alpha).ravel(order='F'),
+                     lambda v, t: prox_norm_nuc(v.reshape((s,L), order='F'), t*beta).ravel(order='F')]
+        A_list = [sparse.vstack([sparse.eye(p*L), sparse.csr_matrix((s*L,p*L))]),
+                  sparse.vstack([-sparse.block_diag(L*[W]), sparse.eye(s*L)]),
+                  sparse.vstack([sparse.csr_matrix((p*L,s*L)), -sparse.eye(s*L)])]
+        b = np.zeros(p*L + s*L)
         
         # Solve with DRS.
         drs_result = a2dr(prox_list, A_list, b, anderson=False, precond=True, max_iter=self.MAX_ITER)
@@ -87,7 +87,7 @@ class TestPaper(BaseTest):
 
         # Solve with A2DR.
         a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER)
-        a2dr_theta = a2dr_result["x_vals"][-1].reshape((p,K), order='F')
+        a2dr_theta = a2dr_result["x_vals"][-1].reshape((s,L), order='F')
         print('A2DR finished.')
         self.compare_total(drs_result, a2dr_result)
 

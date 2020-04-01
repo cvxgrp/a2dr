@@ -46,28 +46,28 @@ class TestPaper(BaseTest):
         self.MAX_ITER = 1000
 
     def test_l1_trend_filtering(self):
-        # minimize (1/2)||y - x||_2^2 + \alpha*||Dx||_1,
-        # where (Dx)_{t-1} = x_{t-1} - 2*x_t + x_{t+1} for t = 2,...,n-1.
+        # minimize (1/2)||y - z||_2^2 + \alpha*||Dz||_1,
+        # where (Dz)_{t-1} = z_{t-1} - 2*z_t + z_{t+1} for t = 2,...,q-1.
         # Reference: https://web.stanford.edu/~boyd/papers/l1_trend_filter.html
 
         # Problem data.
-        n = 1000
-        y = np.random.randn(n)
+        q = 1000
+        y = np.random.randn(q)
         alpha = 0.01*np.linalg.norm(y, np.inf)
 
         # Form second difference matrix.
-        D = sparse.lil_matrix(sparse.eye(n))
+        D = sparse.lil_matrix(sparse.eye(q))
         D.setdiag(-2, k = 1)
         D.setdiag(1, k = 2)
-        D = D[:(n-2),:]
+        D = D[:(q-2),:]
 
         # Convert problem to standard form.
         # f_1(x_1) = (1/2)||y - x_1||_2^2, f_2(x_2) = \alpha*||x_2||_1.
         # A_1 = D, A_2 = -I_{n-2}, b = 0.
         prox_list = [lambda v, t: prox_sum_squares(v, t = 0.5*t, offset = y),
                      lambda v, t: prox_norm1(v, t = alpha*t)]
-        A_list = [D, -sparse.eye(n-2)]
-        b = np.zeros(n-2)
+        A_list = [D, -sparse.eye(q-2)]
+        b = np.zeros(q-2)
 
         # Solve with DRS.
         drs_result = a2dr(prox_list, A_list, b, anderson=False, precond=True, max_iter=self.MAX_ITER)

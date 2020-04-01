@@ -46,20 +46,20 @@ class TestPaper(BaseTest):
         self.MAX_ITER = 1000
 
     def test_nnls(self):
-        # minimize ||Fx - g||_2^2 subject to x >= 0.
+        # minimize ||Fz - g||_2^2 subject to z >= 0.
 
         # Problem data.
-        m, n = 150, 300 
+        p, q = 150, 300 
         density = 0.001
-        F = sparse.random(m, n, density=density, data_rvs=np.random.randn)
-        g = np.random.randn(m)
+        F = sparse.random(p, q, density=density, data_rvs=np.random.randn)
+        g = np.random.randn(p)
 
         # Convert problem to standard form.
         # f_1(x_1) = ||Fx_1 - g||_2^2, f_2(x_2) = I(x_2 >= 0).
         # A_1 = I_n, A_2 = -I_n, b = 0.
         prox_list = [lambda v, t: prox_sum_squares_affine(v, t, F, g), prox_nonneg_constr]
-        A_list = [sparse.eye(n), -sparse.eye(n)]
-        b = np.zeros(n)
+        A_list = [sparse.eye(q), -sparse.eye(q)]
+        b = np.zeros(q)
         
         # Solve with DRS.
         drs_result = a2dr(prox_list, A_list, b, anderson=False, precond=True, max_iter=self.MAX_ITER)

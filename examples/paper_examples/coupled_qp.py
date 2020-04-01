@@ -47,26 +47,30 @@ class TestPaper(BaseTest):
 
     def test_coupled_qp(self):
         # Problem data.
-        K = 4 # number of blocks
-        p = 10 # number of coupling constraints
-        nk = 30 # variable dimension of each subproblem QP
-        mk = 50 # constraint dimension of each subproblem QP
-        A_list = [np.random.randn(p, nk) for k in range(K)]
-        F_list = [np.random.randn(mk, nk) for k in range(K)]
-        q_list = [np.random.randn(nk) for k in range(K)]
-        x_list = [np.random.randn(nk) for k in range(K)]
-        g_list = [F_list[k].dot(x_list[k])+0.1 for k in range(K)]
-        A = np.hstack(A_list)
-        x = np.hstack(x_list)
-        b = A.dot(x)
-        P_list = [np.random.randn(nk,nk) for k in range(K)]
-        Q_list = [P_list[k].T.dot(P_list[k]) for k in range(K)]
+        L = 4     # number of blocks
+        s = 10    # number of coupling constraints
+        ql = 30   # variable dimension of each subproblem QP
+        pl = 50   # constraint dimension of each subproblem QP
+
+        G_list = [np.random.randn(s,ql) for l in range(L)]
+        F_list = [np.random.randn(pl,ql) for l in range(L)]
+        c_list = [np.random.randn(ql) for l in range(L)]
+        z_tld_list = [np.random.randn(ql) for l in range(L)]
+        d_list = [F_list[l].dot(z_tld_list[l])+0.1 for l in range(L)]
+        
+        G = np.hstack(G_list)
+        z_tld = np.hstack(z_tld_list)
+        h = G.dot(z_tld)
+        H_list = [np.random.randn(ql,ql) for l in range(L)]
+        Q_list = [H_list[l].T.dot(H_list[l]) for l in range(L)]
         
         # Convert problem to standard form.
-        def tmp(k, Q_list, q_list, F_list, g_list):
-            return lambda v, t: prox_qp(v, t, Q_list[k], q_list[k], F_list[k], g_list[k])
+        def prox_qp_wrapper(l, Q_list, c_list, F_list, d_list):
+            return lambda v, t: prox_qp(v, t, Q_list[l], c_list[l], F_list[l], d_list[l])
         # Use "map" method to avoid implicit overriding, which would make all the proximal operators the same
-        prox_list = list(map(lambda k: tmp(k,Q_list,q_list,F_list,g_list), range(K)))
+        prox_list = list(map(lambda l: prox_qp_wrapper(l, Q_list, c_list, F_list, d_list), range(L)))
+        A_list = G_list
+        b = h
         
         # Solve with DRS.
         drs_result = a2dr(prox_list, A_list, b, anderson=False, precond=True, max_iter=self.MAX_ITER)
@@ -78,12 +82,12 @@ class TestPaper(BaseTest):
         self.compare_total(drs_result, a2dr_result)
         
         # Check solution correctness.
-        a2dr_x = a2dr_result['x_vals']
-        a2dr_obj = np.sum([a2dr_x[k].dot(Q_list[k]).dot(a2dr_x[k]) 
-                           + q_list[k].dot(a2dr_x[k]) for k in range(K)])
-        a2dr_constr_vio = [np.linalg.norm(np.maximum(F_list[k].dot(a2dr_x[k])-g_list[k],0))**2 
-                                  for k in range(K)]
-        a2dr_constr_vio += [np.linalg.norm(A.dot(np.hstack(a2dr_x))-b)**2]
+        a2dr_z = a2dr_result['x_vals']
+        a2dr_obj = np.sum([a2dr_z[l].dot(Q_list[l]).dot(a2dr_z[l]) 
+                           + c_list[l].dot(a2dr_z[l]) for l in range(L)])
+        a2dr_constr_vio = [np.linalg.norm(np.maximum(F_list[l].dot(a2dr_z[l])-d_list[l],0))**2 
+                                  for l in range(L)]
+        a2dr_constr_vio += [np.linalg.norm(G.dot(np.hstack(a2dr_z))-h)**2]
         a2dr_constr_vio_val = np.sqrt(np.sum(a2dr_constr_vio))
         print('objective value of A2DR = {}'.format(a2dr_obj))
         print('constraint violation of A2DR = {}'.format(a2dr_constr_vio_val))

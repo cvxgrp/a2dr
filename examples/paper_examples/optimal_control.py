@@ -47,52 +47,54 @@ class TestPaper(BaseTest):
 
     def test_optimal_control(self):
         # Problem data.
-        m = 20
-        n = 40
-        K = 5
-        A = np.random.randn(n,n)
-        B = np.random.randn(n,m)
-        c = np.random.randn(n)
-        x_init = np.random.randn(n)
-        A = A / np.max(np.abs(LA.eigvals(A)))
-        xhat = x_init
-        for k in range(K-1):
-            uhat = np.random.randn(m)
-            uhat = uhat / np.max(np.abs(uhat))
-            xhat = A.dot(xhat) + B.dot(uhat) + c
-        x_term = xhat
-        # uhat no normalization actually leads to more significant improvement of A2DR over DRS, and also happens to be feasible
-        # x_term = 0 also happens to be feasible
+        p = 20
+        q = 40
+        L = 5
+
+        F = np.random.randn(q,q)
+        G = np.random.randn(q,p)
+        h = np.random.randn(q)
+        z_init = np.random.randn(q)
+        F = F / np.max(np.abs(LA.eigvals(F)))
+        
+        z_hat = z_init
+        for l in range(L-1):
+            u_hat = np.random.randn(p)
+            u_hat = u_hat / np.max(np.abs(u_hat))
+            z_hat = F.dot(z_hat) + G.dot(u_hat) + h
+        z_term = z_hat
+        # no normalization of uhat actually leads to more significant improvement of A2DR over DRS, and also happens to be feasible
+        # z_term = 0 also happens to be feasible
         
         # Convert problem to standard form.
         def prox_sat(v, t, v_lo = -np.inf, v_hi = np.inf):
             return prox_box_constr(prox_sum_squares(v, t), t, v_lo, v_hi)
         prox_list = [prox_sum_squares, lambda v, t: prox_sat(v, t, -1, 1)]
-        A1 = sparse.lil_matrix(((K+1)*n,K*n))
-        A1[n:K*n,:(K-1)*n] = -sparse.block_diag((K-1)*[A])
+        A1 = sparse.lil_matrix(((L+1)*q,L*q))
+        A1[q:L*q,:(L-1)*q] = -sparse.block_diag((L-1)*[F])
         A1.setdiag(1)
-        A1[K*n:,(K-1)*n:] = sparse.eye(n)
-        A2 = sparse.lil_matrix(((K+1)*n,K*m))
-        A2[n:K*n,:(K-1)*m] = -sparse.block_diag((K-1)*[B])
+        A1[L*q:,(L-1)*q:] = sparse.eye(q)
+        A2 = sparse.lil_matrix(((L+1)*q,L*p))
+        A2[q:L*q,:(L-1)*p] = -sparse.block_diag((L-1)*[G])
         A_list = [sparse.csr_matrix(A1), sparse.csr_matrix(A2)]
-        b_list = [x_init]
-        b_list.extend((K-1)*[c])
-        b_list.extend([x_term])
+        b_list = [z_init]
+        b_list.extend((L-1)*[h])
+        b_list.extend([z_term])
         b = np.concatenate(b_list)
         
         # Solve with CVXPY
-        x = Variable((K,n))
-        u = Variable((K,m))
-        obj = sum([sum_squares(x[k]) + sum_squares(u[k]) for k in range(K)])
-        constr = [x[0] == x_init, norm_inf(u) <= 1]
-        constr += [x[k+1] == A*x[k] + B*u[k] + c for k in range(K-1)]
-        constr += [x[K-1] == x_term]
+        z = Variable((L,q))
+        u = Variable((L,p))
+        obj = sum([sum_squares(x[l]) + sum_squares(u[l]) for l in range(L)])
+        constr = [z[0] == z_init, norm_inf(u) <= 1]
+        constr += [z[l+1] == F*z[l] + G*u[l] + h for l in range(L-1)]
+        constr += [z[L-1] == z_term]
         prob = Problem(Minimize(obj), constr)
         prob.solve(solver='SCS', eps=self.eps_abs, verbose=True) 
-        # OSQP fails for m=50, n=100, K=30, and also for m=100, n=200, K=30
+        # OSQP fails for p=50, q=100, L=30, and also for p=100, q=200, L=30
         # SCS also fails to converge
         cvxpy_obj = prob.value
-        cvxpy_x = x.value.ravel(order='C')
+        cvxpy_z = z.value.ravel(order='C')
         cvxpy_u = u.value.ravel(order='C')
         
         # Solve with DRS.
@@ -105,19 +107,19 @@ class TestPaper(BaseTest):
         print('Finished A2DR.')
         
         # check solution correctness
-        a2dr_x = a2dr_result['x_vals'][0]
+        a2dr_z = a2dr_result['x_vals'][0]
         a2dr_u = a2dr_result['x_vals'][1]
-        a2dr_obj = np.sum(a2dr_x**2) + np.sum(a2dr_u**2)
-        cvxpy_obj_raw = np.sum(cvxpy_x**2) + np.sum(cvxpy_u**2)
-        cvxpy_X = cvxpy_x.reshape([K,n], order='C')
-        cvxpy_U = cvxpy_u.reshape([K,m], order='C')
-        a2dr_X = a2dr_x.reshape([K,n], order='C')
-        a2dr_U = a2dr_u.reshape([K,m], order='C')
-        cvxpy_constr_vio = [np.linalg.norm(cvxpy_X[0]-x_init), np.linalg.norm(cvxpy_X[K-1]-x_term)]
-        a2dr_constr_vio = [np.linalg.norm(a2dr_X[0]-x_init), np.linalg.norm(a2dr_X[K-1]-x_term)]
-        for k in range(K-1):
-            cvxpy_constr_vio.append(np.linalg.norm(cvxpy_X[k+1]-A.dot(cvxpy_X[k])-B.dot(cvxpy_U[k])-c))
-            a2dr_constr_vio.append(np.linalg.norm(a2dr_X[k+1]-A.dot(a2dr_X[k])-B.dot(a2dr_U[k])-c))    
+        a2dr_obj = np.sum(a2dr_z**2) + np.sum(a2dr_u**2)
+        cvxpy_obj_raw = np.sum(cvxpy_z**2) + np.sum(cvxpy_u**2)
+        cvxpy_Z = cvxpy_z.reshape([L,q], order='C')
+        cvxpy_U = cvxpy_u.reshape([L,p], order='C')
+        a2dr_Z = a2dr_x.reshape([L,q], order='C')
+        a2dr_U = a2dr_u.reshape([L,p], order='C')
+        cvxpy_constr_vio = [np.linalg.norm(cvxpy_Z[0]-z_init), np.linalg.norm(cvxpy_Z[L-1]-z_term)]
+        a2dr_constr_vio = [np.linalg.norm(a2dr_Z[0]-z_init), np.linalg.norm(a2dr_Z[L-1]-z_term)]
+        for l in range(L-1):
+            cvxpy_constr_vio.append(np.linalg.norm(cvxpy_Z[l+1]-F.dot(cvxpy_Z[l])-G.dot(cvxpy_U[l])-h))
+            a2dr_constr_vio.append(np.linalg.norm(a2dr_Z[l+1]-F.dot(a2dr_Z[l])-G.dot(a2dr_U[l])-h))    
         print('linear constr vio cvxpy = {}, linear constr vio a2dr = {}'.format(
             np.mean(cvxpy_constr_vio), np.mean(a2dr_constr_vio)))
         print('norm constr vio cvxpy = {}, norm constr vio a2dr = {}'.format(np.max(np.abs(cvxpy_u)), 
