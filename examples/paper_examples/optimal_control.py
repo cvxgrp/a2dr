@@ -63,7 +63,7 @@ class TestPaper(BaseTest):
             u_hat = u_hat / np.max(np.abs(u_hat))
             z_hat = F.dot(z_hat) + G.dot(u_hat) + h
         z_term = z_hat
-        # no normalization of uhat actually leads to more significant improvement of A2DR over DRS, and also happens to be feasible
+        # no normalization of u_hat actually leads to more significant improvement of A2DR over DRS, and also happens to be feasible
         # z_term = 0 also happens to be feasible
         
         # Convert problem to standard form.

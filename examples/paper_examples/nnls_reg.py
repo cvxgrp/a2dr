@@ -55,7 +55,7 @@ class TestPaper(BaseTest):
         g = np.random.randn(p)
 
         # Convert problem to standard form.
-        # f_1(x_1) = ||Fx - g||_2^2, f_2(x_2) = I(x_2 >= 0).
+        # f_1(x_1) = ||Fx_1 - g||_2^2, f_2(x_2) = I(x_2 >= 0).
         # A_1 = I_n, A_2 = -I_n, b = 0.
         prox_list = [lambda v, t: prox_sum_squares_affine(v, t, F, g), prox_nonneg_constr]
         A_list = [sparse.eye(q), -sparse.eye(q)]

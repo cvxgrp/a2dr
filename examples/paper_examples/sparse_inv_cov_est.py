@@ -46,17 +46,18 @@ class TestPaper(BaseTest):
         self.MAX_ITER = 1000
 
     def test_sparse_inv_covariance(self, q, alpha_ratio):
-        # minimize -log(det(S)) + trace(S*Y) + \alpha*||S||_1 subject to S is symmetric PSD.
+        # minimize -log(det(S)) + trace(S*Q) + \alpha*||S||_1 subject to S is symmetric PSD.
 
         # Problem data.
         # q: Dimension of matrix.
-        p = 1000  # Number of samples.
+        p = 1000      # Number of samples.
         ratio = 0.9   # Fraction of zeros in S.
 
         S_true = sparse.csc_matrix(make_sparse_spd_matrix(q, ratio))
         Sigma = sparse.linalg.inv(S_true).todense()
         z_sample = sp.linalg.sqrtm(Sigma).dot(np.random.randn(q,p))
         Q = np.cov(z_sample)
+        
         mask = np.ones(Q.shape, dtype=bool)
         np.fill_diagonal(mask, 0)
         alpha_max = np.max(np.abs(Q)[mask])
