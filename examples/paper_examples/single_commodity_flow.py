@@ -102,7 +102,7 @@ class TestPaper(BaseTest):
         #          + \sum_{i'} I(s_{i'}^{transfer}=0) + \sum_{i''}
         #          + \sum_{i"} I(s_{i"}^{sink}=L_{i"}).
         # A = [B, I], b = 0
-        zeros = np.zeros(m1)
+        zeros = np.zeros(p1)
         def prox_sat(v, t, c, v_lo = -np.inf, v_hi = np.inf):
             return prox_box_constr(prox_sum_squares(v, t*c), t, v_lo, v_hi)
         prox_list = [lambda v, t: prox_sat(v, t, c, -z_max, z_max),

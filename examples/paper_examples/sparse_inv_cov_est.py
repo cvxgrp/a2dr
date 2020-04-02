@@ -65,7 +65,7 @@ class TestPaper(BaseTest):
         # Convert problem to standard form.
         # f_1(S) = -log(det(S)) + trace(S*Q) on symmetric PSD matrices, f_2(S) = \alpha*||S||_1.
         # A_1 = I, A_2 = -I, b = 0.
-        prox_list = [lambda v, t: prox_neg_log_det(v.reshape((n,n), order='C'), t, lin_term=t*Q).ravel(order='C'), 
+        prox_list = [lambda v, t: prox_neg_log_det(v.reshape((q,q), order='C'), t, lin_term=t*Q).ravel(order='C'), 
                      lambda v, t: prox_norm1(v, t*alpha)]
         A_list = [sparse.eye(q*q), -sparse.eye(q*q)]
         b = np.zeros(q*q)
