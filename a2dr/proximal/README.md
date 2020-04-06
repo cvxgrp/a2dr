@@ -93,7 +93,7 @@ Below we describe the proximal operators for several constraint sets $C$. The pr
 | prox_box_constr    | (v, v_lo = $-\infty$, v_hi = $\infty$) | $v \in \mathbf{R}^n$ <br> $v^{lo}, v^{hi} \in \mathbf{R}^n$  | $v^{lo} \leq x \leq v^{hi}$ |
 | prox_nonneg_constr | v             | $v \in \mathbf{R}^n$   | $x \geq 0$                                |
 | prox_nonpos_constr | v             | $v \in \mathbf{R}^n$   | $x \leq 0$                                |
-| prox_psd           | B             | $B \in \mathbf{S}^n$   | $X \succeq 0$                             |
+| prox_psd_cone      | B             | $B \in \mathbf{S}^n$   | $X \succeq 0$                             |
 | prox_soc           | v             | $v \in \mathbf{R}^n$   | $\sqrt{\sum_{i=1}^{n-1} x_i^2} \leq x_n$  |
 
 ### Nonconvex sets

@@ -23,4 +23,5 @@ from a2dr.proximal.elementwise import prox_abs, prox_constant, prox_neg_entr, pr
 from a2dr.proximal.matrix import prox_neg_log_det, prox_sigma_max, prox_trace
 from a2dr.proximal.misc import prox_logistic, prox_max
 from a2dr.proximal.norm import prox_norm1, prox_norm2, prox_norm_inf, prox_norm_fro, prox_norm_nuc, prox_group_lasso
+from a2dr.proximal.nonconvex import prox_cardinality, prox_rank, prox_boolean, prox_integer
 from a2dr.proximal.quadratic import prox_quad_form, prox_sum_squares, prox_sum_squares_affine, prox_qp
