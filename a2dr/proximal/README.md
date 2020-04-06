@@ -87,20 +87,10 @@ These functions apply to each element of the input, which can be a scalar, vecto
 
 ## Set indicators
 Below we describe the proximal operators for several constraint sets $C$. The proximal operator of $f = I_C$ is the minimum norm projection $\mathbf{prox}_{tI_C}(v) = \arg\min_{x \in C}\{\|x - v\|_2^2\}$ when $C \subseteq \mathbf{R}^n$.
-### Convex sets
 |  Python Handle     |  Arguments    |  Domain                |  Constraint Set                           |
 | ------------------ | ------------- | ---------------------- | ----------------------------------------- |
 | prox_box_constr    | (v, v_lo = $-\infty$, v_hi = $\infty$) | $v \in \mathbf{R}^n$ <br> $v^{lo}, v^{hi} \in \mathbf{R}^n$  | $v^{lo} \leq x \leq v^{hi}$ |
 | prox_nonneg_constr | v             | $v \in \mathbf{R}^n$   | $x \geq 0$                                |
 | prox_nonpos_constr | v             | $v \in \mathbf{R}^n$   | $x \leq 0$                                |
-| prox_psd           | B             | $B \in \mathbf{S}^n$   | $X \succeq 0$                             |
+| prox_psd_cone      | B             | $B \in \mathbf{S}^n$   | $X \succeq 0$                             |
 | prox_soc           | v             | $v \in \mathbf{R}^n$   | $\sqrt{\sum_{i=1}^{n-1} x_i^2} \leq x_n$  |
-
-### Nonconvex sets
-These sets are currently in the experimental phase.
-|  Python Handle   |  Arguments  |  Domain              | Constraint Set       |
-| ---------------- | ----------- | -------------------- | -------------------- |
-| prox_cardinality | (v, k = 10) | $v \in \mathbf{R}^n$ <br> $k \geq 0$ | $\mathbf{card}(\{v_i\vert v_i \neq 0\}) \leq k$ |
-| prox_rank        | (B, k = 10) | $B \in \mathbf{R}^{m \times n}$ <br> $k \geq 0$ | $\mathbf{rank}(B) \leq k$ |
-| prox_boolean     | v           | $v \in \mathbf{R}^n$ | $x \in \{0,1\}^n$    |
-| prox_integer     | v           | $v \in \mathbf{R}^n$ | $x \in \mathbf{Z}^n$ |
