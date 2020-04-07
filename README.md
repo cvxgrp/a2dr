@@ -90,7 +90,7 @@ The module `a2dr` also comes with several additional tools that facilitates the 
 ```python
 import a2dr.proximal
 ```
-It also comes with some tests and visualization tools, which can be imported via
+It also comes with some [tests and visualization tools](a2dr/tests/base_test.py), which can be imported via
 ```python
 import a2dr.tests
 ```
