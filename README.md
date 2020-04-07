@@ -49,24 +49,24 @@ from a2dr import a2dr
 ```
 The function **a2dr** is called with the command
 ```python
-x_vals, primal, dual, num_iters, solve_time = a2dr(p_list,
-                                                   A_list=[],
-                                                   b=np.array([]),
-                                                   v_init=None,
-                                                   n_list=None,
-                                                   max_iter=1000,
-                                                   t_init=1/10,
-                                                   eps_abs=1e-6,
-                                                   eps_rel=1e-8,
-                                                   precond=True,
-                                                   ada_reg=True,
-                                                   anderson=True,
-                                                   m_accel=10,
-                                                   lam_accel=1e-8,
-                                                   aa_method='lstsq',
-                                                   D_safe=1e6,
-                                                   eps_safe=1e-6,
-                                                   M_safe=10)
+a2dr_result = a2dr(p_list,
+                   A_list=[],
+                   b=np.array([]),
+                   v_init=None,
+                   n_list=None,
+                   max_iter=1000,
+                   t_init=1/10,
+                   eps_abs=1e-6,
+                   eps_rel=1e-8,
+                   precond=True,
+                   ada_reg=True,
+                   anderson=True,
+                   m_accel=10,
+                   lam_accel=1e-8,
+                   aa_method='lstsq',
+                   D_safe=1e6,
+                   eps_safe=1e-6,
+                   M_safe=10)
 ```
 
 #### Parameters:
@@ -80,12 +80,13 @@ Notice that `A_list` and `b` are optional, and when omitted, the solver recogniz
 For information on the other optional hyper-parameters, please refer to our [companion paper](http://stanford.edu/~boyd/papers/a2dr.html) (Algorithm 2) and the [source code comments of the function **a2dr** in solver.py](https://github.com/cvxgrp/a2dr/tree/master/a2dr).
 
 #### Returns:
+The returned object `a2dr_result` is a dictionary containing the keys `'x_vals'`, `'primal'`, `'dual'`, `'num_iters'` and `'solve_time'`:
 * The output `x_vals` is a list of x_1,...,x_N from the iteration with the smallest residuals.
 * `primal` and `dual` are arrays containing the primal and dual residual norms for the entire iteration process, respectively.
 * The value `num_iters` is the total number of iterations, and `solve_time` is the algorithm runtime.
 
 #### Other tools
-The module `a2dr` also comes with several additional tools that facilitates the transformation of the problems into the required input format described above as well as tests and visualization. In particular, it come with a package for proximal operators, which can be imported via
+The module `a2dr` also comes with several additional tools that facilitates the transformation of the problems into the required input format described above as well as tests and visualization. In particular, it come with a [package for proximal operators](a2dr/proximal/README.md), which can be imported via
 ```python
 import a2dr.proximal
 ```
