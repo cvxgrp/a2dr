@@ -185,6 +185,12 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
     # Store constraint matrix for projection step.
     A = sp.csr_matrix(sp.hstack(A_list))
 
+    # Check linear feasibility
+    r1norm = sp.linalg.lsqr(A, b)[3]
+    if r1norm >= eps_abs: # infeasible
+        print('Infeasible linear equality constraint: minimum constraint violation = {}; terminated.'.format(r1norm))
+        return {"x_vals": None, "primal": None, "dual": None, "num_iters": None, "solve_time": None}
+
     # Set up the workers.
     pipes = []
     procs = []

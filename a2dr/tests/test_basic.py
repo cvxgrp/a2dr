@@ -22,7 +22,7 @@ import numpy.linalg as LA
 from scipy import sparse
 
 from a2dr import a2dr
-from a2dr.proximal import prox_sum_squares_affine
+from a2dr.proximal import prox_sum_squares_affine, prox_nonneg_constr
 from a2dr.tests.base_test import BaseTest
 
 class TestBasic(BaseTest):
@@ -65,7 +65,7 @@ class TestBasic(BaseTest):
         self.assertAlmostEqual(np_obj, a2dr_obj)
 
     def test_ols(self):
-        # minimize ||y - X\beta||_2^2 with respect to \beta >= 0.
+        # minimize ||y - X\beta||_2^2.
         m = 100
         n = 10
         N = 4  # Number of splits. (split X row-wise)
@@ -116,3 +116,32 @@ class TestBasic(BaseTest):
         for i in range(N):
             self.assertItemsAlmostEqual(np_beta[i], drs_beta[i])
             self.assertItemsAlmostEqual(np_beta[i], a2dr_beta[i])
+
+    def test_infeas(self):
+        # a modified non-negative least squares example with infeasible linear constraints
+        m, n = 150, 300
+        density = 0.001
+        X = sparse.random(m, n, density=density, data_rvs=np.random.randn)
+        y = np.random.randn(m)
+
+        # Convert problem to standard form.
+        prox_list = [lambda v, t: prox_sum_squares_affine(v, t, F=X, g=y), 
+                     prox_nonneg_constr]
+        Z = sparse.eye(n);
+        e1 = sparse.lil_matrix((1,n))
+        e1[0,0] = 1 
+        A1 = sparse.bmat([[Z], [e1]])
+        A2 = sparse.bmat([[-Z], [-e1]])
+        A_list = [A1, A2]
+        b = np.zeros(n+1)
+        b[0] = 1
+        b[-1] = -1
+
+        # Solve with DRS.
+        drs_result = a2dr(prox_list, A_list, b, anderson=False)
+        # Solve with A2DR.
+        a2dr_result = a2dr(prox_list, A_list, b, anderson=True)
+        self.assertTrue(drs_result == 
+            {"x_vals": None, "primal": None, "dual": None, "num_iters": None, "solve_time": None} 
+            and a2dr_result == 
+            {"x_vals": None, "primal": None, "dual": None, "num_iters": None, "solve_time": None})
