@@ -41,13 +41,11 @@ where f_i (i=1,...,N) are convex, closed and proper, and are only accessible thr
 #### Prox-affine forms
 The above formulation is also referred to as **prox-affine** forms in the literature (see e.g., [Epsilon](https://arxiv.org/abs/1511.04815)). When it is seen as a standard form for generic convex optimization problems, the major advantage of **prox-affine** forms compared to the more widely used **conic** forms include:
 * **Privacy**: suitable for peer-to-peer optimization with privacy requirements.
+  * In practice, the data and source code that define the proximal oracle can be securely encrypted (e.g., via compilation) so that privacy is preserved. For example, in Python, we can convert the `.py` file containing the proximal operator function into an encrypted `.so` file via the [Cython](https://cython.org/) extension.
 * **Compactness**: straightforward canonicalization/transformation and lower dimensional representations.
+  * In general, the prox-affine form often requires less variables than the conic form (see e.g., the portfolio optimization example [here](http://web.stanford.edu/~junziz/papers/prox_affine/prox_affine.pdf)). The compactness advantage is also partly exemplified by the comparison between `a2dr` and `SCS` in the sparse covariance estimation example in our [paper](http://www.stanford.edu/~boyd/papers/a2dr.html). 
 
-For a brief introduction to prox-affine forms and the comparisons with conic forms, see our [companion slides](http://web.stanford.edu/~junziz/papers/prox_affine/prox_affine.pdf). 
-
-Some more comments on privacy and compactness:
-* In practice, the data and source code that define the proximal oracle can be securely encrypted (e.g., via compilation) so that privacy is preserved. For example, in Python, we can convert the `.py` file containing the proximal operator function into an encrypted `.so` file via the [Cython](https://cython.org/) extension.
-* The compactness advantage is also partly exemplified by the comparison between `a2dr` and `SCS` in the sparse covariance estimation example in our [paper](http://www.stanford.edu/~boyd/papers/a2dr.html). 
+For a bit more detailed introduction to prox-affine forms and the comparisons with conic forms, see our [companion slides](http://web.stanford.edu/~junziz/papers/prox_affine/prox_affine.pdf). 
 
 ### Usage
 After installing `a2dr`, you can import `a2dr` using
