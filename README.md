@@ -42,6 +42,7 @@ where f_i (i=1,...,N) are convex, closed and proper, and are only accessible thr
 The above formulation is also referred to as **prox-affine** forms in the literature (see e.g., [Epsilon](https://arxiv.org/abs/1511.04815)). When it is seen as a standard form for generic convex optimization problems, the major advantage of **prox-affine** forms compared to the more widely used **conic** forms include:
 * **Privacy**: suitable for peer-to-peer optimization with privacy requirements.
 * **Compactness**: straightforward canonicalization/transformation and lower dimensional representations.
+
 For a brief introduction to prox-affine forms and the comparisons with conic forms, see our [companion slides](http://web.stanford.edu/~junziz/papers/prox_affine/prox_affine.pdf). 
 
 In practice, the data and source code that define the proximal oracle can be securely encrypted (e.g., via compilation) so that privacy is preserved. For example, in Python, we can convert the `.py` file containing the proximal operator function into an encrypted `.so` file via the [Cython](https://cython.org/) extension.
