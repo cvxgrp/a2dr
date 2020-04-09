@@ -45,9 +45,9 @@ The above formulation is also referred to as **prox-affine** forms in the litera
 
 For a brief introduction to prox-affine forms and the comparisons with conic forms, see our [companion slides](http://web.stanford.edu/~junziz/papers/prox_affine/prox_affine.pdf). 
 
-In practice, the data and source code that define the proximal oracle can be securely encrypted (e.g., via compilation) so that privacy is preserved. For example, in Python, we can convert the `.py` file containing the proximal operator function into an encrypted `.so` file via the [Cython](https://cython.org/) extension.
-
-The compactness advantage is also partly exemplified by the comparison between `a2dr` and `SCS` in the sparse covariance estimation example in our [paper](http://www.stanford.edu/~boyd/papers/a2dr.html). 
+Some more comments on privacy and compactness:
+* In practice, the data and source code that define the proximal oracle can be securely encrypted (e.g., via compilation) so that privacy is preserved. For example, in Python, we can convert the `.py` file containing the proximal operator function into an encrypted `.so` file via the [Cython](https://cython.org/) extension.
+* The compactness advantage is also partly exemplified by the comparison between `a2dr` and `SCS` in the sparse covariance estimation example in our [paper](http://www.stanford.edu/~boyd/papers/a2dr.html). 
 
 ### Usage
 After installing `a2dr`, you can import `a2dr` using
