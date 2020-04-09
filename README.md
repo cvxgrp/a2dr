@@ -36,7 +36,17 @@ Please file an issue on Github if you want Python 2 support.
 minimize         f_1(x_1) + ... + f_N(x_N)
 subject to       A_1x_1 + ... + A_Nx_N = b.
 ```
-where f_i (i=1,...,N) are only accessible through their proximal operators.
+where f_i (i=1,...,N) are convex, closed and proper, and are only accessible through their proximal operators. Notice that f_i can take infinite values, and in particular constraints can be included in the objectives with the help of indicator functions.
+
+#### Prox-affine forms
+The above formulation is also referred to as **prox-affine** forms in the literature (see e.g., [Epsilon](https://arxiv.org/abs/1511.04815)). When it is seen as a standard form for generic convex optimization problems, the major advantage of **prox-affine** forms compared to the more widely used **conic** forms include:
+* **Privacy**: suitable for peer-to-peer optimization with privacy requirements.
+* **Compactness**: straightforward canonicalization/transformation and lower dimensional representations.
+For a brief introduction to prox-affine forms and the comparisons with conic forms, see our [companion slides](http://web.stanford.edu/~junziz/papers/prox_affine/prox_affine.pdf). 
+
+In practice, the data and source code that define the proximal oracle can be securely encrypted (e.g., via compilation) so that privacy is preserved. For example, in Python, we can convert the `.py` file containing the proximal operator function into an encrypted `.so` file via the [Cython](https://cython.org/) extension.
+
+The compactness advantage is also partly exemplified by the comparison between `a2dr` and `SCS` in the sparse covariance estimation example in our [paper](http://www.stanford.edu/~boyd/papers/a2dr.html). 
 
 ### Usage
 After installing `a2dr`, you can import `a2dr` using
