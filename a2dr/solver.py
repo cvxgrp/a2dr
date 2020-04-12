@@ -22,7 +22,7 @@ import scipy.sparse as sp
 from scipy.stats.mstats import gmean
 from time import time
 from multiprocessing import Process, Pipe
-import sys, os
+import sys, os, warnings
 from a2dr.precondition import precondition
 from a2dr.acceleration import aa_weights
 
@@ -36,7 +36,11 @@ def a2dr_worker(pipe, prox, v_init, A, t, anderson, m_accel):
     # A2DR loop.
     while True:
         # Proximal step for x^(k+1/2).
+        warnings.filterwarnings("ignore")
+        sys.stdout = open(os.devnull, 'w')
         x_half = prox(v_vec, t)
+        sys.stdout = sys.__stdout__
+        warnings.filterwarnings("default")
 
         # Calculate v^(k+1/2) = 2*x^(k+1/2) - v^(k).
         v_half = 2*x_half - v_vec
@@ -209,7 +213,7 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
     # Store constraint matrix for projection step.
     A = sp.csr_matrix(sp.hstack(A_list))
     if verbose:
-        print("variables n = {}, constraints m = {}".format(A.shape[0], A.shape[1]))
+        print("variables n = {}, constraints m = {}".format(A.shape[1], A.shape[0]))
         print("nnz(A) = {}".format(A.nnz))
         print("Setup time: {:.2e}".format(time() - start))
 
@@ -217,7 +221,7 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
     sys.stdout = open(os.devnull, 'w')
     r1norm = sp.linalg.lsqr(A, b)[3]
     sys.stdout = sys.__stdout__
-    if r1norm >= eps_abs: # infeasible
+    if r1norm >= np.sqrt(eps_abs): # infeasible
         if verbose:
             print('Infeasible linear equality constraint: minimum constraint violation = {:.4e}'.format(r1norm))
             print('Status: Terminated due to linear infeasibility')

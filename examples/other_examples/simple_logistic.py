@@ -22,6 +22,10 @@ import scipy as sp
 from cvxpy import *
 from scipy import sparse
 
+import matplotlib
+matplotlib.use('TKAgg')
+import matplotlib.pyplot as plt
+
 from a2dr import a2dr
 from a2dr.proximal import *
 from a2dr.tests.base_test import BaseTest
