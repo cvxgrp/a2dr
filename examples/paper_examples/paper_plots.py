@@ -220,7 +220,7 @@ class TestPaper(BaseTest):
         # Solve with CVXPY
         z = Variable((L,q))
         u = Variable((L,p))
-        obj = sum([sum_squares(x[l]) + sum_squares(u[l]) for l in range(L)])
+        obj = sum([sum_squares(z[l]) + sum_squares(u[l]) for l in range(L)])
         constr = [z[0] == z_init, norm_inf(u) <= 1]
         constr += [z[l+1] == F*z[l] + G*u[l] + h for l in range(L-1)]
         constr += [z[L-1] == z_term]
@@ -250,8 +250,8 @@ class TestPaper(BaseTest):
         cvxpy_U = cvxpy_u.reshape([L,p], order='C')
         a2dr_Z = a2dr_z.reshape([L,q], order='C')
         a2dr_U = a2dr_u.reshape([L,p], order='C')
-        cvxpy_constr_vio = [np.linalg.norm(cvxpy_Z[0]-z_init), np.linalg.norm(cvxpy_Z[K-1]-z_term)]
-        a2dr_constr_vio = [np.linalg.norm(a2dr_Z[0]-z_init), np.linalg.norm(a2dr_Z[K-1]-z_term)]
+        cvxpy_constr_vio = [np.linalg.norm(cvxpy_Z[0]-z_init), np.linalg.norm(cvxpy_Z[L-1]-z_term)]
+        a2dr_constr_vio = [np.linalg.norm(a2dr_Z[0]-z_init), np.linalg.norm(a2dr_Z[L-1]-z_term)]
         for l in range(L-1):
             cvxpy_constr_vio.append(np.linalg.norm(cvxpy_Z[l+1]-F.dot(cvxpy_Z[l])-G.dot(cvxpy_U[l])-h))
             a2dr_constr_vio.append(np.linalg.norm(a2dr_Z[l+1]-F.dot(a2dr_Z[l])-G.dot(a2dr_U[l])-h))
