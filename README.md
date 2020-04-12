@@ -63,7 +63,7 @@ a2dr_result = a2dr(p_list,
                    b=np.array([]),
                    v_init=None,
                    n_list=None,
-                   max_iter=1000,
+                   max_iter=3000,
                    t_init=1/10,
                    eps_abs=1e-6,
                    eps_rel=1e-8,
@@ -75,7 +75,7 @@ a2dr_result = a2dr(p_list,
                    aa_method='lstsq',
                    D_safe=1e6,
                    eps_safe=1e-6,
-                   M_safe=10)
+                   M_safe=int(max_iter/100))
 ```
 
 #### Parameters:

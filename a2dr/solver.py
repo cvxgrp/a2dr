@@ -93,8 +93,10 @@ def a2dr_worker(pipe, prox, v_init, A, t, anderson, m_accel):
 
 
 def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *args, **kwargs):
+    start = time()
+
     # Problem parameters.
-    max_iter = kwargs.pop("max_iter", 1000)
+    max_iter = kwargs.pop("max_iter", 3000)
     t_init = kwargs.pop("t_init", 1/10)  # Step size.
     eps_abs = kwargs.pop("eps_abs", 1e-6)   # Absolute stopping tolerance.
     eps_rel = kwargs.pop("eps_rel", 1e-8)   # Relative stopping tolerance.
@@ -110,7 +112,7 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
     # Safeguarding parameters.
     D_safe = kwargs.pop("D_safe", 1e6)
     eps_safe = kwargs.pop("eps_safe", 1e-6)
-    M_safe = kwargs.pop("M_safe", max_iter/100)
+    M_safe = kwargs.pop("M_safe", int(max_iter/100))
 
     # Validate parameters.
     if max_iter <= 0:
@@ -176,20 +178,41 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
         if not sp.issparse(A_list[i]):
             A_list[i] = sp.csr_matrix(A_list[i])
 
+    print("----------------------------------------------------------------")
+    print("a2dr v0.1 - Prox-Affine Distributed Convex Optimization Solver")
+    print("(c) Anqi Fu, Junzi Zhang")
+    print("Stanford University 2019")
+    print("----------------------------------------------------------------")
+
     # Precondition data.
     if precond and has_constr:
         p_list, A_list, b, e_pre = precondition(p_list, A_list, b)
         t_init = 1/gmean(e_pre)**2/10
-        print('After preconditioning, t_init changed to {}'.format(t_init))
+        print('Preconditioning finished.')
+
+    print("max_iter = {}, t_init (after preconditioning) = {:.2f}, eps_abs = {}, eps_rel = {}".format(
+           max_iter, t_init, eps_abs, eps_rel))
+    print("precond = {!r}, ada_reg = {!r}, anderson = {!r}, m_accel = {}, lam_accel = {}".format(
+           precond, ada_reg, anderson, m_accel, lam_accel))
+    print("aa_method = {}, D_safe = {:.2f}, eps_safe = {}, M_safe = {:d}".format(
+           aa_method, D_safe, eps_safe, M_safe))
 
     # Store constraint matrix for projection step.
     A = sp.csr_matrix(sp.hstack(A_list))
+    print("variables n = {}, constraints m = {}".format(A.shape[0], A.shape[1]))
+    print("nnz(A) = {}".format(A.nnz))
+    print("Setup time: {:.2e}".format(time() - start))
 
     # Check linear feasibility
     r1norm = sp.linalg.lsqr(A, b)[3]
     if r1norm >= eps_abs: # infeasible
-        print('Infeasible linear equality constraint: minimum constraint violation = {}; terminated.'.format(r1norm))
+        print('Infeasible linear equality constraint: minimum constraint violation = {}'.format(r1norm))
+        print('Status: Terminated due to linear infeasibility')
         return {"x_vals": None, "primal": None, "dual": None, "num_iters": None, "solve_time": None}
+
+    print("----------------------------------------------------")
+    print(" iter | total res | primal res | dual res | time (s)")
+    print("----------------------------------------------------")
 
     # Set up the workers.
     pipes = []
@@ -221,12 +244,7 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
     dk = np.zeros(A.shape[1])
     sol = np.zeros(A.shape[0])
 
-    start = time()
     while not finished:
-        # TODO: Add verbose printout.
-        if k % 10 == 0:
-            print("Iteration:", k)
-
         # Gather v_i^(k+1/2) from nodes.
         v_halves = [pipe.recv() for pipe in pipes]
 
@@ -312,6 +330,14 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
             r_all_0 = r_all
         if k == 0 or r_all < r_best:
             x_final = x_halves
+            k_best = k
+
+        if k % 100 == 0:
+            print("{}| {}  {}  {}  {}".format(str(k).rjust(6), 
+                                        format(r_all, ".2e").ljust(10),
+                                        format(r_primal[k], ".2e").ljust(11), 
+                                        format(r_dual[k], ".2e").ljust(9),
+                                        format(time() - start, ".2e").ljust(8)))
 
         # Stop when residual norm falls below tolerance.
         k = k + 1
@@ -322,5 +348,14 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
     if precond and has_constr:
         x_final = [ei*x for x, ei in zip(x_final, e_pre)]
     end = time()
+    print("----------------------------------------------------")
+    if k < max_iter:
+        print("Status: Solved")
+    else:
+        print("Status: Reach maximum iterations")
+    print("Timing: Solve time: {}".format(end - start))
+    print("        Total number of iterations: {}".format(k))
+    print("Best total residual: {:.2e}; reached at iteration {}".format(r_all, k_best))
+    print("============================================================================")
     return {"x_vals": x_final, "primal": np.array(r_primal[:k]), "dual": np.array(r_dual[:k]), \
             "num_iters": k, "solve_time": (end - start)}

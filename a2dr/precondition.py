@@ -88,8 +88,8 @@ def mat_equil(A, n_list, tol, max_iter):
     ave_list = [np.ones([n_i,1]) for n_i in n_list]
     A_block = A2.dot(block_diag(ave_list))
     A_block_T = A_block.transpose()
-    print('Block matrix shape = {}'.format(A_block.shape))
-    print('gamma={}'.format(gamma))
+    # print('Block matrix shape = {}'.format(A_block.shape))
+    # print('gamma={}'.format(gamma))
     
     # Apply regularized Sinkhorn-Knopp on A_block
     for k in range(max_iter):
@@ -99,7 +99,7 @@ def mat_equil(A, n_list, tol, max_iter):
         err_e = np.linalg.norm(e1 - e)
         d = d1
         e = e1
-        print('k={}, err_d={}, err_e={}'.format(k, err_d/np.sqrt(m), err_e/np.sqrt(N)))
+        # print('k={}, err_d={}, err_e={}'.format(k, err_d/np.sqrt(m), err_e/np.sqrt(N)))
         if err_d/np.sqrt(m) <= tol and err_e/np.sqrt(N) <= tol:
             break
     
@@ -108,9 +108,9 @@ def mat_equil(A, n_list, tol, max_iter):
     I_list = [sparse.eye(n_list[i]) * e[i] for i in range(N)]
     E = csr_matrix(block_diag(I_list))
     D = csr_matrix(diags(d))
-    print('generate D, E')
+    # print('generate D, E')
     B = D.dot(csr_matrix(A).dot(E))
-    print('compute scaled matrix')
+    # print('compute scaled matrix')
     
     # Rescale to have \|DAE\|_2 close to 1
     scale = norm(B, 'fro') / np.sqrt(np.min([m,N]))
