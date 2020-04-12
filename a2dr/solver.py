@@ -26,6 +26,8 @@ import sys, os, warnings
 from a2dr.precondition import precondition
 from a2dr.acceleration import aa_weights
 
+sys_stdout_origin = sys.stdout
+
 def a2dr_worker(pipe, prox, v_init, A, t, anderson, m_accel):
     # Initialize AA-II parameters.
     if anderson:   # TODO: Store and update these efficiently as arrays.
@@ -39,7 +41,7 @@ def a2dr_worker(pipe, prox, v_init, A, t, anderson, m_accel):
         warnings.filterwarnings("ignore")
         sys.stdout = open(os.devnull, 'w')
         x_half = prox(v_vec, t)
-        sys.stdout = sys.__stdout__
+        sys.stdout = sys_stdout_origin
         warnings.filterwarnings("default")
 
         # Calculate v^(k+1/2) = 2*x^(k+1/2) - v^(k).
@@ -189,8 +191,8 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
     if verbose:
         print("----------------------------------------------------------------")
         print("a2dr v0.1 - Prox-Affine Distributed Convex Optimization Solver")
-        print("(c) Anqi Fu, Junzi Zhang")
-        print("Stanford University 2019")
+        print("                 (c) Anqi Fu, Junzi Zhang")
+        print("                 Stanford University, 2019")
         print("----------------------------------------------------------------")
 
     # Precondition data.
@@ -220,7 +222,7 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
     # Check linear feasibility
     sys.stdout = open(os.devnull, 'w')
     r1norm = sp.linalg.lsqr(A, b)[3]
-    sys.stdout = sys.__stdout__
+    sys.stdout = sys_stdout_origin
     if r1norm >= np.sqrt(eps_abs): # infeasible
         if verbose:
             print('Infeasible linear equality constraint: minimum constraint violation = {:.4e}'.format(r1norm))
@@ -269,7 +271,9 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
 
         # Projection step for x^(k+1).
         v_half = np.concatenate(v_halves, axis=0)
+        sys.stdout = open(os.devnull, 'w')
         dk = sp.linalg.lsqr(A, A.dot(v_half) - b, atol=1e-10, btol=1e-10, x0=dk)[0]
+        sys.stdout = sys_stdout_origin
 
         # Scatter d^k = A^\dagger(Av^(k+1/2) - b).
         for i in range(N):
@@ -339,7 +343,9 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
 
         subgrad = np.concatenate(xv_diffs)/t_init
         # sol = LA.lstsq(A.T, subgrad, rcond=None)[0]
+        sys.stdout = open(os.devnull, 'w')
         sol = sp.linalg.lsqr(A.T, subgrad, atol=1e-10, btol=1e-10, x0=sol)[0]
+        sys.stdout = sys_stdout_origin
         r_dual_vec = A.T.dot(sol) - subgrad
         r_dual[k] = LA.norm(r_dual_vec, ord=2)
 
@@ -384,7 +390,7 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
             print("Status: Reach maximum iterations")
         print("Solve time: {}".format(end - start))
         print("        Total number of iterations: {}".format(k))
-        print("Best total residual: {:.2e}; reached at iteration {}".format(r_all, k_best))
+        print("Best total residual: {:.2e}; reached at iteration {}".format(r_best, k_best))
         print("============================================================================")
     return {"x_vals": x_final, "primal": np.array(r_primal[:k]), "dual": np.array(r_dual[:k]), \
             "num_iters": k, "solve_time": (end - start)}
