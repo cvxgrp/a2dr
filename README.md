@@ -93,6 +93,7 @@ The returned object `a2dr_result` is a dictionary containing the keys `'x_vals'`
 * The output `x_vals` is a list of x_1,...,x_N from the iteration with the smallest residuals.
 * `primal` and `dual` are arrays containing the primal and dual residual norms for the entire iteration process, respectively.
 * The value `num_iters` is the total number of iterations, and `solve_time` is the algorithm runtime.
+When the linear equality constraint is infeasible, the solver will print the corresponding flag and return `None` for all the outputs.
 
 #### Other tools
 The module `a2dr` also comes with several additional tools that facilitates the transformation of the problems into the required input format described above as well as tests and visualization. In particular, it come with a [package for proximal operators](a2dr/proximal/README.md), which can be imported via
