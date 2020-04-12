@@ -115,6 +115,9 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
     eps_safe = kwargs.pop("eps_safe", 1e-6)
     M_safe = kwargs.pop("M_safe", int(max_iter/100))
 
+    # Printout parameters
+    verbose = kwargs.pop("verbose", True)
+
     # Validate parameters.
     if max_iter <= 0:
         raise ValueError("max_iter must be a positive integer.")
@@ -179,44 +182,52 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
         if not sp.issparse(A_list[i]):
             A_list[i] = sp.csr_matrix(A_list[i])
 
-    print("----------------------------------------------------------------")
-    print("a2dr v0.1 - Prox-Affine Distributed Convex Optimization Solver")
-    print("(c) Anqi Fu, Junzi Zhang")
-    print("Stanford University 2019")
-    print("----------------------------------------------------------------")
+    if verbose:
+        print("----------------------------------------------------------------")
+        print("a2dr v0.1 - Prox-Affine Distributed Convex Optimization Solver")
+        print("(c) Anqi Fu, Junzi Zhang")
+        print("Stanford University 2019")
+        print("----------------------------------------------------------------")
 
     # Precondition data.
     if precond and has_constr:
+        if verbose:
+            print('### Preconditioning starts ... ###')
         p_list, A_list, b, e_pre = precondition(p_list, A_list, b)
         t_init = 1/gmean(e_pre)**2/10
-        print('Preconditioning finished.')
+        if verbose:
+            print('### Preconditioning finished.  ###')
 
-    print("max_iter = {}, t_init (after preconditioning) = {:.2f}, eps_abs = {}, eps_rel = {}".format(
-           max_iter, t_init, eps_abs, eps_rel))
-    print("precond = {!r}, ada_reg = {!r}, anderson = {!r}, m_accel = {}, lam_accel = {}".format(
-           precond, ada_reg, anderson, m_accel, lam_accel))
-    print("aa_method = {}, D_safe = {:.2f}, eps_safe = {}, M_safe = {:d}".format(
-           aa_method, D_safe, eps_safe, M_safe))
+    if verbose:
+        print("max_iter = {}, t_init (after preconditioning) = {:.2f}, eps_abs = {}, eps_rel = {}".format(
+               max_iter, t_init, eps_abs, eps_rel))
+        print("precond = {!r}, ada_reg = {!r}, anderson = {!r}, m_accel = {}, lam_accel = {}".format(
+               precond, ada_reg, anderson, m_accel, lam_accel))
+        print("aa_method = {}, D_safe = {:.2f}, eps_safe = {}, M_safe = {:d}".format(
+               aa_method, D_safe, eps_safe, M_safe))
 
     # Store constraint matrix for projection step.
     A = sp.csr_matrix(sp.hstack(A_list))
-    print("variables n = {}, constraints m = {}".format(A.shape[0], A.shape[1]))
-    print("nnz(A) = {}".format(A.nnz))
-    print("Setup time: {:.2e}".format(time() - start))
+    if verbose:
+        print("variables n = {}, constraints m = {}".format(A.shape[0], A.shape[1]))
+        print("nnz(A) = {}".format(A.nnz))
+        print("Setup time: {:.2e}".format(time() - start))
 
     # Check linear feasibility
     sys.stdout = open(os.devnull, 'w')
     r1norm = sp.linalg.lsqr(A, b)[3]
     sys.stdout = sys.__stdout__
     if r1norm >= eps_abs: # infeasible
-        print('Infeasible linear equality constraint: minimum constraint violation = {:.4e}'.format(r1norm))
-        print('Status: Terminated due to linear infeasibility')
-        print("Solve time: {:.4e}".format(time() - start))
+        if verbose:
+            print('Infeasible linear equality constraint: minimum constraint violation = {:.4e}'.format(r1norm))
+            print('Status: Terminated due to linear infeasibility')
+            print("Solve time: {:.4e}".format(time() - start))
         return {"x_vals": None, "primal": None, "dual": None, "num_iters": None, "solve_time": None}
 
-    print("----------------------------------------------------")
-    print(" iter | total res | primal res | dual res | time (s)")
-    print("----------------------------------------------------")
+    if verbose:
+        print("----------------------------------------------------")
+        print(" iter | total res | primal res | dual res | time (s)")
+        print("----------------------------------------------------")
 
     # Set up the workers.
     pipes = []
@@ -337,7 +348,8 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
             r_best = r_all
             k_best = k
 
-        if k % 100 == 0:
+        if (k % 100 == 0 or k == max_iter-1)and verbose:
+            # print every 100 iterations or reaching maximum
             print("{}| {}  {}  {}  {}".format(str(k).rjust(6), 
                                         format(r_all, ".2e").ljust(10),
                                         format(r_primal[k], ".2e").ljust(11), 
@@ -347,20 +359,28 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
         # Stop when residual norm falls below tolerance.
         k = k + 1
         finished = k >= max_iter or (r_all <= eps_abs + eps_rel * r_all_0)
+        if r_all <= eps_abs + eps_rel * r_all_0 and k % 100 != 0:
+            # print the best iterate
+            print("{}| {}  {}  {}  {}".format(str(k-1).rjust(6), 
+                            format(r_all, ".2e").ljust(10),
+                            format(r_primal[k-1], ".2e").ljust(11), 
+                            format(r_dual[k-1], ".2e").ljust(9),
+                            format(time() - start, ".2e").ljust(8)))
 
     # Unscale and return x_i^(k+1/2).
     [p.terminate() for p in procs]
     if precond and has_constr:
         x_final = [ei*x for x, ei in zip(x_final, e_pre)]
     end = time()
-    print("----------------------------------------------------")
-    if k < max_iter:
-        print("Status: Solved")
-    else:
-        print("Status: Reach maximum iterations")
-    print("Solve time: {}".format(end - start))
-    print("        Total number of iterations: {}".format(k))
-    print("Best total residual: {:.2e}; reached at iteration {}".format(r_all, k_best))
-    print("============================================================================")
+    if verbose:
+        print("----------------------------------------------------")
+        if k < max_iter:
+            print("Status: Solved")
+        else:
+            print("Status: Reach maximum iterations")
+        print("Solve time: {}".format(end - start))
+        print("        Total number of iterations: {}".format(k))
+        print("Best total residual: {:.2e}; reached at iteration {}".format(r_all, k_best))
+        print("============================================================================")
     return {"x_vals": x_final, "primal": np.array(r_primal[:k]), "dual": np.array(r_dual[:k]), \
             "num_iters": k, "solve_time": (end - start)}

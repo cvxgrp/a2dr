@@ -75,7 +75,8 @@ a2dr_result = a2dr(p_list,
                    aa_method='lstsq',
                    D_safe=1e6,
                    eps_safe=1e-6,
-                   M_safe=int(max_iter/100))
+                   M_safe=int(max_iter/100),
+                   verbose=True)
 ```
 
 #### Parameters:

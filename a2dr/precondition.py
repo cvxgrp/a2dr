@@ -25,7 +25,7 @@ import scipy.linalg as sLA
 from scipy.stats.mstats import gmean
 
 def precondition(p_list, A_list, b, tol = 1e-3, max_iter = 1000):
-    print('### Preconditioning starts ...')
+    # print('### Preconditioning starts ...')
     if all([Ai.size == 0 for Ai in A_list]):
         return p_list, A_list, b, np.ones(len(A_list))
 
