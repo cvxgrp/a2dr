@@ -209,8 +209,9 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
     r1norm = sp.linalg.lsqr(A, b)[3]
     sys.stdout = sys.__stdout__
     if r1norm >= eps_abs: # infeasible
-        print('Infeasible linear equality constraint: minimum constraint violation = {}'.format(r1norm))
+        print('Infeasible linear equality constraint: minimum constraint violation = {:.4e}'.format(r1norm))
         print('Status: Terminated due to linear infeasibility')
+        print("Solve time: {:.4e}".format(time() - start))
         return {"x_vals": None, "primal": None, "dual": None, "num_iters": None, "solve_time": None}
 
     print("----------------------------------------------------")
@@ -333,6 +334,7 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
             r_all_0 = r_all
         if k == 0 or r_all < r_best:
             x_final = x_halves
+            r_best = r_all
             k_best = k
 
         if k % 100 == 0:
@@ -356,7 +358,7 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
         print("Status: Solved")
     else:
         print("Status: Reach maximum iterations")
-    print("Timing: Solve time: {}".format(end - start))
+    print("Solve time: {}".format(end - start))
     print("        Total number of iterations: {}".format(k))
     print("Best total residual: {:.2e}; reached at iteration {}".format(r_all, k_best))
     print("============================================================================")
