@@ -22,6 +22,7 @@ import scipy.sparse as sp
 from scipy.stats.mstats import gmean
 from time import time
 from multiprocessing import Process, Pipe
+import sys, os
 from a2dr.precondition import precondition
 from a2dr.acceleration import aa_weights
 
@@ -204,7 +205,9 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
     print("Setup time: {:.2e}".format(time() - start))
 
     # Check linear feasibility
+    sys.stdout = open(os.devnull, 'w')
     r1norm = sp.linalg.lsqr(A, b)[3]
+    sys.stdout = sys.__stdout__
     if r1norm >= eps_abs: # infeasible
         print('Infeasible linear equality constraint: minimum constraint violation = {}'.format(r1norm))
         print('Status: Terminated due to linear infeasibility')
