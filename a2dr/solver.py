@@ -41,6 +41,7 @@ def a2dr_worker(pipe, prox, v_init, A, t, anderson, m_accel):
         warnings.filterwarnings("ignore")
         sys.stdout = open(os.devnull, 'w')
         x_half = prox(v_vec, t)
+        sys.stdout.close()
         sys.stdout = sys_stdout_origin
         warnings.filterwarnings("default")
 
@@ -222,6 +223,7 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
     # Check linear feasibility
     sys.stdout = open(os.devnull, 'w')
     r1norm = sp.linalg.lsqr(A, b)[3]
+    sys.stdout.close()
     sys.stdout = sys_stdout_origin
     if r1norm >= np.sqrt(eps_abs): # infeasible
         if verbose:
@@ -273,6 +275,7 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
         v_half = np.concatenate(v_halves, axis=0)
         sys.stdout = open(os.devnull, 'w')
         dk = sp.linalg.lsqr(A, A.dot(v_half) - b, atol=1e-10, btol=1e-10, x0=dk)[0]
+        sys.stdout.close()
         sys.stdout = sys_stdout_origin
 
         # Scatter d^k = A^\dagger(Av^(k+1/2) - b).
@@ -345,6 +348,7 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
         # sol = LA.lstsq(A.T, subgrad, rcond=None)[0]
         sys.stdout = open(os.devnull, 'w')
         sol = sp.linalg.lsqr(A.T, subgrad, atol=1e-10, btol=1e-10, x0=sol)[0]
+        sys.stdout.close()
         sys.stdout = sys_stdout_origin
         r_dual_vec = A.T.dot(sol) - subgrad
         r_dual[k] = LA.norm(r_dual_vec, ord=2)
