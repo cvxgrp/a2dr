@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(name='a2dr',
-      version='0.2',
+      version='0.2.0',
       description='A Python package for type-II Anderson accelerated Douglas-Rachford splitting (A2DR).',
       url='https://github.com/cvxgrp/a2dr',
       author='Anqi Fu, Junzi Zhang, Stephen Boyd',

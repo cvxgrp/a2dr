@@ -190,11 +190,11 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
             A_list[i] = sp.csr_matrix(A_list[i])
 
     if verbose:
-        print("----------------------------------------------------------------")
-        print("a2dr v0.2 - Prox-Affine Distributed Convex Optimization Solver")
+        print("-----------------------------------------------------------------")
+        print("a2dr v0.2.0 - Prox-Affine Distributed Convex Optimization Solver")
         print("                 (c) Anqi Fu, Junzi Zhang")
         print("                Stanford University   2019")
-        print("----------------------------------------------------------------")
+        print("-----------------------------------------------------------------")
 
     # Precondition data.
     if precond and has_constr:
@@ -208,13 +208,13 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
     if verbose:
         print("max_iter = {}, t_init (after preconditioning) = {:.2f}".format(
                max_iter, t_init))
-        print("eps_abs = {}, eps_rel = {}, precond = {!r}".format(
+        print("eps_abs = {:.2e}, eps_rel = {:.2e}, precond = {!r}".format(
                eps_abs, eps_rel, precond))
         print("ada_reg = {!r}, anderson = {!r}, m_accel = {}".format(
                ada_reg, anderson, m_accel))
-        print("lam_accel = {}, aa_method = {}, D_safe = {:.2f}".format(
+        print("lam_accel = {:.2e}, aa_method = {}, D_safe = {:.2e}".format(
                lam_accel, aa_method, D_safe))
-        print("eps_safe = {}, M_safe = {:d}".format(
+        print("eps_safe = {:.2e}, M_safe = {:d}".format(
                eps_safe, M_safe))
 
     # Store constraint matrix for projection step.
@@ -231,9 +231,9 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
     sys.stdout = sys_stdout_origin
     if r1norm >= np.sqrt(eps_abs): # infeasible
         if verbose:
-            print('Infeasible linear equality constraint: minimum constraint violation = {:.4e}'.format(r1norm))
+            print('Infeasible linear equality constraint: minimum constraint violation = {:.2e}'.format(r1norm))
             print('Status: Terminated due to linear infeasibility')
-            print("Solve time: {:.4e}".format(time() - start))
+            print("Solve time: {:.2e}".format(time() - start))
         return {"x_vals": None, "primal": None, "dual": None, "num_iters": None, "solve_time": None}
 
     if verbose:
@@ -396,9 +396,9 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
             print("Status: Solved")
         else:
             print("Status: Reach maximum iterations")
-        print("Solve time: {}".format(end - start))
+        print("Solve time: {:.2e}".format(end - start))
         print("Total number of iterations: {}".format(k))
         print("Best total residual: {:.2e}; reached at iteration {}".format(r_best, k_best))
-        print("================================================================")
+        print("=================================================================")
     return {"x_vals": x_final, "primal": np.array(r_primal[:k]), "dual": np.array(r_dual[:k]), \
             "num_iters": k, "solve_time": (end - start)}
