@@ -152,8 +152,8 @@ If you wish to cite `a2dr`, please use the following:
 
 @misc{a2dr_code,
     author       = {Fu, A. and Zhang, J. and Boyd, S.},
-    title        = {{a2dr}: Anderson Accelerated {D}ouglas-{R}achford Splitting, version 0.1},
+    title        = {{a2dr}: Anderson Accelerated {D}ouglas-{R}achford Splitting, version 0.2},
     howpublished = {\url{https://github.com/cvxgrp/a2dr}},
-    year         = {2019}
+    year         = {2020}
 }
 ```
