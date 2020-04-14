@@ -104,7 +104,7 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
     start = time()
 
     # Problem parameters.
-    max_iter = kwargs.pop("max_iter", 3000)
+    max_iter = kwargs.pop("max_iter", 1000)
     t_init = kwargs.pop("t_init", 1/10)  # Step size.
     eps_abs = kwargs.pop("eps_abs", 1e-6)   # Absolute stopping tolerance.
     eps_rel = kwargs.pop("eps_rel", 1e-8)   # Relative stopping tolerance.
@@ -191,9 +191,9 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
 
     if verbose:
         print("----------------------------------------------------------------")
-        print("a2dr v0.1 - Prox-Affine Distributed Convex Optimization Solver")
+        print("a2dr v0.2 - Prox-Affine Distributed Convex Optimization Solver")
         print("                 (c) Anqi Fu, Junzi Zhang")
-        print("                 Stanford University, 2019")
+        print("                Stanford University   2019")
         print("----------------------------------------------------------------")
 
     # Precondition data.
@@ -206,12 +206,16 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
             print('### Preconditioning finished.  ###')
 
     if verbose:
-        print("max_iter = {}, t_init (after preconditioning) = {:.2f}, eps_abs = {}, eps_rel = {}".format(
-               max_iter, t_init, eps_abs, eps_rel))
-        print("precond = {!r}, ada_reg = {!r}, anderson = {!r}, m_accel = {}, lam_accel = {}".format(
-               precond, ada_reg, anderson, m_accel, lam_accel))
-        print("aa_method = {}, D_safe = {:.2f}, eps_safe = {}, M_safe = {:d}".format(
-               aa_method, D_safe, eps_safe, M_safe))
+        print("max_iter = {}, t_init (after preconditioning) = {:.2f}".format(
+               max_iter, t_init))
+        print("eps_abs = {}, eps_rel = {}, precond = {!r}".format(
+               eps_abs, eps_rel, precond))
+        print("ada_reg = {!r}, anderson = {!r}, m_accel = {}".format(
+               ada_reg, anderson, m_accel))
+        print("lam_accel = {}, aa_method = {}, D_safe = {:.2f}".format(
+               lam_accel, aa_method, D_safe))
+        print("eps_safe = {}, M_safe = {:d}".format(
+               eps_safe, M_safe))
 
     # Store constraint matrix for projection step.
     A = sp.csr_matrix(sp.hstack(A_list))
@@ -393,8 +397,8 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
         else:
             print("Status: Reach maximum iterations")
         print("Solve time: {}".format(end - start))
-        print("        Total number of iterations: {}".format(k))
+        print("Total number of iterations: {}".format(k))
         print("Best total residual: {:.2e}; reached at iteration {}".format(r_best, k_best))
-        print("============================================================================")
+        print("================================================================")
     return {"x_vals": x_final, "primal": np.array(r_primal[:k]), "dual": np.array(r_dual[:k]), \
             "num_iters": k, "solve_time": (end - start)}

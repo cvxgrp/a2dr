@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(name='a2dr',
-      version='0.1',
+      version='0.2',
       description='A Python package for type-II Anderson accelerated Douglas-Rachford splitting (A2DR).',
       url='https://github.com/cvxgrp/a2dr',
       author='Anqi Fu, Junzi Zhang, Stephen Boyd',
@@ -10,7 +10,7 @@ setup(name='a2dr',
       packages=find_packages(),
       install_requires=['matplotlib',
                         'cvxpy >= 1.0.25',
-                        'numpy >= 1.14',
+                        'numpy >= 1.16',
                         'scipy >= 1.2.1'],
       zip_safe=False,
       test_suite='nose.collector',
