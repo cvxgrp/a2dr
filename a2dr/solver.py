@@ -192,11 +192,18 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
 
     if verbose:
         version = get_version("__init__.py")
-        print("-----------------------------------------------------------------")
-        print("a2dr v" + version + " - Prox-Affine Distributed Convex Optimization Solver")
-        print("                 (c) Anqi Fu, Junzi Zhang")
-        print("                Stanford University   2019")
-        print("-----------------------------------------------------------------")
+        line_solver = "a2dr v" + version + " - Prox-Affine Distributed Convex Optimization Solver"
+        dashes = "-" * len(line_solver)
+        ddashes = "=" * len(line_solver)
+        line_authors = "(c) Anqi Fu, Junzi Zhang"
+        num_spaces_authors = (len(line_solver) - len(line_authors)) // 2
+        line_affil = "Stanford University   2019"
+        num_spaces_affil = (len(line_solver) - len(line_affil)) // 2
+        print(dashes)
+        print(line_solver)
+        print(" " * num_spaces_authors + line_authors)
+        print(" " * num_spaces_affil + line_affil)
+        print(dashes)
 
     # Precondition data.
     if precond and has_constr:
@@ -401,6 +408,6 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
         print("Solve time: {:.2e}".format(end - start))
         print("Total number of iterations: {}".format(k))
         print("Best total residual: {:.2e}; reached at iteration {}".format(r_best, k_best))
-        print("=================================================================")
+        print(ddashes)
     return {"x_vals": x_final, "primal": np.array(r_primal[:k]), "dual": np.array(r_dual[:k]), \
             "num_iters": k, "solve_time": (end - start)}
