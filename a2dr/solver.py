@@ -25,6 +25,7 @@ from multiprocessing import Process, Pipe
 import sys, os, warnings
 from a2dr.precondition import precondition
 from a2dr.acceleration import aa_weights
+from a2dr.utilities import get_version
 
 sys_stdout_origin = sys.stdout
 
@@ -190,8 +191,9 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
             A_list[i] = sp.csr_matrix(A_list[i])
 
     if verbose:
+        version = get_version("__init__.py")
         print("-----------------------------------------------------------------")
-        print("a2dr v0.2.0 - Prox-Affine Distributed Convex Optimization Solver")
+        print("a2dr v" + version + " - Prox-Affine Distributed Convex Optimization Solver")
         print("                 (c) Anqi Fu, Junzi Zhang")
         print("                Stanford University   2019")
         print("-----------------------------------------------------------------")

@@ -1,11 +1,15 @@
 # a2dr
 
-`a2dr` is a Python package for solving large-scale non-smooth convex optimization problems with general linear constraints, with separable objective functions accessible through their proximal operators. It exploits the separability of the objective functions and the sparsity in the linear constraints, and utilizes the power of Anderson acceleration to achieve fast and robust convergence and scalability to multiple processors. The current version is `0.2.0`.
+`a2dr` is a Python package for solving large-scale non-smooth convex optimization problems with general linear constraints, with separable objective functions accessible through their proximal operators. It exploits the separability of the objective functions and the sparsity in the linear constraints, and utilizes the power of Anderson acceleration to achieve fast and robust convergence and scalability to multiple processors. The current version is `0.2.3`.
 
 It is an implementation of type-II Anderson accelerated Douglas-Rachford splitting, based on our paper [A. Fu, J. Zhang, and S. Boyd (2019)](http://www.stanford.edu/~boyd/papers/a2dr.html).
 
 ### Installation
-To install `a2dr`, first make sure that you have [setuptools](https://github.com/pypa/setuptools)
+To install using pip (recommended), run:
+```console
+pip install a2dr
+```
+To install `a2dr` from source, first make sure that you have [setuptools](https://github.com/pypa/setuptools)
 and [nose](https://nose.readthedocs.io/en/latest/) installed. Then follow the steps below:
 
 1. Clone the [`a2dr` git repository](https://github.com/cvxgrp/a2dr).
@@ -152,7 +156,7 @@ If you wish to cite `a2dr`, please use the following:
 
 @misc{a2dr_code,
     author       = {Fu, A. and Zhang, J. and Boyd, S.},
-    title        = {{a2dr}: Anderson Accelerated {D}ouglas-{R}achford Splitting, version 0.2.0},
+    title        = {{a2dr}: Anderson Accelerated {D}ouglas-{R}achford Splitting, version 0.2.3},
     howpublished = {\url{https://github.com/cvxgrp/a2dr}},
     year         = {2020}
 }
