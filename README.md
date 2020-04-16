@@ -5,12 +5,13 @@
 It is an implementation of type-II Anderson accelerated Douglas-Rachford splitting, based on our paper [A. Fu, J. Zhang, and S. Boyd (2019)](http://www.stanford.edu/~boyd/papers/a2dr.html).
 
 ### Installation
+
 To install using pip (recommended), run:
 ```console
 pip install a2dr
 ```
 To install `a2dr` from source, first make sure that you have [setuptools](https://github.com/pypa/setuptools)
-and [nose](https://nose.readthedocs.io/en/latest/) installed. Then follow the steps below:
+installed. Then follow the steps below:
 
 1. Clone the [`a2dr` git repository](https://github.com/cvxgrp/a2dr).
 2. Navigate to the top-level of the cloned directory and run:
@@ -19,7 +20,7 @@ and [nose](https://nose.readthedocs.io/en/latest/) installed. Then follow the st
 python setup.py install
 ```
 
-3. Test the installation with nose:
+To test the installation with nose, first make sure that you have [nose](https://nose.readthedocs.io/en/latest/) installed. Then run:
 
 ```python
 nosetests a2dr
