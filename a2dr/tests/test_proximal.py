@@ -23,13 +23,17 @@ from cvxpy import *
 from a2dr.proximal import *
 from a2dr.tests.base_test import BaseTest
 
+# debug
+import numpy.linalg as LA
+
 class TestProximal(BaseTest):
     """Unit tests for proximal operators"""
 
     def setUp(self):
         np.random.seed(1)
         self.TOLERANCE = 1e-6
-        self.SCS_TOLERANCE = 1e-6
+        self.SCS_TOLERANCE = 1e-8#1e-6
+        self.SCS_MAXITER = 10000
         self.t = 5*np.abs(np.random.randn()) + self.TOLERANCE
         self.c = np.random.randn()
         self.v = np.random.randn(100)
@@ -59,7 +63,7 @@ class TestProximal(BaseTest):
         prob.solve(*args, **kwargs)
         return x_var.value
 
-    def check_composition(self, prox, fun, v_init, places = 3, *args, **kwargs):
+    def check_composition(self, prox, fun, v_init, places = 3, symm=False, *args, **kwargs):
         x_a2dr = prox(v_init)
         x_cvxpy = self.prox_cvxpy(v_init, fun, *args, **kwargs)
         self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = places)
@@ -87,9 +91,17 @@ class TestProximal(BaseTest):
         else:
             offset = np.random.randn(*v_init.shape)
             lin_term = np.random.randn(*v_init.shape)
+            if symm:
+            # symmetrization: useful for -logdet, etc.
+                offset = (offset + offset.T)/2
+                lin_term = (lin_term + lin_term.T)/2
         x_a2dr = prox(v_init, t = self.t, scale = 0.5, offset = offset, lin_term = lin_term, quad_term = 2.5)
         x_cvxpy = self.prox_cvxpy(v_init, fun, t = self.t, scale = 0.5, offset = offset, lin_term = lin_term,
                                   quad_term = 2.5, *args, **kwargs)
+        #debug
+        # x_a2dr = prox(v_init, t = self.t, scale = 0.5, offset = 0.5, lin_term = lin_term, quad_term = 2.5)
+        # x_cvxpy = self.prox_cvxpy(v_init, fun, t = self.t, scale = 0.5, offset = 0.5, lin_term = lin_term,
+        #                           quad_term = 2.5, *args, **kwargs)
         self.assertItemsAlmostEqual(x_a2dr, x_cvxpy, places = places)
 
     def check_elementwise(self, prox, places = 4):
@@ -454,8 +466,8 @@ class TestProximal(BaseTest):
     def test_neg_log_det(self):
         # TODO: Poor accuracy in compositions.
         # General composition tests.
-        # self.check_composition(prox_neg_log_det, lambda X: -log_det(X), self.B_symm, places=2, solver="SCS")
-        # self.check_composition(prox_neg_log_det, lambda X: -log_det(X), self.B_psd, places=2, solver="SCS")
+        self.check_composition(prox_neg_log_det, lambda X: -log_det(X), self.B_symm, places=2, symm=True, solver="SCS", eps=self.SCS_TOLERANCE, max_iters=self.SCS_MAXITER, verbose=True)
+        self.check_composition(prox_neg_log_det, lambda X: -log_det(X), self.B_psd, places=2, symm=True, solver="SCS", eps=self.SCS_TOLERANCE)
 
         # Sparse inverse covariance estimation term: f(B) = -log(det(B)) for symmetric positive definite B.
         B_spd = self.B_psd + np.eye(self.B_psd.shape[0])
@@ -465,10 +477,21 @@ class TestProximal(BaseTest):
 
         # Sparse inverse covariance estimation term: f(B) = -log(det(B)) + tr(BQ) for symmetric positive definite B
         # and given matrix Q.
-        # Q = np.random.randn(*B_spd.shape)
-        # B_a2dr = prox_neg_log_det(B_spd, self.t, lin_term = Q.T)   # tr(BQ) = \sum_{ij} Q_{ji}B_{ij}
-        # B_cvxpy = self.prox_cvxpy(B_spd, lambda X: -log_det(X) + trace(X*Q), t=self.t, solver="SCS")
-        # self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places=2)
+        #Q = np.random.randn(*B_spd.shape)
+        #Q = np.zeros(B_spd.shape)
+        Q = np.eye(*B_spd.shape)
+        B_a2dr = prox_neg_log_det(B_spd, self.t, lin_term = self.t*Q.T)   # tr(A^TB) = \sum_{ij} A_{ij}B_{ij}
+        B_cvxpy = self.prox_cvxpy(B_spd, lambda X: -log_det(X) + trace(Q*X), t=self.t, solver="SCS", eps=self.SCS_TOLERANCE, verbose=True)
+        # debug
+        print('a2dr obj = {}'.format(self.t*(-LA.slogdet(B_a2dr)[1] + np.trace(Q*B_a2dr)) + np.sum((B_a2dr-B_spd)**2)/2))
+        print('cvxpy obj = {}'.format(self.t*(-LA.slogdet(B_cvxpy)[1] + np.trace(Q*B_cvxpy)) + np.sum((B_cvxpy-B_spd)**2)/2))
+        #B_cvxpy = self.prox_cvxpy(B_spd, lambda X: -log_det(X) + trace(Q*X), t=self.t, solver="MOSEK", verbose=True)
+        # w0, v0 = LA.eig(B_a2dr)
+        # w1, v1 = LA.eig(B_cvxpy)
+        # print(np.linalg.norm(B_a2dr-B_a2dr.T), np.linalg.norm(B_cvxpy-B_cvxpy.T))
+        # print(np.min(w0), np.min(w1))
+        # #print(LA.(B_a2dr)[0], LA.slogdet(B_cvxpy)[0])
+        self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places=2)
 
     def test_max(self):
         # General composition tests.
