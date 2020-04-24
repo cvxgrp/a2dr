@@ -22,7 +22,6 @@ def prox_scale(prox, *args, **kwargs):
     offset = kwargs.pop("offset", 0)
     lin_term = kwargs.pop("lin_term", 0)
     quad_term = kwargs.pop("quad_term", 0)
-    #symm = kwargs.pop("symm", False)
 
     if not np.isscalar(scale) or scale == 0:
         raise ValueError("scale must be a non-zero scalar.")
@@ -36,12 +35,5 @@ def prox_scale(prox, *args, **kwargs):
         #         v = v.todense()
         v_new = scale*(v - lin_term)/(2*quad_term + 1) - offset
         t_new = t*scale**2/(2*quad_term + 1)
-        # ## debug
-        # v_diff = v_new-v+lin_term
-        # if sparse.issparse(v_diff):
-        #     v_diff = v_diff.todense()
-        # #print(np.linalg.norm(v_new-v+lin_term))
-        # print(scale, quad_term, t_new, np.linalg.norm(v_diff))
-        # print(scale, offset, quad_term, lin_term, t, t_new)
         return (prox(v_new, t_new, *args, **kwargs) + offset)/scale
     return prox_new
