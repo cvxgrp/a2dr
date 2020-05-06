@@ -21,6 +21,6 @@ from a2dr.proximal.constraint import prox_box_constr, prox_nonneg_constr, prox_n
 from a2dr.proximal.elementwise import prox_abs, prox_constant, prox_neg_entr, prox_exp, prox_huber, prox_identity, \
     prox_neg, prox_pos, prox_neg_log
 from a2dr.proximal.matrix import prox_neg_log_det, prox_sigma_max, prox_trace
-from a2dr.proximal.misc import prox_logistic, prox_max
+from a2dr.proximal.misc import prox_kl, prox_logistic, prox_max
 from a2dr.proximal.norm import prox_norm1, prox_norm2, prox_norm_inf, prox_norm_fro, prox_norm_nuc, prox_group_lasso
 from a2dr.proximal.quadratic import prox_quad_form, prox_sum_squares, prox_sum_squares_affine, prox_qp

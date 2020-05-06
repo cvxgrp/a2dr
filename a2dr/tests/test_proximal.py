@@ -497,6 +497,26 @@ class TestProximal(BaseTest):
         self.check_composition(prox_max, cvxpy.max, self.B, solver = "SCS", 
                                eps=self.SCS_TOLERANCE, max_iters=self.SCS_MAXITER)
 
+    def test_kl(self):
+        # General composition tests.
+        u_c = np.random.rand() + 1e-8
+        #u_c = 1
+        u_v = np.random.rand(*self.v.shape) + 1e-8#1e-3#1e-8
+        #u_v = 1.1*np.ones(*self.v.shape)
+        #u_v = np.ones(*self.v.shape)
+        u_B = np.random.rand(*self.B.shape) + 1e-8
+        #u_B = 2 * np.random.rand(*self.B.shape) + 1e-2
+        #u_B = np.random.rand(*self.B.shape) + np.random.rand(*self.B.shape)
+        self.check_composition(lambda v, *args, **kwargs: prox_kl(v, u = u_c, *args, **kwargs), 
+                               lambda x: sum(-entr(x)-x*log(u_c)), self.c, solver='SCS',
+                               eps=self.SCS_TOLERANCE, max_iters=self.SCS_MAXITER)
+        self.check_composition(lambda v, *args, **kwargs: prox_kl(v, u = u_v, *args, **kwargs),
+                               lambda x: sum(-entr(x)-multiply(x, log(u_v))), self.v, solver='SCS', verbose=True,
+                               eps=self.SCS_TOLERANCE, max_iters=self.SCS_MAXITER)
+        self.check_composition(lambda v, *args, **kwargs: prox_kl(v, u = u_B, *args, **kwargs),  
+                               lambda x: sum(-entr(x)-multiply(x, log(u_B))), self.B, solver='SCS',
+                               eps=self.SCS_TOLERANCE, max_iters=self.SCS_MAXITER)
+
     def test_norm1(self):
         # Sparsity consistency tests.
         self.check_sparsity(prox_norm1)
