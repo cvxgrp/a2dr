@@ -19,4 +19,4 @@ along with A2DR. If not, see <http://www.gnu.org/licenses/>.
 
 from a2dr.solver import a2dr
 
-__version__ = "0.2.3.post1"
+__version__ = "0.2.3.post2"
