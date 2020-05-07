@@ -360,7 +360,8 @@ class TestProximal(BaseTest):
         self.check_elementwise(prox_exp)
 
         # General composition tests.
-        self.check_composition(prox_exp, cvxpy.exp, self.c)
+        self.check_composition(prox_exp, cvxpy.exp, self.c, solver = "SCS", 
+                               eps=self.SCS_TOLERANCE, max_iters=self.SCS_MAXITER)
         self.check_composition(prox_exp, lambda x: sum(exp(x)), self.v, solver = "SCS", 
                                eps=self.SCS_TOLERANCE, max_iters=self.SCS_MAXITER)
         self.check_composition(prox_exp, lambda x: sum(exp(x)), self.B, places=2, solver = "SCS", 
@@ -395,7 +396,9 @@ class TestProximal(BaseTest):
 
     def test_logistic(self):
         # General composition tests.
-        self.check_composition(prox_logistic, lambda x: logistic(x), self.c, solver='ECOS')
+        # self.check_composition(prox_logistic, lambda x: logistic(x), self.c, solver='ECOS')
+        self.check_composition(prox_logistic, lambda x: logistic(x), self.c, solver = 'SCS', 
+                               eps=self.SCS_TOLERANCE, max_iters=self.SCS_MAXITER)
         self.check_composition(prox_logistic, lambda x: sum(logistic(x)), self.v, solver = 'SCS', 
                                eps=self.SCS_TOLERANCE, max_iters=self.SCS_MAXITER)
         self.check_composition(prox_logistic, lambda x: sum(logistic(x)), self.B, solver = "SCS", 
@@ -447,8 +450,10 @@ class TestProximal(BaseTest):
         self.check_elementwise(prox_neg_entr)
 
         # General composition tests.
-        self.check_composition(prox_neg_entr, lambda x: -entr(x), self.c)
-        self.check_composition(prox_neg_entr, lambda x: sum(-entr(x)), self.v)
+        self.check_composition(prox_neg_entr, lambda x: -entr(x), self.c, solver="SCS",
+                               eps=self.SCS_TOLERANCE, max_iters=self.SCS_MAXITER)
+        self.check_composition(prox_neg_entr, lambda x: sum(-entr(x)), self.v, solver="SCS", 
+                               eps=self.SCS_TOLERANCE, max_iters=self.SCS_MAXITER)
         self.check_composition(prox_neg_entr, lambda x: sum(-entr(x)), self.B, places=2, solver="SCS", 
                                eps=self.SCS_TOLERANCE, max_iters=self.SCS_MAXITER)
 
@@ -491,8 +496,9 @@ class TestProximal(BaseTest):
         # General composition tests.
         self.check_composition(prox_max, cvxpy.max, self.c)
         self.check_composition(prox_max, cvxpy.max, self.v)
-        self.check_composition(prox_max, cvxpy.max, self.B, solver = "SCS", 
-                               eps=self.SCS_TOLERANCE, max_iters=self.SCS_MAXITER)
+        # self.check_composition(prox_max, cvxpy.max, self.B, solver = "SCS", 
+        #                        eps=self.SCS_TOLERANCE, max_iters=self.SCS_MAXITER)
+        self.check_composition(prox_max, cvxpy.max, self.B)
 
     def test_kl(self):
         # General composition tests.
@@ -503,7 +509,7 @@ class TestProximal(BaseTest):
                                lambda x: sum(-entr(x)-x*log(u_c)), self.c, solver='SCS',
                                eps=self.SCS_TOLERANCE, max_iters=self.SCS_MAXITER)
         self.check_composition(lambda v, *args, **kwargs: prox_kl(v, u = u_v, *args, **kwargs),
-                               lambda x: sum(-entr(x)-multiply(x, log(u_v))), self.v, solver='SCS', verbose=True,
+                               lambda x: sum(-entr(x)-multiply(x, log(u_v))), self.v, solver='SCS',
                                eps=self.SCS_TOLERANCE, max_iters=self.SCS_MAXITER)
         self.check_composition(lambda v, *args, **kwargs: prox_kl(v, u = u_B, *args, **kwargs),  
                                lambda x: sum(-entr(x)-multiply(x, log(u_B))), self.B, solver='SCS',
@@ -534,7 +540,8 @@ class TestProximal(BaseTest):
         self.check_sparsity(prox_norm2)
 
         # General composition tests.
-        self.check_composition(prox_norm2, norm2, np.random.randn())
+        self.check_composition(prox_norm2, norm2, self.c, solver ="SCS", 
+                               eps=self.SCS_TOLERANCE, max_iters=self.SCS_MAXITER)
         self.check_composition(prox_norm2, norm2, self.v, solver ="SCS", 
                                eps=self.SCS_TOLERANCE, max_iters=self.SCS_MAXITER)
         self.check_composition(prox_norm2, lambda B: cvxpy.norm(B, 'fro'), self.B, solver ="SCS", 
@@ -550,7 +557,9 @@ class TestProximal(BaseTest):
         # General composition tests.
         self.check_composition(prox_norm_inf, norm_inf, self.c)
         self.check_composition(prox_norm_inf, norm_inf, self.v)
-        self.check_composition(prox_norm_inf, norm_inf, self.B, solver='ECOS')
+        # self.check_composition(prox_norm_inf, norm_inf, self.B, solver='ECOS')
+        self.check_composition(prox_norm_inf, norm_inf, self.B, solver ="SCS", 
+                               eps=self.SCS_TOLERANCE, max_iters=self.SCS_MAXITER)
 
         # f(x) = \alpha*||x||_{\infty}
         alpha = 0.5 + np.abs(np.random.randn())
@@ -587,7 +596,8 @@ class TestProximal(BaseTest):
         # Multi-task logistic regression term: f(B) = \alpha*||B||_{2,1}.
         alpha = 1.5 + np.abs(np.random.randn())
         B_a2dr = prox_group_lasso(self.B, t = alpha*self.t)
-        B_cvxpy = self.prox_cvxpy(self.B, groupLasso, t = alpha*self.t)
+        B_cvxpy = self.prox_cvxpy(self.B, groupLasso, t = alpha*self.t, solver="SCS", 
+                                  eps=self.SCS_TOLERANCE, max_iters=self.SCS_MAXITER)
         self.assertItemsAlmostEqual(B_a2dr, B_cvxpy, places = 3)
 
         # Compare with taking l2-norm separately on each column.

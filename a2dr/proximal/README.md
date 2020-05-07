@@ -52,6 +52,7 @@ A scalar function takes a scalar, vector, or matrix as input and returns a scala
 ### Vector input
 |    Python Handle        |  Arguments                      |   Domain             |   Function                       |
 | ----------------------- | ------------------------------- | -------------------- | -------------------------------- |
+| prox_kl                 | (v, t = 1, u = $\mathbf{1}^n$)  | $v \in \mathbf{R}^n$ | $\sum_i x_i\log(x_i/u_i)$        |
 | prox_logistic           | (v, t = 1, y = $-\mathbf{1}^n$) | $v \in \mathbf{R}^n$ | $\sum_i \log(1 + \exp(-y_ix_i))$ |
 | prox_max                | (v, t = 1)                      | $v \in \mathbf{R}^n$ | $\max_i x_i$                     |
 | prox_norm1              | (v, t = 1)                      | $v \in \mathbf{R}^n$ | $\sum_i \vert x_i \vert$         |
@@ -72,7 +73,7 @@ A scalar function takes a scalar, vector, or matrix as input and returns a scala
 | prox_trace       | (B, t = 1, C = $I$) | $B \in \mathbf{R}^{m \times n}$ <br> $C \in \mathbf{R}^{m \times n}$ | $\text{tr}(C^TX)$ |
 
 ## Elementwise functions
-These functions apply to each element of the input, which can be a scalar, vector, or matrix. In `a2dr`, the corresponding proximal operators also apply elementwise, i.e., given $v \in \mathbf{R}^n$, they return $(\mathbf{prox}_{tf}(v_1), \ldots, (\mathbf{prox}_{tf}(v_n))$.
+These functions $f$ apply to each element $x_i$ of the input $x$, which can be a scalar, vector, or matrix, and return the sum $g(x)=\sum_i f(x_i)$. The corresponding proximal operators also apply elementwise, i.e., given $v \in \mathbf{R}^n$, they return $\mathbf{prox}_{tg}(v)=(\mathbf{prox}_{tf}(v_1), \ldots, (\mathbf{prox}_{tf}(v_n))$. Notice that `prox_abs` is simply a synonym of `prox_norm1` above.
 |  Python Handle  |   Arguments       |   Domain            |   Function                       |
 | --------------- | ----------------- | ------------------- | -------------------------------- |
 | prox_abs        | (v, t = 1)        | $v \in \mathbf{R}$  | $\vert x\vert$                   |

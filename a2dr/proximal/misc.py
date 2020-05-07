@@ -6,6 +6,7 @@ from scipy.optimize import minimize
 from a2dr.proximal.projection import proj_simplex
 from a2dr.proximal.composition import prox_scale
 
+
 def prox_kl(v, t = 1, u = None, *args, **kwargs):
     """Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where 
     :math:`f(x) = \\sum_i x_i*\\log(x_i/u_i)`
@@ -17,7 +18,6 @@ def prox_kl(v, t = 1, u = None, *args, **kwargs):
     if u is None:
         u = np.ones(v.shape)
     return prox_scale(prox_kl_base, u, *args, **kwargs)(v, t)
-
 
 def prox_logistic(v, t = 1, x0 = None, y = None, *args, **kwargs):
     """Proximal operator of :math:`tf(ax-b) + c^Tx + d\\|x\\|_2^2`, where 
@@ -48,8 +48,6 @@ def prox_kl_base(v, t, u):
     The function defaults to u_i = 1 for all i, so that :math:`f(x) = \\sum_i x_i\\log x_i`.
     """
     return t*lambertw(u*np.exp(v/t-1)/t)
-
-
 
 def prox_logistic_base(v, t, x0, y):
     """Proximal operator of :math:`f(x) = \\sum_i \\log(1 + \\exp(-y_i*x_i))`, where y is a given vector quantity,
