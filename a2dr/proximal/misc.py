@@ -47,7 +47,7 @@ def prox_kl_base(v, t, u):
     """Proximal operator of :math:`f(x) = \\sum_i x_i\\log(x_i/u_i)`, where u is a given vector quantity.
     The function defaults to u_i = 1 for all i, so that :math:`f(x) = \\sum_i x_i\\log x_i`.
     """
-    return t*lambertw(u*np.exp(v/t-1)/t)
+    return t*np.real(lambertw(u*np.exp(v/t-1)/t))
 
 def prox_logistic_base(v, t, x0, y):
     """Proximal operator of :math:`f(x) = \\sum_i \\log(1 + \\exp(-y_i*x_i))`, where y is a given vector quantity,

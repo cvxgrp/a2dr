@@ -121,7 +121,7 @@ def prox_neg_entr_base(v, t):
 	"""
 	if sparse.issparse(v):
 		v = v.todense()
-	return t * lambertw(np.exp((v/t - 1) - np.log(t)))
+	return t * np.real(lambertw(np.exp((v/t - 1) - np.log(t))))
 
 def prox_neg_log_base(v, t):
 	"""Proximal operator of :math:`f(x) = -\\log(x)`.
