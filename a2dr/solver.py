@@ -375,7 +375,7 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
             r_best = r_all
             k_best = k
 
-        if (k % 100 == 0 or k == max_iter-1)and verbose:
+        if (k % 100 == 0 or k == max_iter-1) and verbose:
             # print every 100 iterations or reaching maximum
             print("{}| {}  {}  {}  {}".format(str(k).rjust(6), 
                                         format(r_all, ".2e").ljust(10),
@@ -386,7 +386,7 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
         # Stop when residual norm falls below tolerance.
         k = k + 1
         finished = k >= max_iter or (r_all <= eps_abs + eps_rel * r_all_0)
-        if r_all <= eps_abs + eps_rel * r_all_0 and k % 100 != 0:
+        if r_all <= eps_abs + eps_rel * r_all_0 and k % 100 != 0 and verbose:
             # print the best iterate
             print("{}| {}  {}  {}  {}".format(str(k-1).rjust(6), 
                             format(r_all, ".2e").ljust(10),
