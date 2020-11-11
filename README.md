@@ -151,8 +151,12 @@ If you wish to cite `a2dr`, please use the following:
 @article{a2dr,
     author       = {Fu, A. and Zhang, J. and Boyd, S.},
     title        = {Anderson Accelerated {D}ouglas-{R}achford Splitting},
-    journal      = {http://stanford.edu/~boyd/papers/a2dr.html},
-    year         = {2019},
+    journal      = {SIAM Journal on Scientific Computing},
+    year         = {2020},
+    volume       = {42},
+    number       = {6},
+    pages        = {A3560–A3583}, 
+    url          = {http://stanford.edu/~boyd/papers/a2dr.html},
 }
 
 @misc{a2dr_code,
