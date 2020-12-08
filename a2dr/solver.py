@@ -320,11 +320,12 @@ def a2dr(p_list, A_list = [], b = np.array([]), v_init = None, n_list = None, *a
                 if LA.norm(g_vec) <= D_safe*g0_norm*(n_AA/M_safe + 1)**(-(1 + eps_safe)):
                     AA_update = True
                     n_AA = n_AA + 1
-                    M_AA = 0
+                    M_AA = 1
                     safeguard = False
                 else:
                     AA_update = False
                     M_AA = 0
+                    safeguard = True
             else:
                 AA_update = True
                 M_AA = M_AA + 1
