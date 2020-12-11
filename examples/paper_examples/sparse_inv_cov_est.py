@@ -73,10 +73,14 @@ class TestPaper(BaseTest):
 
         # Solve with DRS.
         drs_result = a2dr(prox_list, A_list, b, anderson=False, precond=True, max_iter=self.MAX_ITER)
+        #drs_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER, ada_reg=False)
+        #drs_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER, ada_reg=False, lam_accel=0)
+        #drs_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER, ada_reg=False, lam_accel=1e-12)
         print('Finished DRS.')
 
         # Solve with A2DR.
         a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER) 
+        #a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER, lam_accel=1e-12)
         # lam_accel = 0 seems to work well sometimes, although it oscillates a lot.
         a2dr_S = a2dr_result["x_vals"][-1].reshape((q,q), order='C')
         self.compare_total(drs_result, a2dr_result)

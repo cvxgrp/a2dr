@@ -71,10 +71,14 @@ class TestPaper(BaseTest):
 
         # Solve with DRS.
         drs_result = a2dr(prox_list, A_list, b, anderson=False, precond=True, max_iter=self.MAX_ITER)
+        #drs_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER, ada_reg=False)
+        #drs_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER, ada_reg=False, lam_accel=0)
+        #drs_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER, ada_reg=False, lam_accel=1e-12)
         print('Finished DRS.')
 
         # Solve with A2DR.
         a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER)
+        #a2dr_result = a2dr(prox_list, A_list, b, anderson=True, precond=True, max_iter=self.MAX_ITER, lam_accel=1e-12)
         self.compare_total(drs_result, a2dr_result)
         print('Finished A2DR.')
 
